@@ -20,7 +20,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build and scan
-        run: cargo run -p aishield-cli -- scan . --format sarif > aishield.sarif
+        run: cargo run -p aishield-cli -- scan . --format sarif --output aishield.sarif
 
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v3
