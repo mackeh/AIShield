@@ -116,6 +116,7 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     match format {
         OutputFormat::Table => print_table(&result),
         OutputFormat::Json => print_json(&result),
+        OutputFormat::Sarif => print_sarif(&result),
     }
 
     if fail_on_findings && !result.findings.is_empty() {
@@ -205,7 +206,7 @@ fn run_init(args: &[String]) -> Result<(), String> {
 fn print_help() {
     println!("AIShield CLI (foundation)\n");
     println!("Usage:");
-    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json] [--rules c1,c2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings]");
+    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif] [--rules c1,c2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings]");
     println!("  aishield fix <path> [--rules-dir DIR]");
     println!("  aishield init [--output PATH]");
 }
@@ -354,6 +355,111 @@ fn print_json(result: &ScanResult) {
     println!("}}");
 }
 
+fn print_sarif(result: &ScanResult) {
+    let mut rules = BTreeMap::new();
+    for finding in &result.findings {
+        rules
+            .entry(finding.id.clone())
+            .or_insert((finding.title.clone(), finding.severity));
+    }
+
+    println!("{{");
+    println!("  \"$schema\": \"https://json.schemastore.org/sarif-2.1.0.json\",");
+    println!("  \"version\": \"2.1.0\",");
+    println!("  \"runs\": [");
+    println!("    {{");
+    println!("      \"tool\": {{");
+    println!("        \"driver\": {{");
+    println!("          \"name\": \"AIShield\",");
+    println!("          \"version\": \"{}\",", env!("CARGO_PKG_VERSION"));
+    println!("          \"informationUri\": \"https://github.com/mackeh/AIShield\",");
+    println!("          \"rules\": [");
+
+    for (idx, (rule_id, (title, severity))) in rules.iter().enumerate() {
+        println!("            {{");
+        println!("              \"id\": \"{}\",", escape_json(rule_id));
+        println!("              \"name\": \"{}\",", escape_json(rule_id));
+        println!(
+            "              \"shortDescription\": {{ \"text\": \"{}\" }},",
+            escape_json(title)
+        );
+        println!(
+            "              \"defaultConfiguration\": {{ \"level\": \"{}\" }}",
+            severity_to_sarif_level(*severity)
+        );
+        if idx + 1 == rules.len() {
+            println!("            }}");
+        } else {
+            println!("            }},");
+        }
+    }
+
+    println!("          ]");
+    println!("        }}");
+    println!("      }},");
+    println!("      \"results\": [");
+
+    for (idx, finding) in result.findings.iter().enumerate() {
+        let message = format!(
+            "{} (AI confidence {:.1}%, risk {:.1})",
+            finding.title, finding.ai_confidence, finding.risk_score
+        );
+        println!("        {{");
+        println!("          \"ruleId\": \"{}\",", escape_json(&finding.id));
+        println!(
+            "          \"level\": \"{}\",",
+            severity_to_sarif_level(finding.severity)
+        );
+        println!(
+            "          \"message\": {{ \"text\": \"{}\" }},",
+            escape_json(&message)
+        );
+        println!("          \"locations\": [");
+        println!("            {{");
+        println!("              \"physicalLocation\": {{");
+        println!(
+            "                \"artifactLocation\": {{ \"uri\": \"{}\" }},",
+            escape_json(&finding.file)
+        );
+        println!(
+            "                \"region\": {{ \"startLine\": {}, \"startColumn\": {} }}",
+            finding.line, finding.column
+        );
+        println!("              }}");
+        println!("            }}");
+        println!("          ],");
+        println!("          \"properties\": {{");
+        println!(
+            "            \"aiConfidence\": {:.1},",
+            finding.ai_confidence
+        );
+        println!("            \"riskScore\": {:.1},", finding.risk_score);
+        println!(
+            "            \"category\": {},",
+            opt_json_string(finding.category.as_deref())
+        );
+        print!("            \"tags\": [");
+        for (tag_idx, tag) in finding.tags.iter().enumerate() {
+            if tag_idx > 0 {
+                print!(", ");
+            }
+            print!("\"{}\"", escape_json(tag));
+        }
+        println!("]");
+        println!("          }}");
+        if idx + 1 == result.findings.len() {
+            println!("        }}");
+        } else {
+            println!("        }},");
+        }
+    }
+
+    println!("      ]");
+    println!("    }}");
+    println!("  ]");
+    println!("}}");
+}
+
 fn opt_json_string(value: Option<&str>) -> String {
     match value {
         Some(v) => format!("\"{}\"", escape_json(v)),
@@ -377,10 +483,19 @@ fn escape_json(input: &str) -> String {
     out
 }
 
+fn severity_to_sarif_level(severity: Severity) -> &'static str {
+    match severity {
+        Severity::Critical | Severity::High => "error",
+        Severity::Medium => "warning",
+        Severity::Low | Severity::Info => "note",
+    }
+}
+
 #[derive(Clone, Copy)]
 enum OutputFormat {
     Table,
     Json,
+    Sarif,
 }
 
 impl OutputFormat {
@@ -388,7 +503,8 @@ impl OutputFormat {
         match raw.to_ascii_lowercase().as_str() {
             "table" => Ok(Self::Table),
             "json" => Ok(Self::Json),
-            _ => Err("--format must be table or json".to_string()),
+            "sarif" => Ok(Self::Sarif),
+            _ => Err("--format must be table, json, or sarif".to_string()),
         }
     }
 }
