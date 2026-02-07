@@ -49,6 +49,7 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     let mut rules_dir_override = None;
     let mut format_override = None;
     let mut categories_override = None;
+    let mut exclude_paths_override = None;
     let mut ai_only_flag = false;
     let mut min_ai_confidence_override = None;
     let mut severity_override = None;
@@ -79,6 +80,11 @@ fn run_scan(args: &[String]) -> Result<(), String> {
                 i += 1;
                 let raw = args.get(i).ok_or("--rules requires a value")?;
                 categories_override = Some(parse_list_like(raw));
+            }
+            "--exclude" => {
+                i += 1;
+                let raw = args.get(i).ok_or("--exclude requires a value")?;
+                exclude_paths_override = Some(parse_list_like(raw));
             }
             "--ai-only" => ai_only_flag = true,
             "--min-ai-confidence" => {
@@ -129,6 +135,10 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     let rules_dir = rules_dir_override.unwrap_or_else(|| config.rules_dir.clone());
     let format = format_override.unwrap_or(config.format);
     let categories = categories_override.unwrap_or_else(|| config.rules.clone());
+    let mut exclude_paths = config.exclude_paths.clone();
+    if let Some(extra) = exclude_paths_override {
+        exclude_paths.extend(extra);
+    }
     let ai_only = ai_only_flag || config.ai_only;
     let min_ai_confidence = min_ai_confidence_override.or(config.min_ai_confidence);
     let severity_threshold = severity_override.or(config.severity_threshold);
@@ -153,6 +163,7 @@ fn run_scan(args: &[String]) -> Result<(), String> {
         ai_only,
         min_ai_confidence,
         categories,
+        exclude_paths,
     };
     let mut result = if staged_only {
         let staged_targets = collect_staged_targets(&target)?;
@@ -364,7 +375,7 @@ fn run_init(args: &[String]) -> Result<(), String> {
         return Err(format!("{} already exists", output.display()));
     }
 
-    let config = "version: 1\nrules_dir: rules\nformat: table\nrules: []\nai_only: false\nmin_ai_confidence: 0.70\nseverity_threshold: medium\nfail_on_findings: false\nhistory_file: .aishield-history.log\nrecord_history: true\n";
+    let config = "version: 1\nrules_dir: rules\nformat: table\nrules: []\nexclude_paths: []\nai_only: false\nmin_ai_confidence: 0.70\nseverity_threshold: medium\nfail_on_findings: false\nhistory_file: .aishield-history.log\nrecord_history: true\n";
 
     let mut file = File::create(&output).map_err(|err| err.to_string())?;
     file.write_all(config.as_bytes())
@@ -756,7 +767,7 @@ fn render_stats_json(aggregate: &StatsAggregate, days: u64, history_file: &Path)
 fn print_help() {
     println!("AIShield CLI (foundation)\n");
     println!("Usage:");
-    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif] [--rules c1,c2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged] [--output FILE] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
+    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged] [--output FILE] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
     println!("  aishield fix <path> [--rules-dir DIR] [--config FILE] [--no-config]");
     println!("  aishield init [--output PATH]");
     println!("  aishield stats [--last Nd] [--history-file FILE] [--format table|json] [--config FILE] [--no-config]");
@@ -1191,6 +1202,7 @@ struct AppConfig {
     rules_dir: PathBuf,
     format: OutputFormat,
     rules: Vec<String>,
+    exclude_paths: Vec<String>,
     ai_only: bool,
     min_ai_confidence: Option<f32>,
     severity_threshold: Option<SeverityThreshold>,
@@ -1205,6 +1217,7 @@ impl Default for AppConfig {
             rules_dir: PathBuf::from("rules"),
             format: OutputFormat::Table,
             rules: Vec::new(),
+            exclude_paths: Vec::new(),
             ai_only: false,
             min_ai_confidence: None,
             severity_threshold: None,
@@ -1247,6 +1260,7 @@ impl AppConfig {
                 "rules_dir" => config.rules_dir = PathBuf::from(strip_quotes(value)),
                 "format" => config.format = OutputFormat::parse(value)?,
                 "rules" => config.rules = parse_list_like(value),
+                "exclude_paths" => config.exclude_paths = parse_list_like(value),
                 "ai_only" => config.ai_only = parse_bool(value)?,
                 "min_ai_confidence" => {
                     config.min_ai_confidence = Some(

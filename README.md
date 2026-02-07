@@ -47,6 +47,9 @@ tests/fixtures/    # vulnerable sample files
 # scan current project
 cargo run -p aishield-cli -- scan .
 
+# scan while excluding generated/vendor paths
+cargo run -p aishield-cli -- scan . --exclude vendor/,dist/,node_modules/
+
 # scan only staged files (fast pre-commit mode)
 cargo run -p aishield-cli -- scan . --staged
 
@@ -75,6 +78,7 @@ aishield scan <path> \
   [--rules-dir DIR] \
   [--format table|json|sarif] \
   [--rules auth,crypto] \
+  [--exclude vendor/,dist/] \
   [--ai-only] \
   [--min-ai-confidence N] \
   [--severity LEVEL] \
@@ -122,6 +126,7 @@ version: 1
 rules_dir: rules
 format: table
 rules: [auth]
+exclude_paths: [vendor/, node_modules/, dist/]
 ai_only: false
 min_ai_confidence: 0.70
 severity_threshold: medium

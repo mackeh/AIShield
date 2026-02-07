@@ -72,6 +72,7 @@ pub struct AnalysisOptions {
     pub ai_only: bool,
     pub min_ai_confidence: Option<f32>,
     pub categories: Vec<String>,
+    pub exclude_paths: Vec<String>,
 }
 
 pub struct Analyzer {
@@ -95,6 +96,10 @@ impl Analyzer {
         let mut dedup = HashSet::new();
 
         for file in &files {
+            if is_excluded_path(target, &file.path, &options.exclude_paths) {
+                continue;
+            }
+
             let content = match std::fs::read_to_string(&file.path) {
                 Ok(content) => content,
                 Err(_) => continue,
@@ -181,6 +186,20 @@ fn should_include_rule(rule: &Rule, options: &AnalysisOptions) -> bool {
 
     let threshold = options.min_ai_confidence.unwrap_or(0.70).clamp(0.0, 1.0);
     rule.confidence_that_ai_generated >= threshold
+}
+
+fn is_excluded_path(target: &Path, file_path: &Path, exclude_paths: &[String]) -> bool {
+    if exclude_paths.is_empty() {
+        return false;
+    }
+
+    let full = file_path.to_string_lossy().to_ascii_lowercase();
+    let relative = relative_path(target, file_path).to_ascii_lowercase();
+
+    exclude_paths.iter().any(|pattern| {
+        let pattern = pattern.to_ascii_lowercase();
+        !pattern.is_empty() && (full.contains(&pattern) || relative.contains(&pattern))
+    })
 }
 
 fn has_negative_match(line_lower: &str, full_lower: &str, negative_patterns: &[String]) -> bool {
@@ -532,6 +551,58 @@ if (token === expected) {
             .expect("scan");
 
         assert_eq!(result.summary.total, 0);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn exclude_paths_skip_matching_files() {
+        let root = temp_path("aishield-core-test-exclude");
+        let rules_dir = root.join("rules/python/auth");
+        let src_dir = root.join("src");
+        let vendor_dir = src_dir.join("vendor");
+
+        fs::create_dir_all(&rules_dir).expect("create rules dir");
+        fs::create_dir_all(&vendor_dir).expect("create vendor dir");
+
+        fs::write(
+            rules_dir.join("token-compare.yaml"),
+            r#"id: AISHIELD-PY-AUTH-001
+title: Timing-Unsafe Secret Comparison
+severity: high
+confidence_that_ai_generated: 0.88
+languages: [python]
+category: auth
+pattern:
+  any:
+    - "token == "
+fix:
+  suggestion: use compare_digest
+tags: [auth]
+"#,
+        )
+        .expect("write rule");
+
+        fs::write(src_dir.join("main.py"), "if token == expected:\n    pass\n")
+            .expect("write source");
+        fs::write(
+            vendor_dir.join("lib.py"),
+            "if token == expected:\n    pass\n",
+        )
+        .expect("write vendor source");
+
+        let rules = RuleSet::load_from_dir(root.join("rules").as_path()).expect("load rules");
+        let analyzer = Analyzer::new(rules);
+        let options = AnalysisOptions {
+            exclude_paths: vec!["vendor/".to_string()],
+            ..AnalysisOptions::default()
+        };
+        let result = analyzer
+            .analyze_path(src_dir.as_path(), &options)
+            .expect("scan");
+
+        assert_eq!(result.summary.total, 1);
+        assert_eq!(result.findings[0].file, "main.py");
 
         let _ = fs::remove_dir_all(root);
     }
