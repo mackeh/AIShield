@@ -27,6 +27,8 @@ This repository currently contains a solid foundation for Phase 1:
 - Report file output via `--output`
 - Scan history tracking plus `aishield stats --last Nd` analytics
 - Local pre-commit hook installer
+- Benchmark command for scan-performance baselining (`aishield bench`)
+- Interactive fix groundwork (`aishield fix --interactive`)
 - GitHub Actions workflow uploading SARIF to GitHub Security
 - Expanded vulnerable fixture suite and regression tests for rule coverage
 
@@ -83,6 +85,9 @@ cargo run -p aishield-cli -- scan . --format sarif --dedup none
 # initialize local config
 cargo run -p aishield-cli -- init
 
+# benchmark scan performance (5 measured runs, 1 warmup)
+cargo run -p aishield-cli -- bench . --iterations 5 --warmup 1
+
 # install a pre-commit gate
 cargo run -p aishield-cli -- hook install --severity high
 
@@ -117,11 +122,29 @@ aishield scan <path> \
 ### `fix`
 
 ```bash
-aishield fix <path> [--rules-dir DIR] [--write] [--dry-run] [--config FILE] [--no-config]
+aishield fix <path> [--rules-dir DIR] [--write|--interactive] [--dry-run] [--config FILE] [--no-config]
 ```
 
 `--write` applies available safe autofixes in-place for supported rules.  
 `--dry-run` reports what would change without writing files.
+`--interactive` prompts per autofix candidate with `yes/no/all/quit`.
+
+### `bench`
+
+```bash
+aishield bench <path> \
+  [--rules-dir DIR] \
+  [--iterations N] \
+  [--warmup N] \
+  [--format table|json] \
+  [--bridge semgrep,bandit,eslint|all] \
+  [--rules auth,crypto] \
+  [--exclude vendor/,dist/] \
+  [--ai-only] \
+  [--min-ai-confidence N] \
+  [--config FILE] \
+  [--no-config]
+```
 
 ### `init`
 

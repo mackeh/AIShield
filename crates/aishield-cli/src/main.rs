@@ -2,11 +2,11 @@ use std::collections::{BTreeMap, HashSet};
 use std::env;
 use std::fmt::Write as FmtWrite;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use aishield_core::{
     AnalysisOptions, Analyzer, Finding, RuleSet, ScanResult, ScanSummary, Severity,
@@ -30,6 +30,7 @@ fn run() -> Result<(), String> {
     match args[0].as_str() {
         "scan" => run_scan(&args[1..]),
         "fix" => run_fix(&args[1..]),
+        "bench" => run_bench(&args[1..]),
         "init" => run_init(&args[1..]),
         "create-rule" => run_create_rule(&args[1..]),
         "stats" => run_stats(&args[1..]),
@@ -786,6 +787,357 @@ fn analyze_targets(
     Ok(ScanResult { findings, summary })
 }
 
+fn run_bench(args: &[String]) -> Result<(), String> {
+    if args.is_empty() {
+        return Err("bench requires a target path".to_string());
+    }
+
+    let target = PathBuf::from(&args[0]);
+    let mut rules_dir_override = None;
+    let mut bridge_engines_override = None::<Vec<BridgeEngine>>;
+    let mut categories_override = None;
+    let mut exclude_paths_override = None;
+    let mut ai_only_flag = false;
+    let mut min_ai_confidence_override = None;
+    let mut iterations = 5usize;
+    let mut warmup = 1usize;
+    let mut format = BenchOutputFormat::Table;
+    let mut config_path = PathBuf::from(".aishield.yml");
+    let mut use_config = true;
+
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--rules-dir" => {
+                i += 1;
+                rules_dir_override = Some(PathBuf::from(
+                    args.get(i).ok_or("--rules-dir requires a value")?,
+                ));
+            }
+            "--bridge" => {
+                i += 1;
+                bridge_engines_override = Some(parse_bridge_engines(
+                    args.get(i).ok_or("--bridge requires a value")?,
+                )?);
+            }
+            "--rules" => {
+                i += 1;
+                let raw = args.get(i).ok_or("--rules requires a value")?;
+                categories_override = Some(parse_list_like(raw));
+            }
+            "--exclude" => {
+                i += 1;
+                let raw = args.get(i).ok_or("--exclude requires a value")?;
+                exclude_paths_override = Some(parse_list_like(raw));
+            }
+            "--ai-only" => ai_only_flag = true,
+            "--min-ai-confidence" => {
+                i += 1;
+                let raw = args.get(i).ok_or("--min-ai-confidence requires a value")?;
+                min_ai_confidence_override = Some(
+                    raw.parse::<f32>()
+                        .map_err(|_| "invalid --min-ai-confidence value".to_string())?,
+                );
+            }
+            "--iterations" => {
+                i += 1;
+                let raw = args.get(i).ok_or("--iterations requires a value")?;
+                iterations = raw
+                    .parse::<usize>()
+                    .map_err(|_| "invalid --iterations value".to_string())?;
+                if iterations == 0 {
+                    return Err("--iterations must be greater than zero".to_string());
+                }
+            }
+            "--warmup" => {
+                i += 1;
+                let raw = args.get(i).ok_or("--warmup requires a value")?;
+                warmup = raw
+                    .parse::<usize>()
+                    .map_err(|_| "invalid --warmup value".to_string())?;
+            }
+            "--format" => {
+                i += 1;
+                format = BenchOutputFormat::parse(args.get(i).ok_or("--format requires a value")?)?;
+            }
+            "--config" => {
+                i += 1;
+                config_path = PathBuf::from(args.get(i).ok_or("--config requires a value")?);
+            }
+            "--no-config" => use_config = false,
+            other => return Err(format!("unknown bench option `{other}`")),
+        }
+        i += 1;
+    }
+
+    let config = if use_config {
+        AppConfig::load_if_exists(&config_path)?
+    } else {
+        AppConfig::default()
+    };
+
+    let rules_dir = rules_dir_override.unwrap_or_else(|| config.rules_dir.clone());
+    let bridge_engines = bridge_engines_override.unwrap_or_else(|| config.bridge_engines.clone());
+    let categories = categories_override.unwrap_or_else(|| config.rules.clone());
+    let mut exclude_paths = config.exclude_paths.clone();
+    if let Some(extra) = exclude_paths_override {
+        exclude_paths.extend(extra);
+    }
+    let ai_only = ai_only_flag || config.ai_only;
+    let min_ai_confidence = min_ai_confidence_override.or(config.min_ai_confidence);
+
+    let ruleset = RuleSet::load_from_dir(&rules_dir)
+        .map_err(|err| format!("failed to load rules from {}: {err}", rules_dir.display()))?;
+    if ruleset.rules.is_empty() {
+        return Err(format!("no rules found in {}", rules_dir.display()));
+    }
+
+    let analyzer = Analyzer::new(ruleset);
+    let options = AnalysisOptions {
+        ai_only,
+        min_ai_confidence,
+        categories,
+        exclude_paths,
+    };
+
+    let total_runs = warmup + iterations;
+    let mut samples_ms = Vec::with_capacity(iterations);
+    let mut final_result = None::<ScanResult>;
+    let mut bridge_warnings_seen = HashSet::new();
+
+    for run_idx in 0..total_runs {
+        let started = Instant::now();
+        let mut result = analyzer
+            .analyze_path(&target, &options)
+            .map_err(|err| format!("failed to scan {}: {err}", target.display()))?;
+
+        if !bridge_engines.is_empty() {
+            let bridge_result = collect_bridge_findings(&target, &bridge_engines);
+            for warning in bridge_result.warnings {
+                if bridge_warnings_seen.insert(warning.clone()) {
+                    eprintln!("warning: {warning}");
+                }
+            }
+            if !bridge_result.findings.is_empty() {
+                result.findings.extend(bridge_result.findings);
+                result = dedup_machine_output(&result, DedupMode::Normalized);
+                result.summary = recompute_summary(&result);
+            }
+        }
+
+        let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
+        if run_idx >= warmup {
+            samples_ms.push(elapsed_ms);
+            final_result = Some(result);
+        }
+    }
+
+    let final_result = final_result.ok_or("benchmark did not execute measured runs")?;
+    let metrics = BenchMetrics::from_samples(&samples_ms)?;
+    let rendered = match format {
+        BenchOutputFormat::Table => render_bench_table(
+            &target,
+            iterations,
+            warmup,
+            &metrics,
+            &final_result,
+            &bridge_engines,
+        ),
+        BenchOutputFormat::Json => render_bench_json(
+            &target,
+            iterations,
+            warmup,
+            &metrics,
+            &final_result,
+            &bridge_engines,
+        ),
+    };
+
+    write_stdout(&rendered)
+}
+
+struct BenchMetrics {
+    min_ms: f64,
+    max_ms: f64,
+    mean_ms: f64,
+    median_ms: f64,
+    p95_ms: f64,
+    stddev_ms: f64,
+}
+
+impl BenchMetrics {
+    fn from_samples(samples_ms: &[f64]) -> Result<Self, String> {
+        if samples_ms.is_empty() {
+            return Err("benchmark samples are empty".to_string());
+        }
+
+        let min_ms = samples_ms
+            .iter()
+            .copied()
+            .reduce(f64::min)
+            .ok_or("missing min sample")?;
+        let max_ms = samples_ms
+            .iter()
+            .copied()
+            .reduce(f64::max)
+            .ok_or("missing max sample")?;
+        let mean_ms = samples_ms.iter().sum::<f64>() / samples_ms.len() as f64;
+        let variance = samples_ms
+            .iter()
+            .map(|sample| {
+                let delta = sample - mean_ms;
+                delta * delta
+            })
+            .sum::<f64>()
+            / samples_ms.len() as f64;
+        let stddev_ms = variance.sqrt();
+
+        Ok(Self {
+            min_ms,
+            max_ms,
+            mean_ms,
+            median_ms: percentile(samples_ms, 0.50),
+            p95_ms: percentile(samples_ms, 0.95),
+            stddev_ms,
+        })
+    }
+}
+
+fn percentile(samples_ms: &[f64], percentile: f64) -> f64 {
+    if samples_ms.is_empty() {
+        return 0.0;
+    }
+    if samples_ms.len() == 1 {
+        return samples_ms[0];
+    }
+
+    let mut sorted = samples_ms.to_vec();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+    let clamped = percentile.clamp(0.0, 1.0);
+    let rank = clamped * (sorted.len() as f64 - 1.0);
+    let lower_idx = rank.floor() as usize;
+    let upper_idx = rank.ceil() as usize;
+    if lower_idx == upper_idx {
+        return sorted[lower_idx];
+    }
+
+    let weight = rank - lower_idx as f64;
+    sorted[lower_idx] + (sorted[upper_idx] - sorted[lower_idx]) * weight
+}
+
+fn render_bench_table(
+    target: &Path,
+    iterations: usize,
+    warmup: usize,
+    metrics: &BenchMetrics,
+    result: &ScanResult,
+    bridge_engines: &[BridgeEngine],
+) -> String {
+    let mut out = String::new();
+    let bridge_display = if bridge_engines.is_empty() {
+        "none".to_string()
+    } else {
+        bridge_engines
+            .iter()
+            .map(|engine| engine.as_str())
+            .collect::<Vec<_>>()
+            .join(",")
+    };
+
+    let _ = writeln!(out, "AIShield benchmark");
+    let _ = writeln!(out, "Target: {}", target.display());
+    let _ = writeln!(out, "Iterations: {} (warmup {})", iterations, warmup);
+    let _ = writeln!(out, "Bridge engines: {}", bridge_display);
+    let _ = writeln!(out, "Mean:   {:.2} ms", metrics.mean_ms);
+    let _ = writeln!(out, "Median: {:.2} ms", metrics.median_ms);
+    let _ = writeln!(out, "P95:    {:.2} ms", metrics.p95_ms);
+    let _ = writeln!(out, "Min:    {:.2} ms", metrics.min_ms);
+    let _ = writeln!(out, "Max:    {:.2} ms", metrics.max_ms);
+    let _ = writeln!(out, "Stddev: {:.2} ms", metrics.stddev_ms);
+    let _ = writeln!(
+        out,
+        "Throughput: {:.2} scans/sec",
+        1000.0 / metrics.mean_ms.max(0.0001)
+    );
+    let _ = writeln!(
+        out,
+        "Result snapshot: findings={} scanned_files={} matched_rules={}",
+        result.summary.total, result.summary.scanned_files, result.summary.matched_rules
+    );
+    let target_status = if metrics.mean_ms <= 2000.0 {
+        "PASS"
+    } else {
+        "FAIL"
+    };
+    let _ = writeln!(out, "Phase-2 speed target (<2s mean): {}", target_status);
+    out
+}
+
+fn render_bench_json(
+    target: &Path,
+    iterations: usize,
+    warmup: usize,
+    metrics: &BenchMetrics,
+    result: &ScanResult,
+    bridge_engines: &[BridgeEngine],
+) -> String {
+    let mut out = String::new();
+    out.push_str("{\n");
+    let _ = writeln!(
+        out,
+        "  \"target\": \"{}\",",
+        escape_json(target.to_string_lossy().as_ref())
+    );
+    let _ = writeln!(out, "  \"iterations\": {},", iterations);
+    let _ = writeln!(out, "  \"warmup\": {},", warmup);
+    out.push_str("  \"bridge_engines\": [");
+    for (idx, engine) in bridge_engines.iter().enumerate() {
+        if idx > 0 {
+            out.push_str(", ");
+        }
+        let _ = write!(out, "\"{}\"", engine.as_str());
+    }
+    out.push_str("],\n");
+    out.push_str("  \"timing_ms\": {\n");
+    let _ = writeln!(out, "    \"mean\": {:.3},", metrics.mean_ms);
+    let _ = writeln!(out, "    \"median\": {:.3},", metrics.median_ms);
+    let _ = writeln!(out, "    \"p95\": {:.3},", metrics.p95_ms);
+    let _ = writeln!(out, "    \"min\": {:.3},", metrics.min_ms);
+    let _ = writeln!(out, "    \"max\": {:.3},", metrics.max_ms);
+    let _ = writeln!(out, "    \"stddev\": {:.3}", metrics.stddev_ms);
+    out.push_str("  },\n");
+    let _ = writeln!(
+        out,
+        "  \"throughput_scans_per_sec\": {:.3},",
+        1000.0 / metrics.mean_ms.max(0.0001)
+    );
+    out.push_str("  \"result_snapshot\": {\n");
+    let _ = writeln!(out, "    \"findings\": {},", result.summary.total);
+    let _ = writeln!(
+        out,
+        "    \"scanned_files\": {},",
+        result.summary.scanned_files
+    );
+    let _ = writeln!(
+        out,
+        "    \"matched_rules\": {}",
+        result.summary.matched_rules
+    );
+    out.push_str("  },\n");
+    let _ = writeln!(
+        out,
+        "  \"target_under_2s_mean\": {}",
+        if metrics.mean_ms <= 2000.0 {
+            "true"
+        } else {
+            "false"
+        }
+    );
+    out.push_str("}\n");
+    out
+}
+
 fn run_fix(args: &[String]) -> Result<(), String> {
     if args.is_empty() {
         return Err("fix requires a target path".to_string());
@@ -795,6 +1147,7 @@ fn run_fix(args: &[String]) -> Result<(), String> {
     let mut rules_dir_override = None;
     let mut write_changes = false;
     let mut dry_run = false;
+    let mut interactive = false;
     let mut config_path = PathBuf::from(".aishield.yml");
     let mut use_config = true;
 
@@ -813,10 +1166,21 @@ fn run_fix(args: &[String]) -> Result<(), String> {
             }
             "--write" => write_changes = true,
             "--dry-run" => dry_run = true,
+            "--interactive" => interactive = true,
             "--no-config" => use_config = false,
             other => return Err(format!("unknown fix option `{other}`")),
         }
         i += 1;
+    }
+
+    if write_changes && dry_run {
+        return Err("use either --write or --dry-run, not both".to_string());
+    }
+    if interactive && write_changes {
+        return Err("use either --interactive or --write, not both".to_string());
+    }
+    if interactive && !io::stdin().is_terminal() {
+        return Err("interactive mode requires a terminal (use --write or --dry-run)".to_string());
     }
 
     let config = if use_config {
@@ -837,27 +1201,232 @@ fn run_fix(args: &[String]) -> Result<(), String> {
         return Ok(());
     }
 
-    if write_changes || dry_run {
+    if interactive {
+        run_fix_interactive(&target, &result, dry_run)?;
+    } else if write_changes || dry_run {
         apply_autofixes(&target, &result, write_changes, dry_run)?;
     } else {
-        println!("Suggested remediations:");
-        for finding in &result.findings {
-            println!(
-                "- [{}] {}:{}:{}",
-                finding.id, finding.file, finding.line, finding.column
-            );
-            if let Some(suggestion) = &finding.fix_suggestion {
-                println!("  Fix: {suggestion}");
-            } else {
-                println!("  Fix: Review this code path and apply secure defaults.");
-            }
-            if let Some(ai_tendency) = &finding.ai_tendency {
-                println!("  Why AI gets this wrong: {ai_tendency}");
-            }
-        }
+        print_suggested_remediations(&result);
     }
 
     Ok(())
+}
+
+#[derive(Clone)]
+struct InteractiveAutofixCandidate {
+    file_path: PathBuf,
+    file_display: String,
+    rule_id: String,
+    title: String,
+    line: usize,
+    column: usize,
+    fix_suggestion: Option<String>,
+}
+
+fn run_fix_interactive(target: &Path, result: &ScanResult, dry_run: bool) -> Result<(), String> {
+    let candidates = collect_interactive_candidates(target, result);
+    if candidates.is_empty() {
+        println!("No safe autofixes are available for these findings.");
+        print_suggested_remediations(result);
+        return Ok(());
+    }
+
+    println!(
+        "Interactive fix mode: {} autofix candidate(s).",
+        candidates.len()
+    );
+    if dry_run {
+        println!("Dry-run enabled: no files will be written.");
+    }
+
+    let mut file_contents = BTreeMap::<PathBuf, String>::new();
+    let mut changed_files = std::collections::BTreeSet::<PathBuf>::new();
+    let mut total_replacements = 0usize;
+    let mut apply_remaining = false;
+
+    for (idx, candidate) in candidates.iter().enumerate() {
+        if !file_contents.contains_key(&candidate.file_path) {
+            let content = match fs::read_to_string(&candidate.file_path) {
+                Ok(content) => content,
+                Err(err) => {
+                    eprintln!(
+                        "warning: skipping {}: failed to read: {}",
+                        candidate.file_path.display(),
+                        err
+                    );
+                    continue;
+                }
+            };
+            file_contents.insert(candidate.file_path.clone(), content);
+        }
+
+        let Some(content) = file_contents.get_mut(&candidate.file_path) else {
+            continue;
+        };
+        let replacements = autofix_replacements(&candidate.rule_id);
+        let possible_replacements = count_replacements(content, &replacements);
+        if possible_replacements == 0 {
+            continue;
+        }
+
+        println!(
+            "\n[{}/{}] [{}] {}:{}:{}",
+            idx + 1,
+            candidates.len(),
+            candidate.rule_id,
+            candidate.file_display,
+            candidate.line,
+            candidate.column
+        );
+        println!("  {}", candidate.title);
+        if let Some(suggestion) = &candidate.fix_suggestion {
+            println!("  Fix: {suggestion}");
+        }
+        println!("  Proposed replacements: {}", possible_replacements);
+
+        let action = if apply_remaining {
+            "a".to_string()
+        } else {
+            prompt_action("Apply autofix? [y]es/[n]o/[a]ll/[q]uit (default n): ", "n")?
+        };
+
+        match action.as_str() {
+            "q" => break,
+            "n" => continue,
+            "a" => {
+                apply_remaining = true;
+            }
+            "y" => {}
+            _ => continue,
+        }
+
+        let applied = apply_replacements(content, &replacements);
+        if applied > 0 {
+            changed_files.insert(candidate.file_path.clone());
+            total_replacements += applied;
+            println!("  Applied {} replacement(s).", applied);
+        }
+    }
+
+    if total_replacements == 0 {
+        println!("No autofix changes selected.");
+        return Ok(());
+    }
+
+    if dry_run {
+        println!(
+            "Interactive dry-run: {} file(s) would change with {} replacement(s).",
+            changed_files.len(),
+            total_replacements
+        );
+        return Ok(());
+    }
+
+    for path in &changed_files {
+        let Some(content) = file_contents.get(path) else {
+            continue;
+        };
+        fs::write(path, content)
+            .map_err(|err| format!("failed to write {}: {err}", path.display()))?;
+    }
+
+    println!(
+        "Interactive autofix applied: {} file(s) changed with {} replacement(s).",
+        changed_files.len(),
+        total_replacements
+    );
+    Ok(())
+}
+
+fn collect_interactive_candidates(
+    target: &Path,
+    result: &ScanResult,
+) -> Vec<InteractiveAutofixCandidate> {
+    let mut keyed = BTreeMap::<(String, String), InteractiveAutofixCandidate>::new();
+    for finding in &result.findings {
+        if autofix_replacements(&finding.id).is_empty() {
+            continue;
+        }
+
+        let file_path = resolve_finding_path(target, &finding.file);
+        let key = (file_path.display().to_string(), finding.id.clone());
+        keyed
+            .entry(key)
+            .or_insert_with(|| InteractiveAutofixCandidate {
+                file_path,
+                file_display: finding.file.clone(),
+                rule_id: finding.id.clone(),
+                title: finding.title.clone(),
+                line: finding.line,
+                column: finding.column,
+                fix_suggestion: finding.fix_suggestion.clone(),
+            });
+    }
+
+    keyed.into_values().collect::<Vec<_>>()
+}
+
+fn prompt_action(prompt: &str, default: &str) -> Result<String, String> {
+    let mut stdout = io::stdout();
+    stdout
+        .write_all(prompt.as_bytes())
+        .map_err(|err| format!("failed to write prompt: {err}"))?;
+    stdout
+        .flush()
+        .map_err(|err| format!("failed to flush prompt: {err}"))?;
+
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .map_err(|err| format!("failed to read input: {err}"))?;
+    let action = if input.trim().is_empty() {
+        default.to_string()
+    } else {
+        input.trim().to_ascii_lowercase()
+    };
+
+    match action.as_str() {
+        "y" | "n" | "a" | "q" => Ok(action),
+        _ => Ok(default.to_string()),
+    }
+}
+
+fn count_replacements(content: &str, replacements: &[(&str, &str)]) -> usize {
+    replacements
+        .iter()
+        .map(|(from, _)| content.match_indices(from).count())
+        .sum()
+}
+
+fn apply_replacements(content: &mut String, replacements: &[(&str, &str)]) -> usize {
+    let mut count = 0usize;
+    for (from, to) in replacements {
+        let matches = content.match_indices(from).count();
+        if matches == 0 {
+            continue;
+        }
+        *content = content.replace(from, to);
+        count += matches;
+    }
+    count
+}
+
+fn print_suggested_remediations(result: &ScanResult) {
+    println!("Suggested remediations:");
+    for finding in &result.findings {
+        println!(
+            "- [{}] {}:{}:{}",
+            finding.id, finding.file, finding.line, finding.column
+        );
+        if let Some(suggestion) = &finding.fix_suggestion {
+            println!("  Fix: {suggestion}");
+        } else {
+            println!("  Fix: Review this code path and apply secure defaults.");
+        }
+        if let Some(ai_tendency) = &finding.ai_tendency {
+            println!("  Why AI gets this wrong: {ai_tendency}");
+        }
+    }
 }
 
 fn run_init(args: &[String]) -> Result<(), String> {
@@ -1575,7 +2144,8 @@ fn print_help() {
     println!("AIShield CLI (foundation)\n");
     println!("Usage:");
     println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
-    println!("  aishield fix <path> [--rules-dir DIR] [--write] [--dry-run] [--config FILE] [--no-config]");
+    println!("  aishield fix <path> [--rules-dir DIR] [--write|--interactive] [--dry-run] [--config FILE] [--no-config]");
+    println!("  aishield bench <path> [--rules-dir DIR] [--iterations N] [--warmup N] [--format table|json] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--config FILE] [--no-config]");
     println!("  aishield init [--output PATH]");
     println!("  aishield create-rule --id ID --title TITLE --language LANG --category CAT [--severity LEVEL] [--pattern-any P] [--pattern-all P] [--pattern-not P] [--tags t1,t2] [--suggestion TEXT] [--out-dir DIR] [--force]");
     println!("  aishield stats [--last Nd] [--history-file FILE] [--format table|json] [--config FILE] [--no-config]");
@@ -2448,6 +3018,22 @@ impl StatsOutputFormat {
 }
 
 #[derive(Clone, Copy)]
+enum BenchOutputFormat {
+    Table,
+    Json,
+}
+
+impl BenchOutputFormat {
+    fn parse(raw: &str) -> Result<Self, String> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "table" => Ok(Self::Table),
+            "json" => Ok(Self::Json),
+            _ => Err("bench format must be table or json".to_string()),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
 enum SeverityThreshold {
     Critical,
     High,
@@ -2496,9 +3082,10 @@ impl SeverityThreshold {
 #[cfg(test)]
 mod tests {
     use super::{
-        dedup_machine_output, empty_summary, escape_github_annotation_message,
-        escape_github_annotation_property, normalize_snippet, render_github_annotations,
-        render_sarif, DedupMode, Finding, OutputSummary, ScanResult, Severity,
+        apply_replacements, count_replacements, dedup_machine_output, empty_summary,
+        escape_github_annotation_message, escape_github_annotation_property, normalize_snippet,
+        percentile, render_github_annotations, render_sarif, DedupMode, Finding, OutputSummary,
+        ScanResult, Severity,
     };
 
     fn finding(
@@ -2684,5 +3271,28 @@ mod tests {
 
         let sarif = render_sarif(&raw, &summary);
         assert!(sarif.contains("\"startLine\": 1, \"startColumn\": 1"));
+    }
+
+    #[test]
+    fn percentile_uses_linear_interpolation() {
+        let samples = vec![10.0, 20.0, 30.0, 40.0];
+        let p50 = percentile(&samples, 0.5);
+        let p95 = percentile(&samples, 0.95);
+        assert!((p50 - 25.0).abs() < f64::EPSILON);
+        assert!((p95 - 38.5).abs() < 0.0001);
+    }
+
+    #[test]
+    fn apply_replacements_updates_content_and_counts_matches() {
+        let mut content = "hashlib.md5(data)\nverify=False\n".to_string();
+        let replacements = vec![
+            ("hashlib.md5(", "hashlib.sha256("),
+            ("verify=False", "verify=True"),
+        ];
+        assert_eq!(count_replacements(&content, &replacements), 2);
+        let applied = apply_replacements(&mut content, &replacements);
+        assert_eq!(applied, 2);
+        assert!(content.contains("hashlib.sha256(data)"));
+        assert!(content.contains("verify=True"));
     }
 }

@@ -7,6 +7,7 @@ This document is the command reference for `aishield-cli`.
 ```bash
 aishield scan <path> [options]
 aishield fix <path> [options]
+aishield bench <path> [options]
 aishield init [options]
 aishield create-rule [options]
 aishield hook install [options]
@@ -87,13 +88,49 @@ cargo run -p aishield-cli -- scan . --bridge all
 Print or apply safe autofixes for supported rules.
 
 ```bash
-aishield fix <path> [--rules-dir DIR] [--write] [--dry-run] [--config FILE] [--no-config]
+aishield fix <path> [--rules-dir DIR] [--write|--interactive] [--dry-run] [--config FILE] [--no-config]
 ```
 
 Options:
 
 - `--write`: apply changes in place
 - `--dry-run`: show planned edits without writing
+- `--interactive`: prompt per autofix candidate (`yes/no/all/quit`)
+
+## `bench`
+
+Run repeated scans and print timing metrics.
+
+```bash
+aishield bench <path> \
+  [--rules-dir DIR] \
+  [--iterations N] \
+  [--warmup N] \
+  [--format table|json] \
+  [--bridge semgrep,bandit,eslint|all] \
+  [--rules c1,c2] \
+  [--exclude p1,p2] \
+  [--ai-only] \
+  [--min-ai-confidence N] \
+  [--config FILE] \
+  [--no-config]
+```
+
+Options:
+
+- `--iterations N`: number of measured runs (default `5`)
+- `--warmup N`: number of unmeasured warmup runs (default `1`)
+- `--format`: benchmark output (`table` or `json`)
+
+Example:
+
+```bash
+# benchmark core scan performance
+cargo run -p aishield-cli -- bench . --iterations 10 --warmup 2
+
+# include external bridge engines in benchmark
+cargo run -p aishield-cli -- bench . --bridge all --format json
+```
 
 ## `init`
 

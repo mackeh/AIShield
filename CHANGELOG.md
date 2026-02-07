@@ -16,6 +16,8 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - CI workflow optionally installs bridge tools (enabled by default, toggle via repo vars)
 - SARIF/GitHub annotation rendering now clamps line/column to valid 1-based values
 - Added initial Go/Rust/Java language scanning support with starter rulepacks and fixtures
+- Added `bench` command for repeatable scan-time benchmarking with table/JSON output
+- Added `fix --interactive` groundwork for prompt-driven autofix selection (`yes/no/all/quit`)
 
 ## [0.1.1] - 2026-02-07
 
