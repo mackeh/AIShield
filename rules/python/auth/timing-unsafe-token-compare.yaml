@@ -6,9 +6,11 @@ languages: [python]
 category: auth
 ai_tendency: LLM output frequently uses simple equality checks for auth tokens.
 pattern:
-  contains:
+  any:
     - "token == "
     - "api_key == "
+  not:
+    - "compare_digest("
 fix:
   suggestion: Use hmac.compare_digest() for secret or token comparisons.
 tags: [auth, timing-attack]

@@ -109,9 +109,7 @@ impl Analyzer {
 
                 for (line_no, line) in content.lines().enumerate() {
                     let line_lower = line.to_ascii_lowercase();
-                    let Some(column) =
-                        first_pattern_match_column(&line_lower, &rule.contains_patterns)
-                    else {
+                    let Some(column) = rule.matches_line(&line_lower) else {
                         continue;
                     };
 
@@ -166,15 +164,6 @@ fn should_include_rule(rule: &Rule, options: &AnalysisOptions) -> bool {
 
     let threshold = options.min_ai_confidence.unwrap_or(0.70).clamp(0.0, 1.0);
     rule.confidence_that_ai_generated >= threshold
-}
-
-fn first_pattern_match_column(line_lower: &str, patterns: &[String]) -> Option<usize> {
-    for pattern in patterns {
-        if let Some(idx) = line_lower.find(pattern) {
-            return Some(idx + 1);
-        }
-    }
-    None
 }
 
 fn has_negative_match(line_lower: &str, full_lower: &str, negative_patterns: &[String]) -> bool {
@@ -242,8 +231,11 @@ confidence_that_ai_generated: 0.88
 languages: [python]
 category: auth
 pattern:
-  contains:
-    - "token == "
+  all:
+    - "token"
+    - "=="
+  not:
+    - "compare_digest("
 fix:
   suggestion: use compare_digest
 tags: [auth]
@@ -267,6 +259,61 @@ tags: [auth]
 
         assert_eq!(result.summary.total, 1);
         assert_eq!(result.findings[0].id, "AISHIELD-PY-AUTH-001");
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn any_and_not_patterns_work_together() {
+        let root = temp_path("aishield-core-test-any-not");
+        let rules_dir = root.join("rules/javascript/auth");
+        let src_dir = root.join("src");
+
+        fs::create_dir_all(&rules_dir).expect("create rules dir");
+        fs::create_dir_all(&src_dir).expect("create src dir");
+
+        fs::write(
+            rules_dir.join("token-compare.yaml"),
+            r#"id: AISHIELD-JS-AUTH-001
+title: Timing-Unsafe Token Comparison
+severity: high
+confidence_that_ai_generated: 0.84
+languages: [javascript]
+category: auth
+pattern:
+  any:
+    - "token === "
+    - "apikey === "
+  not:
+    - "timingsafeequal("
+fix:
+  suggestion: use timingSafeEqual
+tags: [auth]
+"#,
+        )
+        .expect("write rule");
+
+        fs::write(
+            src_dir.join("auth.js"),
+            r#"function bad(token, expected) {
+  if (token === expected) return true;
+}
+
+function good(token, expected) {
+  return crypto.timingSafeEqual(token, expected);
+}
+"#,
+        )
+        .expect("write source");
+
+        let rules = RuleSet::load_from_dir(root.join("rules").as_path()).expect("load rules");
+        let analyzer = Analyzer::new(rules);
+        let result = analyzer
+            .analyze_path(src_dir.as_path(), &AnalysisOptions::default())
+            .expect("scan");
+
+        assert_eq!(result.summary.total, 1);
+        assert_eq!(result.findings[0].line, 2);
 
         let _ = fs::remove_dir_all(root);
     }

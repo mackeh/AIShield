@@ -1,24 +1,144 @@
 # AIShield
 
-Initial foundation for AIShield: a Rust workspace with a rule-driven security scanner focused on AI-prone vulnerability patterns.
+AIShield is a security scanner focused on vulnerabilities commonly introduced by AI-generated code.
 
-## Current capabilities
+It is designed to catch high-risk patterns that look plausible in review but are unsafe in production, such as timing-unsafe auth checks, weak crypto usage, unsafe HTML rendering, and injection-prone query building.
 
-- `aishield scan <path>`: scans Python and JavaScript/TypeScript files using YAML rules.
-- Composite risk score per finding using severity, AI likelihood, context risk, and exploitability.
-- `--format table|json|sarif` output formats.
-- `--output <file>` for writing reports directly to disk.
-- Config loading from `.aishield.yml` (override with `--config`, disable with `--no-config`).
-- `aishield init`: writes a starter `.aishield.yml` config.
-- `aishield fix <path>`: lists remediation suggestions from matched findings.
-- `aishield hook install`: installs a local git pre-commit hook that blocks on findings.
+## Why this project exists
+
+AI coding assistants increase development speed, but they also repeat insecure patterns from public examples and outdated snippets. AIShield adds a dedicated security layer for AI-assisted development by combining:
+
+- Rule-based detection for AI-prone vulnerabilities
+- AI-confidence metadata per rule
+- Context-aware risk scoring
+- CLI + CI + pre-commit integration
+
+## Current implementation status
+
+This repository currently contains a solid foundation for Phase 1:
+
+- Rust workspace with `aishield-core` and `aishield-cli`
+- Rule-driven scanner for Python and JavaScript source files
+- Severity + composite risk scoring per finding
+- Output formats: `table`, `json`, `sarif`
+- Config support via `.aishield.yml`
+- Report file output via `--output`
+- Local pre-commit hook installer
+- GitHub Actions workflow uploading SARIF to GitHub Security
+
+## Project structure
+
+```text
+crates/
+  aishield-core/   # scanner engine, rule parsing, scoring
+  aishield-cli/    # CLI commands and output renderers
+rules/             # YAML rules grouped by language/category
+docs/              # authoring and project docs
+tests/fixtures/    # vulnerable sample files
+.github/workflows/ # CI scans + SARIF upload
+```
 
 ## Quick start
 
 ```bash
+# scan current project
 cargo run -p aishield-cli -- scan .
+
+# machine-readable output
 cargo run -p aishield-cli -- scan . --format json
+
+# GitHub Security compatible output
 cargo run -p aishield-cli -- scan . --format sarif --output aishield.sarif
+
+# initialize local config
 cargo run -p aishield-cli -- init
+
+# install a pre-commit gate
 cargo run -p aishield-cli -- hook install --severity high
 ```
+
+## CLI commands
+
+### `scan`
+
+```bash
+aishield scan <path> \
+  [--rules-dir DIR] \
+  [--format table|json|sarif] \
+  [--rules auth,crypto] \
+  [--ai-only] \
+  [--min-ai-confidence N] \
+  [--severity LEVEL] \
+  [--fail-on-findings] \
+  [--output FILE] \
+  [--config FILE] \
+  [--no-config]
+```
+
+### `fix`
+
+```bash
+aishield fix <path> [--rules-dir DIR] [--config FILE] [--no-config]
+```
+
+### `init`
+
+```bash
+aishield init [--output PATH]
+```
+
+### `hook install`
+
+```bash
+aishield hook install [--severity LEVEL] [--path TARGET]
+```
+
+## Configuration
+
+Example `.aishield.yml`:
+
+```yaml
+version: 1
+rules_dir: rules
+format: table
+rules: [auth]
+ai_only: false
+min_ai_confidence: 0.70
+severity_threshold: medium
+fail_on_findings: false
+```
+
+CLI flags override config values.
+
+## Rule engine overview
+
+Rules are YAML files with metadata and pattern logic.
+
+Pattern fields supported:
+
+- `pattern.any`: at least one must match on a line
+- `pattern.all`: all must match on the same line
+- `pattern.not`: none must match on that line
+- `pattern.contains`: compatibility alias for `pattern.any`
+
+See `docs/rules-authoring.md` for full details and examples.
+
+## CI integration
+
+A workflow is included at `.github/workflows/aishield.yml` to:
+
+1. Run AIShield in SARIF mode
+2. Upload `aishield.sarif` to GitHub Security (`code scanning alerts`)
+
+## Roadmap focus
+
+Near-term priorities:
+
+- More high-signal rule coverage across auth/crypto/injection/misconfig
+- More precise matching semantics and fewer false positives
+- Better remediation output and fix workflows
+- Additional language support and deeper static analysis
+
+## Goal
+
+AIShield aims to become the practical security guardrail for AI-assisted coding workflows: fast enough for pre-commit, clear enough for developers, and structured enough for CI and governance.

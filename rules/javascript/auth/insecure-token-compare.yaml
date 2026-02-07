@@ -6,9 +6,11 @@ languages: [javascript]
 category: auth
 ai_tendency: AI-generated middleware frequently compares secrets with strict equality.
 pattern:
-  contains:
+  any:
     - "token === "
     - "apikey === "
+  not:
+    - "timingsafeequal("
 fix:
   suggestion: Use crypto.timingSafeEqual() for constant-time comparison of secrets.
 tags: [auth, timing-attack]
