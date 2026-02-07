@@ -27,6 +27,10 @@ permissions:
   actions: read
   security-events: write
 
+env:
+  AISHIELD_ENABLE_SAST_BRIDGE: ${{ vars.AISHIELD_ENABLE_SAST_BRIDGE || 'true' }}
+  AISHIELD_BRIDGE_ENGINES: ${{ vars.AISHIELD_BRIDGE_ENGINES || 'all' }}
+
 jobs:
   scan:
     runs-on: ubuntu-latest
@@ -35,9 +39,29 @@ jobs:
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo run -p aishield-cli -- scan . --format sarif --output aishield.sarif
+      - run: |
+          if [ "${AISHIELD_ENABLE_SAST_BRIDGE}" = "true" ]; then
+            echo "AISHIELD_BRIDGE_ARGS=--bridge ${AISHIELD_BRIDGE_ENGINES}" >> "$GITHUB_ENV"
+          else
+            echo "AISHIELD_BRIDGE_ARGS=" >> "$GITHUB_ENV"
+          fi
+      - if: env.AISHIELD_ENABLE_SAST_BRIDGE == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - if: env.AISHIELD_ENABLE_SAST_BRIDGE == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install semgrep bandit
+      - if: env.AISHIELD_ENABLE_SAST_BRIDGE == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - if: env.AISHIELD_ENABLE_SAST_BRIDGE == 'true'
+        run: npm install -g eslint
+      - run: cargo run -p aishield-cli -- scan . --format sarif --output aishield.sarif ${AISHIELD_BRIDGE_ARGS}
       - if: github.event_name == 'pull_request'
-        run: cargo run -p aishield-cli -- scan . --format github --dedup normalized --changed-from "${{ github.event.pull_request.base.sha }}"
+        run: cargo run -p aishield-cli -- scan . --format github --dedup normalized --changed-from "${{ github.event.pull_request.base.sha }}" ${AISHIELD_BRIDGE_ARGS}
       - uses: github/codeql-action/upload-sarif@v4
         if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
         continue-on-error: true
@@ -57,6 +81,15 @@ check:
 - workflow includes `permissions.security-events: write`
 - pull request comes from trusted context (fork PRs can restrict tokens)
 - SARIF upload is guarded with the same-repo `if:` condition
+
+## Bridge Controls
+
+Bridge installation and bridge findings are enabled by default.
+
+Optional repository variables:
+
+- `AISHIELD_ENABLE_SAST_BRIDGE`: `true` (default) or `false`
+- `AISHIELD_BRIDGE_ENGINES`: engine list passed to `--bridge` (default `all`)
 
 ## Recommended CI Command Variants
 

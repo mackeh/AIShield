@@ -13,6 +13,7 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - `scan --changed-from <ref>` to scope scans/annotations to changed files
 - Optional SAST bridge (`--bridge`) for Semgrep/Bandit/ESLint with parallel execution
 - Bridge findings normalized into unified AIShield result schema with dedup
+- CI workflow optionally installs bridge tools (enabled by default, toggle via repo vars)
 
 ## [0.1.1] - 2026-02-07
 

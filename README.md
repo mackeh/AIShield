@@ -216,6 +216,7 @@ A workflow is included at `.github/workflows/aishield.yml` to:
 3. Upload `aishield.sarif` to GitHub Security (`code scanning alerts`)
 
 PR annotations are scoped to files changed since the PR base commit using `--changed-from`.
+Bridge tool installation (Semgrep/Bandit/ESLint) is enabled by default in CI and can be toggled with repository variable `AISHIELD_ENABLE_SAST_BRIDGE=false`.
 
 See `docs/ci-github-actions.md` for permissions details and runbook-style troubleshooting.
 
