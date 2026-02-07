@@ -2,20 +2,42 @@
 
 ## Supported Versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
-
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+| Version | Supported |
+| --- | --- |
+| 0.1.x | Yes |
+| < 0.1.0 | No |
 
 ## Reporting a Vulnerability
 
-Use this section to tell people how to report a vulnerability.
+Please report suspected vulnerabilities privately through GitHub:
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+- Open the repository `Security` tab
+- Click `Report a vulnerability`
+- Submit details through GitHub Private Vulnerability Reporting
+
+Do not open public issues for security vulnerabilities.
+
+## What to Include
+
+Please include:
+
+- affected version/tag or commit
+- vulnerable file/path and rule or behavior impacted
+- reproduction steps and proof of concept
+- impact assessment and any suggested mitigation
+
+## Response Targets
+
+AIShield maintainers aim to:
+
+- acknowledge new reports within 72 hours
+- provide an initial assessment within 7 days
+- coordinate remediation and disclosure timing with the reporter
+
+## Disclosure
+
+After a fix is available, maintainers may publish:
+
+- a changelog entry
+- release notes with impact summary
+- migration or mitigation guidance when needed

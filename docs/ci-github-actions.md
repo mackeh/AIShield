@@ -2,6 +2,8 @@
 
 AIShield includes a workflow at `.github/workflows/aishield.yml` that scans and uploads SARIF.
 
+Release automation is defined at `.github/workflows/release.yml` and runs on version tags (`v*.*.*`).
+
 ## What It Does
 
 1. Checks out repository code

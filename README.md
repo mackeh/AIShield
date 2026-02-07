@@ -47,7 +47,10 @@ tests/fixtures/    # vulnerable sample files
 - `docs/configuration.md`: `.aishield.yml` keys, defaults, and precedence
 - `docs/output-formats.md`: table/json/sarif schemas and dedup behavior
 - `docs/ci-github-actions.md`: GitHub Actions integration and troubleshooting
+- `docs/releasing.md`: release and version-tag workflow
 - `docs/rules-authoring.md`: custom rule authoring guide
+- `CHANGELOG.md`: curated release history
+- `SECURITY.md`: vulnerability reporting policy and support window
 
 ## Quick start
 
@@ -201,6 +204,8 @@ A workflow is included at `.github/workflows/aishield.yml` to:
 2. Upload `aishield.sarif` to GitHub Security (`code scanning alerts`)
 
 See `docs/ci-github-actions.md` for permissions details and runbook-style troubleshooting.
+
+Release creation is automated by `.github/workflows/release.yml` on `v*.*.*` tag pushes.
 
 ## Roadmap focus
 
