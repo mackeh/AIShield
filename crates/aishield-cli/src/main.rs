@@ -49,6 +49,7 @@ fn run_scan(args: &[String]) -> Result<(), String> {
 
     let mut rules_dir_override = None;
     let mut format_override = None;
+    let mut dedup_mode_override = None;
     let mut categories_override = None;
     let mut exclude_paths_override = None;
     let mut ai_only_flag = false;
@@ -75,6 +76,12 @@ fn run_scan(args: &[String]) -> Result<(), String> {
                 i += 1;
                 format_override = Some(OutputFormat::parse(
                     args.get(i).ok_or("--format requires a value")?,
+                )?);
+            }
+            "--dedup" => {
+                i += 1;
+                dedup_mode_override = Some(DedupMode::parse(
+                    args.get(i).ok_or("--dedup requires a value")?,
                 )?);
             }
             "--rules" => {
@@ -135,6 +142,9 @@ fn run_scan(args: &[String]) -> Result<(), String> {
 
     let rules_dir = rules_dir_override.unwrap_or_else(|| config.rules_dir.clone());
     let format = format_override.unwrap_or(config.format);
+    let dedup_mode = dedup_mode_override
+        .or(config.dedup_mode)
+        .unwrap_or_else(|| DedupMode::default_for_format(format));
     let categories = categories_override.unwrap_or_else(|| config.rules.clone());
     let mut exclude_paths = config.exclude_paths.clone();
     if let Some(extra) = exclude_paths_override {
@@ -192,8 +202,16 @@ fn run_scan(args: &[String]) -> Result<(), String> {
 
     let rendered = match format {
         OutputFormat::Table => render_table(&result),
-        OutputFormat::Json => render_json(&result),
-        OutputFormat::Sarif => render_sarif(&result),
+        OutputFormat::Json => {
+            let deduped = dedup_machine_output(&result, dedup_mode);
+            let summary = build_output_summary(&result, &deduped, dedup_mode);
+            render_json(&deduped, &summary)
+        }
+        OutputFormat::Sarif => {
+            let deduped = dedup_machine_output(&result, dedup_mode);
+            let summary = build_output_summary(&result, &deduped, dedup_mode);
+            render_sarif(&deduped, &summary)
+        }
     };
 
     if let Some(path) = output_path {
@@ -384,7 +402,7 @@ fn run_init(args: &[String]) -> Result<(), String> {
         return Err(format!("{} already exists", output.display()));
     }
 
-    let config = "version: 1\nrules_dir: rules\nformat: table\nrules: []\nexclude_paths: []\nai_only: false\nmin_ai_confidence: 0.70\nseverity_threshold: medium\nfail_on_findings: false\nhistory_file: .aishield-history.log\nrecord_history: true\n";
+    let config = "version: 1\nrules_dir: rules\nformat: table\ndedup_mode: normalized\nrules: []\nexclude_paths: []\nai_only: false\nmin_ai_confidence: 0.70\nseverity_threshold: medium\nfail_on_findings: false\nhistory_file: .aishield-history.log\nrecord_history: true\n";
 
     let mut file = File::create(&output).map_err(|err| err.to_string())?;
     file.write_all(config.as_bytes())
@@ -1079,7 +1097,7 @@ fn render_stats_json(aggregate: &StatsAggregate, days: u64, history_file: &Path)
 fn print_help() {
     println!("AIShield CLI (foundation)\n");
     println!("Usage:");
-    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged] [--output FILE] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
+    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif] [--dedup none|normalized] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged] [--output FILE] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
     println!("  aishield fix <path> [--rules-dir DIR] [--write] [--dry-run] [--config FILE] [--no-config]");
     println!("  aishield init [--output PATH]");
     println!("  aishield create-rule --id ID --title TITLE --language LANG --category CAT [--severity LEVEL] [--pattern-any P] [--pattern-all P] [--pattern-not P] [--tags t1,t2] [--suggestion TEXT] [--out-dir DIR] [--force]");
@@ -1125,6 +1143,121 @@ fn empty_summary(scanned_files: usize, matched_rules: usize) -> ScanSummary {
         scanned_files,
         matched_rules,
     }
+}
+
+struct OutputSummary {
+    dedup_mode: DedupMode,
+    original_total: usize,
+    deduped_total: usize,
+}
+
+fn build_output_summary(
+    original: &ScanResult,
+    rendered: &ScanResult,
+    dedup_mode: DedupMode,
+) -> OutputSummary {
+    OutputSummary {
+        dedup_mode,
+        original_total: original.findings.len(),
+        deduped_total: rendered.findings.len(),
+    }
+}
+
+fn dedup_machine_output(result: &ScanResult, dedup_mode: DedupMode) -> ScanResult {
+    if dedup_mode == DedupMode::None {
+        return result.clone();
+    }
+
+    let mut deduped = BTreeMap::<String, Finding>::new();
+    for finding in &result.findings {
+        let key = normalized_finding_key(finding);
+        match deduped.get(&key) {
+            Some(existing) => {
+                if should_replace_dedup_finding(existing, finding) {
+                    deduped.insert(key, finding.clone());
+                }
+            }
+            None => {
+                deduped.insert(key, finding.clone());
+            }
+        }
+    }
+
+    let mut findings = deduped.into_values().collect::<Vec<_>>();
+    findings.sort_by(|a, b| {
+        b.risk_score
+            .partial_cmp(&a.risk_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| b.severity.rank().cmp(&a.severity.rank()))
+            .then_with(|| a.file.cmp(&b.file))
+            .then_with(|| a.line.cmp(&b.line))
+            .then_with(|| a.column.cmp(&b.column))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+
+    ScanResult {
+        summary: summarize_findings(
+            &findings,
+            result.summary.scanned_files,
+            result.summary.matched_rules,
+        ),
+        findings,
+    }
+}
+
+fn should_replace_dedup_finding(existing: &Finding, candidate: &Finding) -> bool {
+    if candidate.risk_score > existing.risk_score {
+        return true;
+    }
+    if candidate.risk_score < existing.risk_score {
+        return false;
+    }
+
+    let candidate_rank = candidate.severity.rank();
+    let existing_rank = existing.severity.rank();
+    if candidate_rank > existing_rank {
+        return true;
+    }
+    if candidate_rank < existing_rank {
+        return false;
+    }
+
+    if candidate.ai_confidence > existing.ai_confidence {
+        return true;
+    }
+    if candidate.ai_confidence < existing.ai_confidence {
+        return false;
+    }
+
+    candidate.id < existing.id
+}
+
+fn normalized_finding_key(finding: &Finding) -> String {
+    let category = finding.category.as_deref().unwrap_or("uncategorized");
+    let snippet = normalize_snippet(&finding.snippet);
+    format!(
+        "{}:{}:{}:{}",
+        finding.file.to_ascii_lowercase(),
+        finding.line,
+        category.to_ascii_lowercase(),
+        snippet
+    )
+}
+
+fn normalize_snippet(snippet: &str) -> String {
+    snippet
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() {
+                ch.to_ascii_lowercase()
+            } else {
+                ' '
+            }
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn render_table(result: &ScanResult) -> String {
@@ -1204,7 +1337,7 @@ fn truncate(input: &str, width: usize) -> String {
     format!("{}...", &input[..width.saturating_sub(3)])
 }
 
-fn render_json(result: &ScanResult) -> String {
+fn render_json(result: &ScanResult, output_summary: &OutputSummary) -> String {
     let ai_estimated = result
         .findings
         .iter()
@@ -1225,6 +1358,21 @@ fn render_json(result: &ScanResult) -> String {
         out,
         "    \"matched_rules\": {},",
         result.summary.matched_rules
+    );
+    let _ = writeln!(
+        out,
+        "    \"dedup_mode\": \"{}\",",
+        output_summary.dedup_mode.as_str()
+    );
+    let _ = writeln!(
+        out,
+        "    \"original_total\": {},",
+        output_summary.original_total
+    );
+    let _ = writeln!(
+        out,
+        "    \"deduped_total\": {},",
+        output_summary.deduped_total
     );
     let _ = writeln!(out, "    \"ai_estimated\": {},", ai_estimated);
     let _ = writeln!(
@@ -1307,7 +1455,7 @@ fn render_json(result: &ScanResult) -> String {
     out
 }
 
-fn render_sarif(result: &ScanResult) -> String {
+fn render_sarif(result: &ScanResult, output_summary: &OutputSummary) -> String {
     let mut out = String::new();
 
     let mut rules = BTreeMap::new();
@@ -1356,6 +1504,23 @@ fn render_sarif(result: &ScanResult) -> String {
 
     out.push_str("          ]\n");
     out.push_str("        }\n");
+    out.push_str("      },\n");
+    out.push_str("      \"properties\": {\n");
+    let _ = writeln!(
+        out,
+        "        \"dedupMode\": \"{}\",",
+        output_summary.dedup_mode.as_str()
+    );
+    let _ = writeln!(
+        out,
+        "        \"originalTotal\": {},",
+        output_summary.original_total
+    );
+    let _ = writeln!(
+        out,
+        "        \"dedupedTotal\": {}",
+        output_summary.deduped_total
+    );
     out.push_str("      },\n");
     out.push_str("      \"results\": [\n");
 
@@ -1549,6 +1714,7 @@ fn escape_rule_yaml(input: &str) -> String {
 struct AppConfig {
     rules_dir: PathBuf,
     format: OutputFormat,
+    dedup_mode: Option<DedupMode>,
     rules: Vec<String>,
     exclude_paths: Vec<String>,
     ai_only: bool,
@@ -1564,6 +1730,7 @@ impl Default for AppConfig {
         Self {
             rules_dir: PathBuf::from("rules"),
             format: OutputFormat::Table,
+            dedup_mode: None,
             rules: Vec::new(),
             exclude_paths: Vec::new(),
             ai_only: false,
@@ -1607,6 +1774,7 @@ impl AppConfig {
                 "version" => {}
                 "rules_dir" => config.rules_dir = PathBuf::from(strip_quotes(value)),
                 "format" => config.format = OutputFormat::parse(value)?,
+                "dedup_mode" => config.dedup_mode = Some(DedupMode::parse(value)?),
                 "rules" => config.rules = parse_list_like(value),
                 "exclude_paths" => config.exclude_paths = parse_list_like(value),
                 "ai_only" => config.ai_only = parse_bool(value)?,
@@ -1645,6 +1813,36 @@ impl OutputFormat {
             "json" => Ok(Self::Json),
             "sarif" => Ok(Self::Sarif),
             _ => Err("format must be table, json, or sarif".to_string()),
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DedupMode {
+    None,
+    Normalized,
+}
+
+impl DedupMode {
+    fn parse(raw: &str) -> Result<Self, String> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "none" => Ok(Self::None),
+            "normalized" => Ok(Self::Normalized),
+            _ => Err("dedup must be none or normalized".to_string()),
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            DedupMode::None => "none",
+            DedupMode::Normalized => "normalized",
+        }
+    }
+
+    fn default_for_format(format: OutputFormat) -> Self {
+        match format {
+            OutputFormat::Table => Self::None,
+            OutputFormat::Json | OutputFormat::Sarif => Self::Normalized,
         }
     }
 }
@@ -1708,5 +1906,122 @@ impl SeverityThreshold {
             SeverityThreshold::Low => Severity::Low,
             SeverityThreshold::Info => Severity::Info,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        dedup_machine_output, empty_summary, normalize_snippet, DedupMode, Finding, ScanResult,
+        Severity,
+    };
+
+    fn finding(
+        id: &str,
+        severity: Severity,
+        file: &str,
+        line: usize,
+        snippet: &str,
+        risk_score: f32,
+    ) -> Finding {
+        Finding {
+            id: id.to_string(),
+            title: id.to_string(),
+            severity,
+            file: file.to_string(),
+            line,
+            column: 1,
+            snippet: snippet.to_string(),
+            ai_confidence: 80.0,
+            risk_score,
+            category: Some("auth".to_string()),
+            tags: vec!["auth".to_string()],
+            ai_tendency: None,
+            fix_suggestion: None,
+        }
+    }
+
+    fn result(findings: Vec<Finding>) -> ScanResult {
+        ScanResult {
+            summary: empty_summary(1, 1),
+            findings,
+        }
+    }
+
+    #[test]
+    fn normalized_dedup_keeps_highest_risk_finding_per_key() {
+        let raw = result(vec![
+            finding(
+                "AISHIELD-PY-AUTH-001",
+                Severity::Medium,
+                "src/app.py",
+                10,
+                "if token == provided:",
+                60.0,
+            ),
+            finding(
+                "AISHIELD-PY-AUTH-099",
+                Severity::High,
+                "src/app.py",
+                10,
+                "if token==provided:",
+                90.0,
+            ),
+            finding(
+                "AISHIELD-PY-AUTH-100",
+                Severity::High,
+                "src/app.py",
+                11,
+                "if token == provided:",
+                88.0,
+            ),
+        ]);
+
+        let deduped = dedup_machine_output(&raw, DedupMode::Normalized);
+
+        assert_eq!(deduped.findings.len(), 2);
+        assert!(deduped
+            .findings
+            .iter()
+            .any(|f| f.id == "AISHIELD-PY-AUTH-099"));
+        assert!(deduped
+            .findings
+            .iter()
+            .any(|f| f.id == "AISHIELD-PY-AUTH-100"));
+        assert_eq!(deduped.summary.total, 2);
+    }
+
+    #[test]
+    fn none_dedup_mode_keeps_original_findings() {
+        let raw = result(vec![
+            finding(
+                "AISHIELD-PY-AUTH-001",
+                Severity::Medium,
+                "src/app.py",
+                10,
+                "if token == provided:",
+                60.0,
+            ),
+            finding(
+                "AISHIELD-PY-AUTH-099",
+                Severity::High,
+                "src/app.py",
+                10,
+                "if token==provided:",
+                90.0,
+            ),
+        ]);
+
+        let deduped = dedup_machine_output(&raw, DedupMode::None);
+
+        assert_eq!(deduped.findings.len(), raw.findings.len());
+    }
+
+    #[test]
+    fn snippet_normalization_collapses_whitespace_and_punctuation() {
+        assert_eq!(
+            normalize_snippet("if token==provided:"),
+            normalize_snippet("if   token == provided ;")
+        );
     }
 }

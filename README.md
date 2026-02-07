@@ -59,6 +59,9 @@ cargo run -p aishield-cli -- scan . --format json
 # GitHub Security compatible output
 cargo run -p aishield-cli -- scan . --format sarif --output aishield.sarif
 
+# disable machine-output dedup if needed
+cargo run -p aishield-cli -- scan . --format sarif --dedup none
+
 # initialize local config
 cargo run -p aishield-cli -- init
 
@@ -77,6 +80,7 @@ cargo run -p aishield-cli -- stats --last 30d
 aishield scan <path> \
   [--rules-dir DIR] \
   [--format table|json|sarif] \
+  [--dedup none|normalized] \
   [--rules auth,crypto] \
   [--exclude vendor/,dist/] \
   [--ai-only] \
@@ -145,6 +149,7 @@ Example `.aishield.yml`:
 version: 1
 rules_dir: rules
 format: table
+dedup_mode: normalized
 rules: [auth]
 exclude_paths: [vendor/, node_modules/, dist/]
 ai_only: false
@@ -156,6 +161,9 @@ record_history: true
 ```
 
 CLI flags override config values.
+
+`dedup_mode` controls machine-output normalization (`json`/`sarif`) to reduce duplicate findings in CI.  
+Default behavior is `normalized` for machine formats and `none` for table output.
 
 ## Rule engine overview
 
