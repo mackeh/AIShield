@@ -1,0 +1,12 @@
+id: AISHIELD-JAVA-INJ-001
+title: Potential Command Injection via Runtime.exec
+severity: high
+confidence_that_ai_generated: 0.83
+languages: [java]
+category: injection
+pattern:
+  any:
+    - "runtime.getruntime().exec("
+fix:
+  suggestion: Avoid shell command construction from user input and prefer fixed argument execution.
+tags: [injection, command-injection]

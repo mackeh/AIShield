@@ -1,0 +1,12 @@
+id: AISHIELD-GO-INJ-001
+title: Potential Command Injection via exec.Command("sh", "-c")
+severity: high
+confidence_that_ai_generated: 0.82
+languages: [go]
+category: injection
+pattern:
+  any:
+    - "exec.command(\"sh\", \"-c\""
+fix:
+  suggestion: Avoid shell invocation with user input; pass validated args directly to exec.Command.
+tags: [injection, command-injection]

@@ -1,0 +1,12 @@
+id: AISHIELD-RS-CRYPTO-001
+title: Weak Hash Algorithm (MD5)
+severity: high
+confidence_that_ai_generated: 0.80
+languages: [rust]
+category: crypto
+pattern:
+  any:
+    - "md5::compute("
+fix:
+  suggestion: Replace MD5 with stronger algorithms for integrity and proper password hashing for secrets.
+tags: [crypto, weak-hash]

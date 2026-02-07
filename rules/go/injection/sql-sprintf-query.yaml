@@ -1,0 +1,13 @@
+id: AISHIELD-GO-INJ-002
+title: SQL Query Built with fmt.Sprintf
+severity: high
+confidence_that_ai_generated: 0.78
+languages: [go]
+category: injection
+pattern:
+  all:
+    - "fmt.sprintf("
+    - "select"
+fix:
+  suggestion: Use parameterized queries with placeholders instead of string formatting.
+tags: [injection, sql-injection]

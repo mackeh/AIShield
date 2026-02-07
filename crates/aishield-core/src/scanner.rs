@@ -59,6 +59,47 @@ fn language_from_path(path: &Path) -> Option<&'static str> {
     match ext.as_str() {
         "py" => Some("python"),
         "js" | "jsx" | "ts" | "tsx" | "mjs" | "cjs" => Some("javascript"),
+        "go" => Some("go"),
+        "rs" => Some("rust"),
+        "java" => Some("java"),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use super::collect_source_files;
+
+    #[test]
+    fn collects_go_rust_and_java_sources() {
+        let root = temp_path("aishield-scanner-lang-test");
+        fs::create_dir_all(&root).expect("create root");
+        fs::write(root.join("sample.go"), "package main\n").expect("write go");
+        fs::write(root.join("sample.rs"), "fn main() {}\n").expect("write rust");
+        fs::write(root.join("Sample.java"), "class Sample {}\n").expect("write java");
+        fs::write(root.join("ignored.txt"), "noop\n").expect("write ignored");
+
+        let files = collect_source_files(&root);
+        let mut languages = files
+            .iter()
+            .map(|f| f.language.as_str())
+            .collect::<Vec<_>>();
+        languages.sort_unstable();
+
+        assert_eq!(languages, vec!["go", "java", "rust"]);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    fn temp_path(prefix: &str) -> PathBuf {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        std::env::temp_dir().join(format!("{prefix}-{stamp}"))
     }
 }

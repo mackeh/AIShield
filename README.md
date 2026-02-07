@@ -18,8 +18,8 @@ AI coding assistants increase development speed, but they also repeat insecure p
 This repository currently contains a solid foundation for Phase 1:
 
 - Rust workspace with `aishield-core` and `aishield-cli`
-- Rule-driven scanner for Python and JavaScript source files
-- 32 foundational rules across crypto, injection, auth, and misconfiguration
+- Rule-driven scanner for Python, JavaScript, Go, Rust, and Java source files
+- 47 foundational rules across crypto, injection, auth, and misconfiguration
 - Severity + composite risk scoring per finding
 - Output formats: `table`, `json`, `sarif`, `github` (PR annotations)
 - Optional SAST bridge for Semgrep, Bandit, and ESLint (parallel orchestration)

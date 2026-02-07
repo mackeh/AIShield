@@ -1,0 +1,13 @@
+id: AISHIELD-JAVA-INJ-002
+title: SQL Query Built with String Concatenation
+severity: high
+confidence_that_ai_generated: 0.79
+languages: [java]
+category: injection
+pattern:
+  all:
+    - "select * from users where id ="
+    - "+ userinput"
+fix:
+  suggestion: Use prepared statements with bound parameters.
+tags: [injection, sql-injection]
