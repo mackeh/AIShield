@@ -101,15 +101,32 @@ impl Analyzer {
             };
 
             let full_lower = content.to_ascii_lowercase();
+            let lines = content.lines().collect::<Vec<_>>();
+            let line_lowers = lines
+                .iter()
+                .map(|line| line.to_ascii_lowercase())
+                .collect::<Vec<_>>();
 
             for rule in rules.for_language(&file.language) {
                 if !should_include_rule(rule, options) {
                     continue;
                 }
 
-                for (line_no, line) in content.lines().enumerate() {
-                    let line_lower = line.to_ascii_lowercase();
-                    let Some(column) = rule.matches_line(&line_lower) else {
+                if is_file_suppressed(&line_lowers, &rule.id) {
+                    continue;
+                }
+
+                for (line_no, line) in lines.iter().enumerate() {
+                    let line_lower = &line_lowers[line_no];
+
+                    if is_line_suppressed(line_lower, &rule.id) {
+                        continue;
+                    }
+                    if line_no > 0 && is_line_suppressed(&line_lowers[line_no - 1], &rule.id) {
+                        continue;
+                    }
+
+                    let Some(column) = rule.matches_line(line_lower) else {
                         continue;
                     };
 
@@ -173,6 +190,37 @@ fn has_negative_match(line_lower: &str, full_lower: &str, negative_patterns: &[S
         }
     }
     false
+}
+
+fn is_file_suppressed(lines_lower: &[String], rule_id: &str) -> bool {
+    let rule_id_lower = rule_id.to_ascii_lowercase();
+    lines_lower
+        .iter()
+        .any(|line| marker_applies(line, "aishield:ignore-file", &rule_id_lower))
+}
+
+fn is_line_suppressed(line_lower: &str, rule_id: &str) -> bool {
+    if line_lower.contains("aishield:ignore-file") {
+        return false;
+    }
+    marker_applies(line_lower, "aishield:ignore", &rule_id.to_ascii_lowercase())
+}
+
+fn marker_applies(line_lower: &str, marker: &str, rule_id_lower: &str) -> bool {
+    let Some(idx) = line_lower.find(marker) else {
+        return false;
+    };
+
+    let tail = line_lower[idx + marker.len()..]
+        .trim()
+        .trim_start_matches(':')
+        .trim();
+
+    if tail.is_empty() {
+        return true;
+    }
+
+    tail.contains(rule_id_lower)
 }
 
 fn relative_path(root: &Path, path: &Path) -> String {
@@ -381,6 +429,109 @@ tags: [auth]
 
         assert_eq!(result.summary.total, 1);
         assert_eq!(result.findings[0].file, "single.py");
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn suppression_markers_ignore_expected_findings() {
+        let root = temp_path("aishield-core-test-suppressions");
+        let rules_dir = root.join("rules/python/auth");
+        let src_dir = root.join("src");
+
+        fs::create_dir_all(&rules_dir).expect("create rules dir");
+        fs::create_dir_all(&src_dir).expect("create src dir");
+
+        fs::write(
+            rules_dir.join("token-compare.yaml"),
+            r#"id: AISHIELD-PY-AUTH-001
+title: Timing-Unsafe Secret Comparison
+severity: high
+confidence_that_ai_generated: 0.88
+languages: [python]
+category: auth
+pattern:
+  any:
+    - "token == "
+fix:
+  suggestion: use compare_digest
+tags: [auth]
+"#,
+        )
+        .expect("write rule");
+
+        fs::write(
+            src_dir.join("suppress.py"),
+            r#"# aishield:ignore AISHIELD-PY-AUTH-001
+if token == expected:
+    pass
+
+# aishield:ignore
+if token == another:
+    pass
+
+if token == live:
+    pass
+"#,
+        )
+        .expect("write source");
+
+        let rules = RuleSet::load_from_dir(root.join("rules").as_path()).expect("load rules");
+        let analyzer = Analyzer::new(rules);
+        let result = analyzer
+            .analyze_path(src_dir.as_path(), &AnalysisOptions::default())
+            .expect("scan");
+
+        assert_eq!(result.summary.total, 1);
+        assert_eq!(result.findings[0].line, 9);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn file_level_suppression_works_for_rule() {
+        let root = temp_path("aishield-core-test-file-suppress");
+        let rules_dir = root.join("rules/javascript/auth");
+        let src_dir = root.join("src");
+
+        fs::create_dir_all(&rules_dir).expect("create rules dir");
+        fs::create_dir_all(&src_dir).expect("create src dir");
+
+        fs::write(
+            rules_dir.join("token-compare.yaml"),
+            r#"id: AISHIELD-JS-AUTH-001
+title: Timing-Unsafe Token Comparison
+severity: high
+confidence_that_ai_generated: 0.84
+languages: [javascript]
+category: auth
+pattern:
+  any:
+    - "token === "
+fix:
+  suggestion: use timingSafeEqual
+tags: [auth]
+"#,
+        )
+        .expect("write rule");
+
+        fs::write(
+            src_dir.join("suppressed.js"),
+            r#"// aishield:ignore-file AISHIELD-JS-AUTH-001
+if (token === expected) {
+  return true;
+}
+"#,
+        )
+        .expect("write source");
+
+        let rules = RuleSet::load_from_dir(root.join("rules").as_path()).expect("load rules");
+        let analyzer = Analyzer::new(rules);
+        let result = analyzer
+            .analyze_path(src_dir.as_path(), &AnalysisOptions::default())
+            .expect("scan");
+
+        assert_eq!(result.summary.total, 0);
 
         let _ = fs::remove_dir_all(root);
     }

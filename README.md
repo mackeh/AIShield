@@ -145,6 +145,13 @@ Pattern fields supported:
 
 See `docs/rules-authoring.md` for full details and examples.
 
+Suppression markers (for intentional exceptions):
+
+- `aishield:ignore` on a line comment suppresses the next line finding (or same line inline).
+- `aishield:ignore <RULE_ID>` suppresses only that rule.
+- `aishield:ignore-file` suppresses all findings in the file.
+- `aishield:ignore-file <RULE_ID>` suppresses only a specific rule across the file.
+
 ## CI integration
 
 A workflow is included at `.github/workflows/aishield.yml` to:

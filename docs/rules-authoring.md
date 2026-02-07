@@ -77,3 +77,12 @@ fix:
   suggestion: Use crypto.timingSafeEqual() for constant-time comparison.
 tags: [auth, timing-attack]
 ```
+
+## Suppression comments
+
+Use suppression markers sparingly when a finding is intentionally accepted:
+
+- `aishield:ignore` for the next line (or same line if inline)
+- `aishield:ignore <RULE_ID>` for a specific rule
+- `aishield:ignore-file` for all findings in a file
+- `aishield:ignore-file <RULE_ID>` for one rule across a file
