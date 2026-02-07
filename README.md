@@ -101,7 +101,7 @@ aishield scan <path> \
   [--min-ai-confidence N] \
   [--severity LEVEL] \
   [--fail-on-findings] \
-  [--staged] \
+  [--staged|--changed-from REF] \
   [--output FILE] \
   [--history-file FILE] \
   [--no-history] \
@@ -206,6 +206,8 @@ A workflow is included at `.github/workflows/aishield.yml` to:
 1. Run AIShield in SARIF mode
 2. Emit inline PR annotations (on pull requests)
 3. Upload `aishield.sarif` to GitHub Security (`code scanning alerts`)
+
+PR annotations are scoped to files changed since the PR base commit using `--changed-from`.
 
 See `docs/ci-github-actions.md` for permissions details and runbook-style troubleshooting.
 

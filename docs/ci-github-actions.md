@@ -32,10 +32,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo run -p aishield-cli -- scan . --format sarif --output aishield.sarif
       - if: github.event_name == 'pull_request'
-        run: cargo run -p aishield-cli -- scan . --format github --dedup normalized
+        run: cargo run -p aishield-cli -- scan . --format github --dedup normalized --changed-from "${{ github.event.pull_request.base.sha }}"
       - uses: github/codeql-action/upload-sarif@v4
         if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
         continue-on-error: true
@@ -64,6 +66,9 @@ cargo run -p aishield-cli -- scan . --staged --severity high --fail-on-findings
 
 # full SARIF artifact with normalized dedup for code scanning
 cargo run -p aishield-cli -- scan . --format sarif --dedup normalized --output aishield.sarif
+
+# PR-only annotations scoped to changed files
+cargo run -p aishield-cli -- scan . --format github --dedup normalized --changed-from "$BASE_SHA"
 ```
 
 ## Local Debugging

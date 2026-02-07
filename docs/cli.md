@@ -28,7 +28,7 @@ aishield scan <path> \
   [--min-ai-confidence N] \
   [--severity LEVEL] \
   [--fail-on-findings] \
-  [--staged] \
+  [--staged|--changed-from REF] \
   [--output FILE] \
   [--history-file FILE] \
   [--no-history] \
@@ -48,6 +48,7 @@ Options:
 - `--severity LEVEL`: minimum severity gate (`critical|high|medium|low|info`)
 - `--fail-on-findings`: return exit code `2` when findings exist
 - `--staged`: scan only staged files under target path
+- `--changed-from REF`: scan only files changed from a git ref (for example PR base SHA)
 - `--output FILE`: write report to file instead of stdout
 - `--history-file FILE`: override history log file
 - `--no-history`: disable history append for this run
@@ -62,6 +63,9 @@ cargo run -p aishield-cli -- scan .
 
 # staged-only scan for pre-commit speed
 cargo run -p aishield-cli -- scan . --staged --severity high --fail-on-findings
+
+# changed-files scan for CI pull requests
+cargo run -p aishield-cli -- scan . --format github --changed-from origin/main
 
 # json for CI systems
 cargo run -p aishield-cli -- scan . --format json --output aishield.json

@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -25,7 +27,7 @@ jobs:
 
       - name: PR annotations
         if: github.event_name == 'pull_request'
-        run: cargo run -p aishield-cli -- scan . --format github --dedup normalized
+        run: cargo run -p aishield-cli -- scan . --format github --dedup normalized --changed-from "${{ github.event.pull_request.base.sha }}"
 
       - name: Upload SARIF
         if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository

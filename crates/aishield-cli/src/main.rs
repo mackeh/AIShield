@@ -60,6 +60,7 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     let mut history_file_override = None;
     let mut no_history_flag = false;
     let mut staged_only = false;
+    let mut changed_from = None::<String>;
     let mut config_path = PathBuf::from(".aishield.yml");
     let mut use_config = true;
 
@@ -124,6 +125,14 @@ fn run_scan(args: &[String]) -> Result<(), String> {
             }
             "--no-history" => no_history_flag = true,
             "--staged" => staged_only = true,
+            "--changed-from" => {
+                i += 1;
+                changed_from = Some(
+                    args.get(i)
+                        .ok_or("--changed-from requires a value")?
+                        .to_string(),
+                );
+            }
             "--config" => {
                 i += 1;
                 config_path = PathBuf::from(args.get(i).ok_or("--config requires a value")?);
@@ -176,9 +185,16 @@ fn run_scan(args: &[String]) -> Result<(), String> {
         categories,
         exclude_paths,
     };
+    if staged_only && changed_from.is_some() {
+        return Err("use either --staged or --changed-from, not both".to_string());
+    }
+
     let mut result = if staged_only {
         let staged_targets = collect_staged_targets(&target)?;
         analyze_targets(&analyzer, &options, &staged_targets, rules_count)?
+    } else if let Some(from_ref) = changed_from.as_deref() {
+        let changed_targets = collect_changed_targets(&target, from_ref)?;
+        analyze_targets(&analyzer, &options, &changed_targets, rules_count)?
     } else {
         analyzer
             .analyze_path(&target, &options)
@@ -248,6 +264,40 @@ fn collect_staged_targets(target: &Path) -> Result<Vec<PathBuf>, String> {
             stderr.trim().to_string()
         };
         return Err(format!("git diff --cached failed: {}", message));
+    }
+
+    let mut targets = Vec::new();
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let path = PathBuf::from(line.trim());
+        if path.as_os_str().is_empty() {
+            continue;
+        }
+        if !path_matches_target(&path, target) {
+            continue;
+        }
+        if path.exists() {
+            targets.push(path);
+        }
+    }
+
+    Ok(targets)
+}
+
+fn collect_changed_targets(target: &Path, from_ref: &str) -> Result<Vec<PathBuf>, String> {
+    let range = format!("{from_ref}...HEAD");
+    let output = Command::new("git")
+        .args(["diff", "--name-only", "--diff-filter=ACMR", &range])
+        .output()
+        .map_err(|err| format!("failed to query changed files via git: {err}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let message = if stderr.trim().is_empty() {
+            "unknown git error".to_string()
+        } else {
+            stderr.trim().to_string()
+        };
+        return Err(format!("git diff {range} failed: {}", message));
     }
 
     let mut targets = Vec::new();
@@ -1102,7 +1152,7 @@ fn render_stats_json(aggregate: &StatsAggregate, days: u64, history_file: &Path)
 fn print_help() {
     println!("AIShield CLI (foundation)\n");
     println!("Usage:");
-    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged] [--output FILE] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
+    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
     println!("  aishield fix <path> [--rules-dir DIR] [--write] [--dry-run] [--config FILE] [--no-config]");
     println!("  aishield init [--output PATH]");
     println!("  aishield create-rule --id ID --title TITLE --language LANG --category CAT [--severity LEVEL] [--pattern-any P] [--pattern-all P] [--pattern-not P] [--tags t1,t2] [--suggestion TEXT] [--out-dir DIR] [--force]");

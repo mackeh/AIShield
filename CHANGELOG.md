@@ -10,6 +10,7 @@ The format is based on Keep a Changelog and follows semantic versioning.
 
 - `github` scan output format for GitHub Actions inline PR annotations
 - CI workflow step to emit AIShield PR annotations alongside SARIF upload
+- `scan --changed-from <ref>` to scope scans/annotations to changed files
 
 ## [0.1.1] - 2026-02-07
 

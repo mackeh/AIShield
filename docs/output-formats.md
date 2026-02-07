@@ -85,6 +85,12 @@ This format emits GitHub Actions workflow commands:
 
 Use it in CI job logs to populate inline pull-request annotations.
 
+For low-noise PR checks, combine with:
+
+```bash
+--changed-from <base-ref-or-sha>
+```
+
 ## Dedup Behavior
 
 Use scan flag:
