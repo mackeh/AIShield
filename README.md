@@ -94,8 +94,11 @@ aishield scan <path> \
 ### `fix`
 
 ```bash
-aishield fix <path> [--rules-dir DIR] [--config FILE] [--no-config]
+aishield fix <path> [--rules-dir DIR] [--write] [--dry-run] [--config FILE] [--no-config]
 ```
+
+`--write` applies available safe autofixes in-place for supported rules.  
+`--dry-run` reports what would change without writing files.
 
 ### `init`
 

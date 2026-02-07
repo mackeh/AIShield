@@ -297,6 +297,8 @@ fn run_fix(args: &[String]) -> Result<(), String> {
 
     let target = PathBuf::from(&args[0]);
     let mut rules_dir_override = None;
+    let mut write_changes = false;
+    let mut dry_run = false;
     let mut config_path = PathBuf::from(".aishield.yml");
     let mut use_config = true;
 
@@ -313,6 +315,8 @@ fn run_fix(args: &[String]) -> Result<(), String> {
                 i += 1;
                 config_path = PathBuf::from(args.get(i).ok_or("--config requires a value")?);
             }
+            "--write" => write_changes = true,
+            "--dry-run" => dry_run = true,
             "--no-config" => use_config = false,
             other => return Err(format!("unknown fix option `{other}`")),
         }
@@ -337,19 +341,23 @@ fn run_fix(args: &[String]) -> Result<(), String> {
         return Ok(());
     }
 
-    println!("Suggested remediations:");
-    for finding in &result.findings {
-        println!(
-            "- [{}] {}:{}:{}",
-            finding.id, finding.file, finding.line, finding.column
-        );
-        if let Some(suggestion) = &finding.fix_suggestion {
-            println!("  Fix: {suggestion}");
-        } else {
-            println!("  Fix: Review this code path and apply secure defaults.");
-        }
-        if let Some(ai_tendency) = &finding.ai_tendency {
-            println!("  Why AI gets this wrong: {ai_tendency}");
+    if write_changes || dry_run {
+        apply_autofixes(&target, &result, write_changes, dry_run)?;
+    } else {
+        println!("Suggested remediations:");
+        for finding in &result.findings {
+            println!(
+                "- [{}] {}:{}:{}",
+                finding.id, finding.file, finding.line, finding.column
+            );
+            if let Some(suggestion) = &finding.fix_suggestion {
+                println!("  Fix: {suggestion}");
+            } else {
+                println!("  Fix: Review this code path and apply secure defaults.");
+            }
+            if let Some(ai_tendency) = &finding.ai_tendency {
+                println!("  Why AI gets this wrong: {ai_tendency}");
+            }
         }
     }
 
@@ -445,6 +453,115 @@ fn run_hook(args: &[String]) -> Result<(), String> {
     match args[0].as_str() {
         "install" => run_hook_install(&args[1..]),
         other => Err(format!("unknown hook subcommand `{other}`")),
+    }
+}
+
+fn apply_autofixes(
+    target: &Path,
+    result: &ScanResult,
+    write_changes: bool,
+    dry_run: bool,
+) -> Result<(), String> {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    let mut file_rules = BTreeMap::<PathBuf, BTreeSet<String>>::new();
+    for finding in &result.findings {
+        let path = resolve_finding_path(target, &finding.file);
+        file_rules
+            .entry(path)
+            .or_default()
+            .insert(finding.id.clone());
+    }
+
+    let mut touched_files = 0usize;
+    let mut total_replacements = 0usize;
+
+    for (file_path, rule_ids) in file_rules {
+        let mut content = match fs::read_to_string(&file_path) {
+            Ok(content) => content,
+            Err(_) => continue,
+        };
+
+        let mut replacements_in_file = 0usize;
+        for rule_id in rule_ids {
+            for (from, to) in autofix_replacements(&rule_id) {
+                let count = content.match_indices(from).count();
+                if count == 0 {
+                    continue;
+                }
+                content = content.replace(from, to);
+                replacements_in_file += count;
+            }
+        }
+
+        if replacements_in_file == 0 {
+            continue;
+        }
+
+        touched_files += 1;
+        total_replacements += replacements_in_file;
+        if write_changes && !dry_run {
+            fs::write(&file_path, content)
+                .map_err(|err| format!("failed to write {}: {err}", file_path.display()))?;
+        }
+    }
+
+    if dry_run {
+        println!(
+            "Autofix dry-run: {} file(s) would change with {} replacement(s).",
+            touched_files, total_replacements
+        );
+    } else if write_changes {
+        println!(
+            "Autofix applied: {} file(s) changed with {} replacement(s).",
+            touched_files, total_replacements
+        );
+    } else {
+        println!(
+            "Autofix preview: {} file(s) eligible with {} replacement(s).",
+            touched_files, total_replacements
+        );
+    }
+
+    Ok(())
+}
+
+fn resolve_finding_path(target: &Path, finding_file: &str) -> PathBuf {
+    if target.is_file() {
+        return target.to_path_buf();
+    }
+    let relative = PathBuf::from(finding_file);
+    if relative.is_absolute() {
+        relative
+    } else {
+        target.join(relative)
+    }
+}
+
+fn autofix_replacements(rule_id: &str) -> Vec<(&'static str, &'static str)> {
+    match rule_id {
+        "AISHIELD-PY-CRYPTO-001" => vec![
+            ("hashlib.md5(", "hashlib.sha256("),
+            ("hashlib.sha1(", "hashlib.sha256("),
+        ],
+        "AISHIELD-PY-MISC-001" => vec![
+            ("DEBUG = True", "DEBUG = False"),
+            ("debug=True", "debug=False"),
+            ("debug = True", "debug = False"),
+        ],
+        "AISHIELD-PY-CRYPTO-006" => vec![
+            ("verify=False", "verify=True"),
+            ("verify = False", "verify = True"),
+        ],
+        "AISHIELD-PY-INJ-003" => vec![
+            ("shell=True", "shell=False"),
+            ("shell = True", "shell = False"),
+        ],
+        "AISHIELD-JS-INJ-004" => vec![
+            ("innerHTML =", "textContent ="),
+            ("innerHTML=", "textContent="),
+        ],
+        _ => Vec::new(),
     }
 }
 
@@ -768,7 +885,7 @@ fn print_help() {
     println!("AIShield CLI (foundation)\n");
     println!("Usage:");
     println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged] [--output FILE] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
-    println!("  aishield fix <path> [--rules-dir DIR] [--config FILE] [--no-config]");
+    println!("  aishield fix <path> [--rules-dir DIR] [--write] [--dry-run] [--config FILE] [--no-config]");
     println!("  aishield init [--output PATH]");
     println!("  aishield stats [--last Nd] [--history-file FILE] [--format table|json] [--config FILE] [--no-config]");
     println!("  aishield hook install [--severity LEVEL] [--path TARGET] [--all-files]");
