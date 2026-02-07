@@ -25,7 +25,7 @@ record_history: true
 
 - `version`: config schema version (currently `1`)
 - `rules_dir`: root directory for YAML rules
-- `format`: default output format (`table|json|sarif`)
+- `format`: default output format (`table|json|sarif|github`)
 - `dedup_mode`: output dedup mode (`none|normalized`)
 - `rules`: category filters list, same behavior as `--rules`
 - `exclude_paths`: list of path fragments to skip
@@ -54,6 +54,6 @@ Examples:
 If `dedup_mode` is not set:
 
 - `table` output defaults to `none`
-- `json` and `sarif` output default to `normalized`
+- `json`, `sarif`, and `github` output default to `normalized`
 
 This reduces noisy duplicate findings in CI while keeping table output closer to raw scan data.

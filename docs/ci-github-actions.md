@@ -9,7 +9,8 @@ Release automation is defined at `.github/workflows/release.yml` and runs on ver
 1. Checks out repository code
 2. Installs Rust toolchain
 3. Runs AIShield in SARIF mode
-4. Uploads `aishield.sarif` to GitHub Code Scanning
+4. Emits inline PR annotations on pull requests
+5. Uploads `aishield.sarif` to GitHub Code Scanning
 
 ## Baseline Workflow
 
@@ -33,6 +34,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo run -p aishield-cli -- scan . --format sarif --output aishield.sarif
+      - if: github.event_name == 'pull_request'
+        run: cargo run -p aishield-cli -- scan . --format github --dedup normalized
       - uses: github/codeql-action/upload-sarif@v4
         if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
         continue-on-error: true

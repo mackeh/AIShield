@@ -20,7 +20,7 @@ Run security analysis against a file or directory.
 ```bash
 aishield scan <path> \
   [--rules-dir DIR] \
-  [--format table|json|sarif] \
+  [--format table|json|sarif|github] \
   [--dedup none|normalized] \
   [--rules c1,c2] \
   [--exclude p1,p2] \
@@ -39,7 +39,7 @@ aishield scan <path> \
 Options:
 
 - `--rules-dir DIR`: rules directory (default `rules`)
-- `--format`: output format (`table`, `json`, `sarif`)
+- `--format`: output format (`table`, `json`, `sarif`, `github`)
 - `--dedup`: machine-output dedup mode (`none`, `normalized`)
 - `--rules`: comma-separated category filters (`auth,crypto,injection,...`)
 - `--exclude`: comma-separated path fragments to skip
@@ -68,6 +68,9 @@ cargo run -p aishield-cli -- scan . --format json --output aishield.json
 
 # SARIF for GitHub code scanning
 cargo run -p aishield-cli -- scan . --format sarif --output aishield.sarif
+
+# inline GitHub Actions annotations
+cargo run -p aishield-cli -- scan . --format github
 ```
 
 ## `fix`

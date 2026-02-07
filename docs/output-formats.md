@@ -1,10 +1,11 @@
 # AIShield Output Formats
 
-AIShield supports three scan output formats:
+AIShield supports four scan output formats:
 
 - `table`: human-friendly terminal view
 - `json`: machine-friendly artifact for CI pipelines
 - `sarif`: GitHub Code Scanning compatible format
+- `github`: GitHub Actions annotation commands for inline PR feedback
 
 ## Table
 
@@ -70,6 +71,20 @@ AIShield writes SARIF `2.1.0` with:
 - result properties (`aiConfidence`, `riskScore`, `category`, `tags`)
 - run-level dedup metadata in `runs[0].properties`
 
+## GitHub Annotations
+
+```bash
+cargo run -p aishield-cli -- scan . --format github
+```
+
+This format emits GitHub Actions workflow commands:
+
+- `::error ...::...` for critical/high findings
+- `::warning ...::...` for medium findings
+- `::notice ...::...` for low/info findings
+
+Use it in CI job logs to populate inline pull-request annotations.
+
 ## Dedup Behavior
 
 Use scan flag:
@@ -86,6 +101,6 @@ Behavior:
 Defaults:
 
 - `table`: `none`
-- `json`/`sarif`: `normalized`
+- `json`/`sarif`/`github`: `normalized`
 
 `summary.original_total` and `summary.deduped_total` (JSON) and run properties (SARIF) expose what changed.

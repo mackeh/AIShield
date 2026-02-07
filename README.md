@@ -21,7 +21,7 @@ This repository currently contains a solid foundation for Phase 1:
 - Rule-driven scanner for Python and JavaScript source files
 - 32 foundational rules across crypto, injection, auth, and misconfiguration
 - Severity + composite risk scoring per finding
-- Output formats: `table`, `json`, `sarif`
+- Output formats: `table`, `json`, `sarif`, `github` (PR annotations)
 - Config support via `.aishield.yml`
 - Report file output via `--output`
 - Scan history tracking plus `aishield stats --last Nd` analytics
@@ -70,6 +70,9 @@ cargo run -p aishield-cli -- scan . --format json
 # GitHub Security compatible output
 cargo run -p aishield-cli -- scan . --format sarif --output aishield.sarif
 
+# GitHub Actions annotation output
+cargo run -p aishield-cli -- scan . --format github
+
 # disable machine-output dedup if needed
 cargo run -p aishield-cli -- scan . --format sarif --dedup none
 
@@ -90,7 +93,7 @@ cargo run -p aishield-cli -- stats --last 30d
 ```bash
 aishield scan <path> \
   [--rules-dir DIR] \
-  [--format table|json|sarif] \
+  [--format table|json|sarif|github] \
   [--dedup none|normalized] \
   [--rules auth,crypto] \
   [--exclude vendor/,dist/] \
@@ -201,7 +204,8 @@ Suppression markers (for intentional exceptions):
 A workflow is included at `.github/workflows/aishield.yml` to:
 
 1. Run AIShield in SARIF mode
-2. Upload `aishield.sarif` to GitHub Security (`code scanning alerts`)
+2. Emit inline PR annotations (on pull requests)
+3. Upload `aishield.sarif` to GitHub Security (`code scanning alerts`)
 
 See `docs/ci-github-actions.md` for permissions details and runbook-style troubleshooting.
 

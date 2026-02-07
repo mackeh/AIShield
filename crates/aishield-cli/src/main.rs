@@ -212,6 +212,11 @@ fn run_scan(args: &[String]) -> Result<(), String> {
             let summary = build_output_summary(&result, &deduped, dedup_mode);
             render_sarif(&deduped, &summary)
         }
+        OutputFormat::Github => {
+            let deduped = dedup_machine_output(&result, dedup_mode);
+            let summary = build_output_summary(&result, &deduped, dedup_mode);
+            render_github_annotations(&deduped, &summary)
+        }
     };
 
     if let Some(path) = output_path {
@@ -1097,7 +1102,7 @@ fn render_stats_json(aggregate: &StatsAggregate, days: u64, history_file: &Path)
 fn print_help() {
     println!("AIShield CLI (foundation)\n");
     println!("Usage:");
-    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif] [--dedup none|normalized] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged] [--output FILE] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
+    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged] [--output FILE] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
     println!("  aishield fix <path> [--rules-dir DIR] [--write] [--dry-run] [--config FILE] [--no-config]");
     println!("  aishield init [--output PATH]");
     println!("  aishield create-rule --id ID --title TITLE --language LANG --category CAT [--severity LEVEL] [--pattern-any P] [--pattern-all P] [--pattern-not P] [--tags t1,t2] [--suggestion TEXT] [--out-dir DIR] [--force]");
@@ -1326,6 +1331,55 @@ fn render_table(result: &ScanResult) -> String {
     );
     let top_pattern = most_frequent_rule_id(result).unwrap_or_else(|| "none".to_string());
     let _ = writeln!(out, "Top pattern: {}", top_pattern);
+
+    out
+}
+
+fn render_github_annotations(result: &ScanResult, output_summary: &OutputSummary) -> String {
+    let mut out = String::new();
+    if result.findings.is_empty() {
+        out.push_str("No vulnerabilities detected.\n");
+        return out;
+    }
+
+    const GITHUB_ANNOTATION_LIMIT: usize = 200;
+    for finding in result.findings.iter().take(GITHUB_ANNOTATION_LIMIT) {
+        let level = severity_to_github_annotation_level(finding.severity);
+        let title = format!("[{}] {}", finding.id, finding.title);
+        let message = format!(
+            "{} (AI confidence {:.1}%, risk {:.1})",
+            finding.title, finding.ai_confidence, finding.risk_score
+        );
+
+        let _ = writeln!(
+            out,
+            "::{} file={},line={},col={},title={}::{}",
+            level,
+            escape_github_annotation_property(&finding.file),
+            finding.line,
+            finding.column,
+            escape_github_annotation_property(&title),
+            escape_github_annotation_message(&message)
+        );
+    }
+
+    if result.findings.len() > GITHUB_ANNOTATION_LIMIT {
+        let _ = writeln!(
+            out,
+            "::notice::AIShield truncated annotations to first {} findings (of {}).",
+            GITHUB_ANNOTATION_LIMIT,
+            result.findings.len()
+        );
+    }
+
+    let _ = writeln!(
+        out,
+        "AIShield summary: total={} dedup_mode={} original_total={} deduped_total={}",
+        result.summary.total,
+        output_summary.dedup_mode.as_str(),
+        output_summary.original_total,
+        output_summary.deduped_total
+    );
 
     out
 }
@@ -1621,11 +1675,35 @@ fn escape_json(input: &str) -> String {
     out
 }
 
+fn escape_github_annotation_message(input: &str) -> String {
+    input
+        .replace('%', "%25")
+        .replace('\r', "%0D")
+        .replace('\n', "%0A")
+}
+
+fn escape_github_annotation_property(input: &str) -> String {
+    input
+        .replace('%', "%25")
+        .replace('\r', "%0D")
+        .replace('\n', "%0A")
+        .replace(':', "%3A")
+        .replace(',', "%2C")
+}
+
 fn severity_to_sarif_level(severity: Severity) -> &'static str {
     match severity {
         Severity::Critical | Severity::High => "error",
         Severity::Medium => "warning",
         Severity::Low | Severity::Info => "note",
+    }
+}
+
+fn severity_to_github_annotation_level(severity: Severity) -> &'static str {
+    match severity {
+        Severity::Critical | Severity::High => "error",
+        Severity::Medium => "warning",
+        Severity::Low | Severity::Info => "notice",
     }
 }
 
@@ -1804,6 +1882,7 @@ enum OutputFormat {
     Table,
     Json,
     Sarif,
+    Github,
 }
 
 impl OutputFormat {
@@ -1812,7 +1891,8 @@ impl OutputFormat {
             "table" => Ok(Self::Table),
             "json" => Ok(Self::Json),
             "sarif" => Ok(Self::Sarif),
-            _ => Err("format must be table, json, or sarif".to_string()),
+            "github" => Ok(Self::Github),
+            _ => Err("format must be table, json, sarif, or github".to_string()),
         }
     }
 }
@@ -1842,7 +1922,7 @@ impl DedupMode {
     fn default_for_format(format: OutputFormat) -> Self {
         match format {
             OutputFormat::Table => Self::None,
-            OutputFormat::Json | OutputFormat::Sarif => Self::Normalized,
+            OutputFormat::Json | OutputFormat::Sarif | OutputFormat::Github => Self::Normalized,
         }
     }
 }
@@ -1912,8 +1992,9 @@ impl SeverityThreshold {
 #[cfg(test)]
 mod tests {
     use super::{
-        dedup_machine_output, empty_summary, normalize_snippet, DedupMode, Finding, ScanResult,
-        Severity,
+        dedup_machine_output, empty_summary, escape_github_annotation_message,
+        escape_github_annotation_property, normalize_snippet, render_github_annotations, DedupMode,
+        Finding, OutputSummary, ScanResult, Severity,
     };
 
     fn finding(
@@ -2023,5 +2104,38 @@ mod tests {
             normalize_snippet("if token==provided:"),
             normalize_snippet("if   token == provided ;")
         );
+    }
+
+    #[test]
+    fn github_annotation_escape_encodes_special_characters() {
+        assert_eq!(escape_github_annotation_message("a%b\r\nc"), "a%25b%0D%0Ac");
+        assert_eq!(
+            escape_github_annotation_property("src/a:b,c%"),
+            "src/a%3Ab%2Cc%25"
+        );
+    }
+
+    #[test]
+    fn github_render_outputs_annotation_lines() {
+        let raw = result(vec![finding(
+            "AISHIELD-PY-AUTH-001",
+            Severity::High,
+            "src/app.py",
+            10,
+            "if token == provided:",
+            88.0,
+        )]);
+        let summary = OutputSummary {
+            dedup_mode: DedupMode::Normalized,
+            original_total: 1,
+            deduped_total: 1,
+        };
+
+        let rendered = render_github_annotations(&raw, &summary);
+        assert!(
+            rendered.contains("::error file=src/app.py,line=10,col=1,title=[AISHIELD-PY-AUTH-001]")
+        );
+        assert!(rendered.contains("AIShield summary:"));
+        assert!(rendered.contains("dedup_mode=normalized"));
     }
 }
