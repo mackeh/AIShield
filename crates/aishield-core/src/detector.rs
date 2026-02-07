@@ -176,6 +176,13 @@ fn has_negative_match(line_lower: &str, full_lower: &str, negative_patterns: &[S
 }
 
 fn relative_path(root: &Path, path: &Path) -> String {
+    if root.is_file() {
+        if let Some(name) = path.file_name() {
+            return name.to_string_lossy().to_string();
+        }
+        return path.display().to_string();
+    }
+
     match path.strip_prefix(root) {
         Ok(p) => p.display().to_string(),
         Err(_) => path.display().to_string(),
@@ -334,6 +341,48 @@ function good(token, expected) {
             "expected at least 20 findings in fixture suite, got {}",
             result.summary.total
         );
+    }
+
+    #[test]
+    fn single_file_scan_keeps_filename_location() {
+        let root = temp_path("aishield-core-test-file-target");
+        let rules_dir = root.join("rules/python/auth");
+        let src_dir = root.join("src");
+
+        fs::create_dir_all(&rules_dir).expect("create rules dir");
+        fs::create_dir_all(&src_dir).expect("create src dir");
+
+        fs::write(
+            rules_dir.join("token-compare.yaml"),
+            r#"id: AISHIELD-PY-AUTH-001
+title: Timing-Unsafe Secret Comparison
+severity: high
+confidence_that_ai_generated: 0.88
+languages: [python]
+category: auth
+pattern:
+  any:
+    - "token == "
+fix:
+  suggestion: use compare_digest
+tags: [auth]
+"#,
+        )
+        .expect("write rule");
+
+        let file = src_dir.join("single.py");
+        fs::write(&file, "if token == provided:\n    pass\n").expect("write source");
+
+        let rules = RuleSet::load_from_dir(root.join("rules").as_path()).expect("load rules");
+        let analyzer = Analyzer::new(rules);
+        let result = analyzer
+            .analyze_path(file.as_path(), &AnalysisOptions::default())
+            .expect("scan");
+
+        assert_eq!(result.summary.total, 1);
+        assert_eq!(result.findings[0].file, "single.py");
+
+        let _ = fs::remove_dir_all(root);
     }
 
     fn temp_path(prefix: &str) -> PathBuf {

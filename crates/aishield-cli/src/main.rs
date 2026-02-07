@@ -4,9 +4,12 @@ use std::fmt::Write as FmtWrite;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use aishield_core::{AnalysisOptions, Analyzer, RuleSet, ScanResult, Severity};
+use aishield_core::{
+    AnalysisOptions, Analyzer, Finding, RuleSet, ScanResult, ScanSummary, Severity,
+};
 
 fn main() {
     if let Err(err) = run() {
@@ -53,6 +56,7 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     let mut output_path = None;
     let mut history_file_override = None;
     let mut no_history_flag = false;
+    let mut staged_only = false;
     let mut config_path = PathBuf::from(".aishield.yml");
     let mut use_config = true;
 
@@ -105,6 +109,7 @@ fn run_scan(args: &[String]) -> Result<(), String> {
                 ));
             }
             "--no-history" => no_history_flag = true,
+            "--staged" => staged_only = true,
             "--config" => {
                 i += 1;
                 config_path = PathBuf::from(args.get(i).ok_or("--config requires a value")?);
@@ -142,15 +147,21 @@ fn run_scan(args: &[String]) -> Result<(), String> {
         return Err(format!("no rules found in {}", rules_dir.display()));
     }
 
+    let rules_count = ruleset.rules.len();
     let analyzer = Analyzer::new(ruleset);
     let options = AnalysisOptions {
         ai_only,
         min_ai_confidence,
         categories,
     };
-    let mut result = analyzer
-        .analyze_path(&target, &options)
-        .map_err(|err| format!("failed to scan {}: {err}", target.display()))?;
+    let mut result = if staged_only {
+        let staged_targets = collect_staged_targets(&target)?;
+        analyze_targets(&analyzer, &options, &staged_targets, rules_count)?
+    } else {
+        analyzer
+            .analyze_path(&target, &options)
+            .map_err(|err| format!("failed to scan {}: {err}", target.display()))?
+    };
 
     if let Some(threshold) = severity_threshold {
         result.findings = result
@@ -186,6 +197,86 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+fn collect_staged_targets(target: &Path) -> Result<Vec<PathBuf>, String> {
+    let output = Command::new("git")
+        .args(["diff", "--cached", "--name-only", "--diff-filter=ACMR"])
+        .output()
+        .map_err(|err| format!("failed to query staged files via git: {err}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let message = if stderr.trim().is_empty() {
+            "unknown git error".to_string()
+        } else {
+            stderr.trim().to_string()
+        };
+        return Err(format!("git diff --cached failed: {}", message));
+    }
+
+    let mut targets = Vec::new();
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let path = PathBuf::from(line.trim());
+        if path.as_os_str().is_empty() {
+            continue;
+        }
+        if !path_matches_target(&path, target) {
+            continue;
+        }
+        if path.exists() {
+            targets.push(path);
+        }
+    }
+
+    Ok(targets)
+}
+
+fn path_matches_target(candidate: &Path, target: &Path) -> bool {
+    if target == Path::new(".") {
+        return true;
+    }
+    if target.is_file() {
+        return candidate == target;
+    }
+    candidate.starts_with(target)
+}
+
+fn analyze_targets(
+    analyzer: &Analyzer,
+    options: &AnalysisOptions,
+    targets: &[PathBuf],
+    rules_count: usize,
+) -> Result<ScanResult, String> {
+    if targets.is_empty() {
+        return Ok(ScanResult {
+            findings: Vec::new(),
+            summary: empty_summary(0, rules_count),
+        });
+    }
+
+    let mut findings = Vec::new();
+    let mut scanned_files = 0usize;
+
+    for target in targets {
+        let partial = analyzer
+            .analyze_path(target, options)
+            .map_err(|err| format!("failed to scan {}: {err}", target.display()))?;
+        scanned_files += partial.summary.scanned_files;
+        findings.extend(partial.findings);
+    }
+
+    findings.sort_by(|a, b| {
+        b.risk_score
+            .partial_cmp(&a.risk_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| b.severity.rank().cmp(&a.severity.rank()))
+            .then_with(|| a.file.cmp(&b.file))
+            .then_with(|| a.line.cmp(&b.line))
+    });
+
+    let summary = summarize_findings(&findings, scanned_files, rules_count);
+    Ok(ScanResult { findings, summary })
 }
 
 fn run_fix(args: &[String]) -> Result<(), String> {
@@ -349,6 +440,7 @@ fn run_hook(args: &[String]) -> Result<(), String> {
 fn run_hook_install(args: &[String]) -> Result<(), String> {
     let mut severity = SeverityThreshold::High;
     let mut scan_path = ".".to_string();
+    let mut all_files = false;
 
     let mut i = 0;
     while i < args.len() {
@@ -362,6 +454,7 @@ fn run_hook_install(args: &[String]) -> Result<(), String> {
                 i += 1;
                 scan_path = args.get(i).ok_or("--path requires a value")?.to_string();
             }
+            "--all-files" => all_files = true,
             other => return Err(format!("unknown hook install option `{other}`")),
         }
         i += 1;
@@ -372,9 +465,10 @@ fn run_hook_install(args: &[String]) -> Result<(), String> {
         return Err(".git/hooks not found; run this inside a git repository".to_string());
     }
 
+    let staged_arg = if all_files { "" } else { "--staged " };
     let hook_path = hooks_dir.join("pre-commit");
     let script = format!(
-        "#!/usr/bin/env sh\nset -e\n\nif command -v aishield >/dev/null 2>&1; then\n  aishield scan {scan_path} --severity {} --fail-on-findings\nelse\n  cargo run -q -p aishield-cli -- scan {scan_path} --severity {} --fail-on-findings\nfi\n",
+        "#!/usr/bin/env sh\nset -e\n\nif command -v aishield >/dev/null 2>&1; then\n  aishield scan {scan_path} {staged_arg}--severity {} --fail-on-findings\nelse\n  cargo run -q -p aishield-cli -- scan {scan_path} {staged_arg}--severity {} --fail-on-findings\nfi\n",
         severity.as_str(),
         severity.as_str()
     );
@@ -662,14 +756,38 @@ fn render_stats_json(aggregate: &StatsAggregate, days: u64, history_file: &Path)
 fn print_help() {
     println!("AIShield CLI (foundation)\n");
     println!("Usage:");
-    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif] [--rules c1,c2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--output FILE] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
+    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif] [--rules c1,c2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged] [--output FILE] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
     println!("  aishield fix <path> [--rules-dir DIR] [--config FILE] [--no-config]");
     println!("  aishield init [--output PATH]");
     println!("  aishield stats [--last Nd] [--history-file FILE] [--format table|json] [--config FILE] [--no-config]");
-    println!("  aishield hook install [--severity LEVEL] [--path TARGET]");
+    println!("  aishield hook install [--severity LEVEL] [--path TARGET] [--all-files]");
 }
 
 fn recompute_summary(result: &ScanResult) -> aishield_core::ScanSummary {
+    summarize_findings(
+        &result.findings,
+        result.summary.scanned_files,
+        result.summary.matched_rules,
+    )
+}
+
+fn summarize_findings(
+    findings: &[Finding],
+    scanned_files: usize,
+    matched_rules: usize,
+) -> ScanSummary {
+    let mut summary = empty_summary(scanned_files, matched_rules);
+    summary.total = findings.len();
+    for finding in findings {
+        *summary
+            .by_severity
+            .entry(finding.severity.as_str().to_string())
+            .or_insert(0) += 1;
+    }
+    summary
+}
+
+fn empty_summary(scanned_files: usize, matched_rules: usize) -> ScanSummary {
     let mut by_severity = BTreeMap::new();
     by_severity.insert("critical".to_string(), 0);
     by_severity.insert("high".to_string(), 0);
@@ -677,17 +795,11 @@ fn recompute_summary(result: &ScanResult) -> aishield_core::ScanSummary {
     by_severity.insert("low".to_string(), 0);
     by_severity.insert("info".to_string(), 0);
 
-    for finding in &result.findings {
-        *by_severity
-            .entry(finding.severity.as_str().to_string())
-            .or_insert(0) += 1;
-    }
-
-    aishield_core::ScanSummary {
-        total: result.findings.len(),
+    ScanSummary {
+        total: 0,
         by_severity,
-        scanned_files: result.summary.scanned_files,
-        matched_rules: result.summary.matched_rules,
+        scanned_files,
+        matched_rules,
     }
 }
 

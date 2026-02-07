@@ -47,6 +47,9 @@ tests/fixtures/    # vulnerable sample files
 # scan current project
 cargo run -p aishield-cli -- scan .
 
+# scan only staged files (fast pre-commit mode)
+cargo run -p aishield-cli -- scan . --staged
+
 # machine-readable output
 cargo run -p aishield-cli -- scan . --format json
 
@@ -76,7 +79,10 @@ aishield scan <path> \
   [--min-ai-confidence N] \
   [--severity LEVEL] \
   [--fail-on-findings] \
+  [--staged] \
   [--output FILE] \
+  [--history-file FILE] \
+  [--no-history] \
   [--config FILE] \
   [--no-config]
 ```
@@ -96,8 +102,10 @@ aishield init [--output PATH]
 ### `hook install`
 
 ```bash
-aishield hook install [--severity LEVEL] [--path TARGET]
+aishield hook install [--severity LEVEL] [--path TARGET] [--all-files]
 ```
+
+By default the installed hook scans only staged files. Use `--all-files` to force full-path scans in pre-commit.
 
 ### `stats`
 
