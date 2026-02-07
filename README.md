@@ -106,6 +106,23 @@ aishield fix <path> [--rules-dir DIR] [--write] [--dry-run] [--config FILE] [--n
 aishield init [--output PATH]
 ```
 
+### `create-rule`
+
+```bash
+aishield create-rule \
+  --id AISHIELD-PY-AUTH-999 \
+  --title "Timing Unsafe Session Compare" \
+  --language python \
+  --category auth \
+  --severity high \
+  --pattern-any "session_token == " \
+  --pattern-not "compare_digest(" \
+  --tags auth,timing-attack \
+  --suggestion "Use hmac.compare_digest for secret comparisons."
+```
+
+This scaffolds a new YAML rule under `rules/<language>/<category>/`.
+
 ### `hook install`
 
 ```bash

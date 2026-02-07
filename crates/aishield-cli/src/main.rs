@@ -29,6 +29,7 @@ fn run() -> Result<(), String> {
         "scan" => run_scan(&args[1..]),
         "fix" => run_fix(&args[1..]),
         "init" => run_init(&args[1..]),
+        "create-rule" => run_create_rule(&args[1..]),
         "stats" => run_stats(&args[1..]),
         "hook" => run_hook(&args[1..]),
         "--help" | "-h" | "help" => {
@@ -389,6 +390,200 @@ fn run_init(args: &[String]) -> Result<(), String> {
     file.write_all(config.as_bytes())
         .map_err(|err| err.to_string())?;
     println!("Created {}", output.display());
+    Ok(())
+}
+
+fn run_create_rule(args: &[String]) -> Result<(), String> {
+    let mut id = None::<String>;
+    let mut title = None::<String>;
+    let mut severity = "medium".to_string();
+    let mut language = None::<String>;
+    let mut category = None::<String>;
+    let mut ai_tendency = None::<String>;
+    let mut confidence = "0.75".to_string();
+    let mut pattern_any = Vec::<String>::new();
+    let mut pattern_all = Vec::<String>::new();
+    let mut pattern_not = Vec::<String>::new();
+    let mut tags = Vec::<String>::new();
+    let mut suggestion = None::<String>;
+    let mut out_dir = None::<PathBuf>;
+    let mut force = false;
+
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--id" => {
+                i += 1;
+                id = Some(args.get(i).ok_or("--id requires a value")?.to_string());
+            }
+            "--title" => {
+                i += 1;
+                title = Some(args.get(i).ok_or("--title requires a value")?.to_string());
+            }
+            "--severity" => {
+                i += 1;
+                severity = parse_severity_value(args.get(i).ok_or("--severity requires a value")?)?
+                    .to_string();
+            }
+            "--language" => {
+                i += 1;
+                language = Some(
+                    args.get(i)
+                        .ok_or("--language requires a value")?
+                        .trim()
+                        .to_ascii_lowercase(),
+                );
+            }
+            "--category" => {
+                i += 1;
+                category = Some(
+                    args.get(i)
+                        .ok_or("--category requires a value")?
+                        .trim()
+                        .to_ascii_lowercase(),
+                );
+            }
+            "--ai-tendency" => {
+                i += 1;
+                ai_tendency = Some(
+                    args.get(i)
+                        .ok_or("--ai-tendency requires a value")?
+                        .to_string(),
+                );
+            }
+            "--confidence" => {
+                i += 1;
+                let raw = args.get(i).ok_or("--confidence requires a value")?;
+                let parsed = raw
+                    .parse::<f32>()
+                    .map_err(|_| "--confidence must be numeric (0.0-1.0)".to_string())?;
+                if !(0.0..=1.0).contains(&parsed) {
+                    return Err("--confidence must be between 0.0 and 1.0".to_string());
+                }
+                confidence = format!("{parsed:.2}");
+            }
+            "--pattern-any" => {
+                i += 1;
+                pattern_any.push(
+                    args.get(i)
+                        .ok_or("--pattern-any requires a value")?
+                        .to_string(),
+                );
+            }
+            "--pattern-all" => {
+                i += 1;
+                pattern_all.push(
+                    args.get(i)
+                        .ok_or("--pattern-all requires a value")?
+                        .to_string(),
+                );
+            }
+            "--pattern-not" => {
+                i += 1;
+                pattern_not.push(
+                    args.get(i)
+                        .ok_or("--pattern-not requires a value")?
+                        .to_string(),
+                );
+            }
+            "--tags" => {
+                i += 1;
+                tags.extend(parse_list_like(
+                    args.get(i).ok_or("--tags requires a value")?,
+                ));
+            }
+            "--suggestion" => {
+                i += 1;
+                suggestion = Some(
+                    args.get(i)
+                        .ok_or("--suggestion requires a value")?
+                        .to_string(),
+                );
+            }
+            "--out-dir" => {
+                i += 1;
+                out_dir = Some(PathBuf::from(
+                    args.get(i).ok_or("--out-dir requires a value")?,
+                ));
+            }
+            "--force" => force = true,
+            other => return Err(format!("unknown create-rule option `{other}`")),
+        }
+        i += 1;
+    }
+
+    let id = id.ok_or("--id is required")?;
+    let title = title.ok_or("--title is required")?;
+    let language = language.ok_or("--language is required")?;
+    let category = category.ok_or("--category is required")?;
+
+    if pattern_any.is_empty() && pattern_all.is_empty() {
+        return Err("at least one of --pattern-any or --pattern-all is required".to_string());
+    }
+
+    let rule_dir = out_dir.unwrap_or_else(|| PathBuf::from(format!("rules/{language}/{category}")));
+    fs::create_dir_all(&rule_dir)
+        .map_err(|err| format!("failed to create {}: {err}", rule_dir.display()))?;
+
+    let file_stem = slugify_rule_filename(&title);
+    let file_path = rule_dir.join(format!("{file_stem}.yaml"));
+    if file_path.exists() && !force {
+        return Err(format!(
+            "{} already exists (use --force to overwrite)",
+            file_path.display()
+        ));
+    }
+
+    let mut yaml = String::new();
+    let _ = writeln!(yaml, "id: {}", id);
+    let _ = writeln!(yaml, "title: {}", title);
+    let _ = writeln!(yaml, "severity: {}", severity);
+    let _ = writeln!(yaml, "confidence_that_ai_generated: {}", confidence);
+    let _ = writeln!(yaml, "languages: [{}]", language);
+    let _ = writeln!(yaml, "category: {}", category);
+    if let Some(ai_tendency) = ai_tendency {
+        let _ = writeln!(yaml, "ai_tendency: {}", ai_tendency);
+    } else {
+        let _ = writeln!(
+            yaml,
+            "ai_tendency: TODO describe why AI tends to generate this pattern."
+        );
+    }
+    yaml.push_str("pattern:\n");
+    if !pattern_any.is_empty() {
+        yaml.push_str("  any:\n");
+        for p in pattern_any {
+            let _ = writeln!(yaml, "    - \"{}\"", escape_rule_yaml(&p));
+        }
+    }
+    if !pattern_all.is_empty() {
+        yaml.push_str("  all:\n");
+        for p in pattern_all {
+            let _ = writeln!(yaml, "    - \"{}\"", escape_rule_yaml(&p));
+        }
+    }
+    if !pattern_not.is_empty() {
+        yaml.push_str("  not:\n");
+        for p in pattern_not {
+            let _ = writeln!(yaml, "    - \"{}\"", escape_rule_yaml(&p));
+        }
+    }
+    yaml.push_str("fix:\n");
+    if let Some(suggestion) = suggestion {
+        let _ = writeln!(yaml, "  suggestion: {}", suggestion);
+    } else {
+        yaml.push_str("  suggestion: TODO add secure remediation guidance.\n");
+    }
+    if tags.is_empty() {
+        yaml.push_str("tags: [todo]\n");
+    } else {
+        let _ = writeln!(yaml, "tags: [{}]", tags.join(", "));
+    }
+
+    fs::write(&file_path, yaml)
+        .map_err(|err| format!("failed to write {}: {err}", file_path.display()))?;
+
+    println!("Created rule scaffold at {}", file_path.display());
     Ok(())
 }
 
@@ -887,6 +1082,7 @@ fn print_help() {
     println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged] [--output FILE] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
     println!("  aishield fix <path> [--rules-dir DIR] [--write] [--dry-run] [--config FILE] [--no-config]");
     println!("  aishield init [--output PATH]");
+    println!("  aishield create-rule --id ID --title TITLE --language LANG --category CAT [--severity LEVEL] [--pattern-any P] [--pattern-all P] [--pattern-not P] [--tags t1,t2] [--suggestion TEXT] [--out-dir DIR] [--force]");
     println!("  aishield stats [--last Nd] [--history-file FILE] [--format table|json] [--config FILE] [--no-config]");
     println!("  aishield hook install [--severity LEVEL] [--path TARGET] [--all-files]");
 }
@@ -1312,6 +1508,41 @@ fn parse_bool(raw: &str) -> Result<bool, String> {
         "false" | "0" | "no" | "off" => Ok(false),
         _ => Err(format!("invalid bool value `{raw}`")),
     }
+}
+
+fn parse_severity_value(raw: &str) -> Result<&'static str, String> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "critical" => Ok("critical"),
+        "high" => Ok("high"),
+        "medium" => Ok("medium"),
+        "low" => Ok("low"),
+        "info" => Ok("info"),
+        _ => Err("severity must be critical|high|medium|low|info".to_string()),
+    }
+}
+
+fn slugify_rule_filename(title: &str) -> String {
+    let mut out = String::new();
+    let mut last_dash = false;
+    for ch in title.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+            last_dash = false;
+        } else if !last_dash {
+            out.push('-');
+            last_dash = true;
+        }
+    }
+    let trimmed = out.trim_matches('-');
+    if trimmed.is_empty() {
+        "new-rule".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn escape_rule_yaml(input: &str) -> String {
+    input.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 #[derive(Clone)]
