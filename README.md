@@ -41,6 +41,14 @@ tests/fixtures/    # vulnerable sample files
 .github/workflows/ # CI scans + SARIF upload
 ```
 
+## Documentation
+
+- `docs/cli.md`: command reference and options
+- `docs/configuration.md`: `.aishield.yml` keys, defaults, and precedence
+- `docs/output-formats.md`: table/json/sarif schemas and dedup behavior
+- `docs/ci-github-actions.md`: GitHub Actions integration and troubleshooting
+- `docs/rules-authoring.md`: custom rule authoring guide
+
 ## Quick start
 
 ```bash
@@ -191,6 +199,8 @@ A workflow is included at `.github/workflows/aishield.yml` to:
 
 1. Run AIShield in SARIF mode
 2. Upload `aishield.sarif` to GitHub Security (`code scanning alerts`)
+
+See `docs/ci-github-actions.md` for permissions details and runbook-style troubleshooting.
 
 ## Roadmap focus
 
