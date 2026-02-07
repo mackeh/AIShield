@@ -14,6 +14,7 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - Optional SAST bridge (`--bridge`) for Semgrep/Bandit/ESLint with parallel execution
 - Bridge findings normalized into unified AIShield result schema with dedup
 - CI workflow optionally installs bridge tools (enabled by default, toggle via repo vars)
+- SARIF/GitHub annotation rendering now clamps line/column to valid 1-based values
 
 ## [0.1.1] - 2026-02-07
 

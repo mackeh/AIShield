@@ -1822,14 +1822,16 @@ fn render_github_annotations(result: &ScanResult, output_summary: &OutputSummary
             "{} (AI confidence {:.1}%, risk {:.1})",
             finding.title, finding.ai_confidence, finding.risk_score
         );
+        let line = finding.line.max(1);
+        let column = finding.column.max(1);
 
         let _ = writeln!(
             out,
             "::{} file={},line={},col={},title={}::{}",
             level,
             escape_github_annotation_property(&finding.file),
-            finding.line,
-            finding.column,
+            line,
+            column,
             escape_github_annotation_property(&title),
             escape_github_annotation_message(&message)
         );
@@ -2083,7 +2085,8 @@ fn render_sarif(result: &ScanResult, output_summary: &OutputSummary) -> String {
         let _ = writeln!(
             out,
             "                \"region\": {{ \"startLine\": {}, \"startColumn\": {} }}",
-            finding.line, finding.column
+            finding.line.max(1),
+            finding.column.max(1)
         );
         out.push_str("              }\n");
         out.push_str("            }\n");
@@ -2494,8 +2497,8 @@ impl SeverityThreshold {
 mod tests {
     use super::{
         dedup_machine_output, empty_summary, escape_github_annotation_message,
-        escape_github_annotation_property, normalize_snippet, render_github_annotations, DedupMode,
-        Finding, OutputSummary, ScanResult, Severity,
+        escape_github_annotation_property, normalize_snippet, render_github_annotations,
+        render_sarif, DedupMode, Finding, OutputSummary, ScanResult, Severity,
     };
 
     fn finding(
@@ -2654,5 +2657,32 @@ mod tests {
     fn bridge_engine_parser_rejects_invalid_engine() {
         let err = super::parse_bridge_engines("foo").expect_err("should reject invalid bridge");
         assert!(err.contains("bridge engine"));
+    }
+
+    #[test]
+    fn sarif_region_clamps_line_and_column_to_one() {
+        let raw = result(vec![Finding {
+            id: "SAST-BRIDGE-TEST".to_string(),
+            title: "Bridge Test".to_string(),
+            severity: Severity::Medium,
+            file: "src/app.py".to_string(),
+            line: 0,
+            column: 0,
+            snippet: "print('x')".to_string(),
+            ai_confidence: 30.0,
+            risk_score: 65.0,
+            category: Some("sast-bridge".to_string()),
+            tags: vec!["sast-bridge".to_string()],
+            ai_tendency: None,
+            fix_suggestion: None,
+        }]);
+        let summary = OutputSummary {
+            dedup_mode: DedupMode::Normalized,
+            original_total: 1,
+            deduped_total: 1,
+        };
+
+        let sarif = render_sarif(&raw, &summary);
+        assert!(sarif.contains("\"startLine\": 1, \"startColumn\": 1"));
     }
 }
