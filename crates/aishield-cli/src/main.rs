@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 use std::env;
 use std::fmt::Write as FmtWrite;
-use std::fs::{self, File};
+use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use aishield_core::{AnalysisOptions, Analyzer, RuleSet, ScanResult, Severity};
 
@@ -25,6 +26,7 @@ fn run() -> Result<(), String> {
         "scan" => run_scan(&args[1..]),
         "fix" => run_fix(&args[1..]),
         "init" => run_init(&args[1..]),
+        "stats" => run_stats(&args[1..]),
         "hook" => run_hook(&args[1..]),
         "--help" | "-h" | "help" => {
             print_help();
@@ -49,6 +51,8 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     let mut severity_override = None;
     let mut fail_on_findings_flag = false;
     let mut output_path = None;
+    let mut history_file_override = None;
+    let mut no_history_flag = false;
     let mut config_path = PathBuf::from(".aishield.yml");
     let mut use_config = true;
 
@@ -94,6 +98,13 @@ fn run_scan(args: &[String]) -> Result<(), String> {
                     args.get(i).ok_or("--output requires a value")?,
                 ));
             }
+            "--history-file" => {
+                i += 1;
+                history_file_override = Some(PathBuf::from(
+                    args.get(i).ok_or("--history-file requires a value")?,
+                ));
+            }
+            "--no-history" => no_history_flag = true,
             "--config" => {
                 i += 1;
                 config_path = PathBuf::from(args.get(i).ok_or("--config requires a value")?);
@@ -117,6 +128,12 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     let min_ai_confidence = min_ai_confidence_override.or(config.min_ai_confidence);
     let severity_threshold = severity_override.or(config.severity_threshold);
     let fail_on_findings = fail_on_findings_flag || config.fail_on_findings;
+    let history_file = history_file_override.unwrap_or_else(|| config.history_file.clone());
+    let record_history = if no_history_flag {
+        false
+    } else {
+        config.record_history
+    };
 
     let ruleset = RuleSet::load_from_dir(&rules_dir)
         .map_err(|err| format!("failed to load rules from {}: {err}", rules_dir.display()))?;
@@ -142,6 +159,12 @@ fn run_scan(args: &[String]) -> Result<(), String> {
             .filter(|f| threshold.includes(f.severity))
             .collect::<Vec<_>>();
         result.summary = recompute_summary(&result);
+    }
+
+    if record_history {
+        if let Err(err) = append_history(&history_file, &target, &result) {
+            eprintln!("warning: failed to append scan history: {err}");
+        }
     }
 
     let rendered = match format {
@@ -250,13 +273,66 @@ fn run_init(args: &[String]) -> Result<(), String> {
         return Err(format!("{} already exists", output.display()));
     }
 
-    let config = "version: 1\nrules_dir: rules\nformat: table\nrules: []\nai_only: false\nmin_ai_confidence: 0.70\nseverity_threshold: medium\nfail_on_findings: false\n";
+    let config = "version: 1\nrules_dir: rules\nformat: table\nrules: []\nai_only: false\nmin_ai_confidence: 0.70\nseverity_threshold: medium\nfail_on_findings: false\nhistory_file: .aishield-history.log\nrecord_history: true\n";
 
     let mut file = File::create(&output).map_err(|err| err.to_string())?;
     file.write_all(config.as_bytes())
         .map_err(|err| err.to_string())?;
     println!("Created {}", output.display());
     Ok(())
+}
+
+fn run_stats(args: &[String]) -> Result<(), String> {
+    let mut days: u64 = 30;
+    let mut history_file = PathBuf::from(".aishield-history.log");
+    let mut format = StatsOutputFormat::Table;
+    let mut config_path = PathBuf::from(".aishield.yml");
+    let mut use_config = true;
+
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--last" => {
+                i += 1;
+                days = parse_last_days(args.get(i).ok_or("--last requires a value")?)?;
+            }
+            "--history-file" => {
+                i += 1;
+                history_file = PathBuf::from(args.get(i).ok_or("--history-file requires a value")?);
+            }
+            "--format" => {
+                i += 1;
+                format = StatsOutputFormat::parse(args.get(i).ok_or("--format requires a value")?)?;
+            }
+            "--config" => {
+                i += 1;
+                config_path = PathBuf::from(args.get(i).ok_or("--config requires a value")?);
+            }
+            "--no-config" => use_config = false,
+            other => return Err(format!("unknown stats option `{other}`")),
+        }
+        i += 1;
+    }
+
+    if use_config && !args.iter().any(|a| a == "--history-file") {
+        let config = AppConfig::load_if_exists(&config_path)?;
+        history_file = config.history_file;
+    }
+
+    let records = load_history(&history_file)?;
+    let cutoff = current_epoch_seconds().saturating_sub(days.saturating_mul(86_400));
+    let filtered = records
+        .into_iter()
+        .filter(|record| record.timestamp >= cutoff)
+        .collect::<Vec<_>>();
+
+    let aggregate = StatsAggregate::from_records(&filtered);
+    let rendered = match format {
+        StatsOutputFormat::Table => render_stats_table(&aggregate, days, &history_file),
+        StatsOutputFormat::Json => render_stats_json(&aggregate, days, &history_file),
+    };
+
+    write_stdout(&rendered)
 }
 
 fn run_hook(args: &[String]) -> Result<(), String> {
@@ -320,12 +396,276 @@ fn run_hook_install(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(Debug, Clone)]
+struct HistoryRecord {
+    timestamp: u64,
+    target: String,
+    total: usize,
+    critical: usize,
+    high: usize,
+    medium: usize,
+    low: usize,
+    info: usize,
+    ai_estimated: usize,
+    top_rule: String,
+}
+
+impl HistoryRecord {
+    fn to_line(&self) -> String {
+        format!(
+            "{}|{}|{}|{}|{}|{}|{}|{}|{}|{}\n",
+            self.timestamp,
+            escape_history_field(&self.target),
+            self.total,
+            self.critical,
+            self.high,
+            self.medium,
+            self.low,
+            self.info,
+            self.ai_estimated,
+            escape_history_field(&self.top_rule)
+        )
+    }
+
+    fn from_line(line: &str) -> Option<Self> {
+        let parts = line.trim().split('|').collect::<Vec<_>>();
+        if parts.len() != 10 {
+            return None;
+        }
+
+        Some(Self {
+            timestamp: parts[0].parse().ok()?,
+            target: unescape_history_field(parts[1]),
+            total: parts[2].parse().ok()?,
+            critical: parts[3].parse().ok()?,
+            high: parts[4].parse().ok()?,
+            medium: parts[5].parse().ok()?,
+            low: parts[6].parse().ok()?,
+            info: parts[7].parse().ok()?,
+            ai_estimated: parts[8].parse().ok()?,
+            top_rule: unescape_history_field(parts[9]),
+        })
+    }
+}
+
+struct StatsAggregate {
+    scans: usize,
+    findings: usize,
+    critical: usize,
+    high: usize,
+    medium: usize,
+    low: usize,
+    info: usize,
+    ai_estimated: usize,
+    top_rules: Vec<(String, usize)>,
+}
+
+impl StatsAggregate {
+    fn from_records(records: &[HistoryRecord]) -> Self {
+        let mut top_rule_counts = BTreeMap::new();
+        let mut aggregate = Self {
+            scans: records.len(),
+            findings: 0,
+            critical: 0,
+            high: 0,
+            medium: 0,
+            low: 0,
+            info: 0,
+            ai_estimated: 0,
+            top_rules: Vec::new(),
+        };
+
+        for record in records {
+            aggregate.findings += record.total;
+            aggregate.critical += record.critical;
+            aggregate.high += record.high;
+            aggregate.medium += record.medium;
+            aggregate.low += record.low;
+            aggregate.info += record.info;
+            aggregate.ai_estimated += record.ai_estimated;
+
+            if !record.top_rule.is_empty() && record.top_rule != "-" {
+                *top_rule_counts.entry(record.top_rule.clone()).or_insert(0) += 1;
+            }
+        }
+
+        aggregate.top_rules = top_rule_counts.into_iter().collect::<Vec<_>>();
+        aggregate
+            .top_rules
+            .sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        aggregate
+    }
+}
+
+fn append_history(history_file: &Path, target: &Path, result: &ScanResult) -> Result<(), String> {
+    if let Some(parent) = history_file.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)
+                .map_err(|err| format!("failed creating {}: {err}", parent.display()))?;
+        }
+    }
+
+    let top_rule = most_frequent_rule_id(result).unwrap_or_else(|| "-".to_string());
+    let record = HistoryRecord {
+        timestamp: current_epoch_seconds(),
+        target: target.display().to_string(),
+        total: result.summary.total,
+        critical: *result.summary.by_severity.get("critical").unwrap_or(&0),
+        high: *result.summary.by_severity.get("high").unwrap_or(&0),
+        medium: *result.summary.by_severity.get("medium").unwrap_or(&0),
+        low: *result.summary.by_severity.get("low").unwrap_or(&0),
+        info: *result.summary.by_severity.get("info").unwrap_or(&0),
+        ai_estimated: result
+            .findings
+            .iter()
+            .filter(|finding| finding.ai_confidence >= 70.0)
+            .count(),
+        top_rule,
+    };
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(history_file)
+        .map_err(|err| format!("failed opening {}: {err}", history_file.display()))?;
+    file.write_all(record.to_line().as_bytes())
+        .map_err(|err| format!("failed writing {}: {err}", history_file.display()))?;
+    Ok(())
+}
+
+fn load_history(history_file: &Path) -> Result<Vec<HistoryRecord>, String> {
+    if !history_file.exists() {
+        return Ok(Vec::new());
+    }
+
+    let content = fs::read_to_string(history_file)
+        .map_err(|err| format!("failed reading {}: {err}", history_file.display()))?;
+
+    Ok(content
+        .lines()
+        .filter_map(HistoryRecord::from_line)
+        .collect::<Vec<_>>())
+}
+
+fn most_frequent_rule_id(result: &ScanResult) -> Option<String> {
+    let mut counts = BTreeMap::new();
+    for finding in &result.findings {
+        *counts.entry(finding.id.clone()).or_insert(0usize) += 1;
+    }
+    counts
+        .into_iter()
+        .max_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)))
+        .map(|entry| entry.0)
+}
+
+fn parse_last_days(raw: &str) -> Result<u64, String> {
+    let normalized = raw.trim().to_ascii_lowercase();
+    let number = if let Some(days) = normalized.strip_suffix('d') {
+        days
+    } else {
+        normalized.as_str()
+    };
+
+    let parsed = number
+        .parse::<u64>()
+        .map_err(|_| format!("invalid --last value `{raw}`; expected e.g. 30d"))?;
+
+    if parsed == 0 {
+        return Err("--last must be greater than zero".to_string());
+    }
+    Ok(parsed)
+}
+
+fn current_epoch_seconds() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+fn escape_history_field(input: &str) -> String {
+    input.replace('%', "%25").replace('|', "%7C")
+}
+
+fn unescape_history_field(input: &str) -> String {
+    input.replace("%7C", "|").replace("%25", "%")
+}
+
+fn render_stats_table(aggregate: &StatsAggregate, days: u64, history_file: &Path) -> String {
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "AIShield stats for last {} day(s) from {}",
+        days,
+        history_file.display()
+    );
+    let _ = writeln!(out, "Scans: {}", aggregate.scans);
+    let _ = writeln!(out, "Findings: {}", aggregate.findings);
+    let _ = writeln!(
+        out,
+        "Severity totals: critical={} high={} medium={} low={} info={}",
+        aggregate.critical, aggregate.high, aggregate.medium, aggregate.low, aggregate.info
+    );
+    let _ = writeln!(
+        out,
+        "AI-generated (estimated): {} of {} findings",
+        aggregate.ai_estimated, aggregate.findings
+    );
+
+    if aggregate.top_rules.is_empty() {
+        out.push_str("Top patterns: none\n");
+        return out;
+    }
+
+    out.push_str("Top patterns:\n");
+    for (idx, (rule_id, count)) in aggregate.top_rules.iter().take(5).enumerate() {
+        let _ = writeln!(out, "  {}. {} ({})", idx + 1, rule_id, count);
+    }
+    out
+}
+
+fn render_stats_json(aggregate: &StatsAggregate, days: u64, history_file: &Path) -> String {
+    let mut out = String::new();
+    out.push_str("{\n");
+    let _ = writeln!(out, "  \"days\": {},", days);
+    let _ = writeln!(
+        out,
+        "  \"history_file\": \"{}\",",
+        escape_json(history_file.to_string_lossy().as_ref())
+    );
+    let _ = writeln!(out, "  \"scans\": {},", aggregate.scans);
+    let _ = writeln!(out, "  \"findings\": {},", aggregate.findings);
+    out.push_str("  \"severity_totals\": {\n");
+    let _ = writeln!(out, "    \"critical\": {},", aggregate.critical);
+    let _ = writeln!(out, "    \"high\": {},", aggregate.high);
+    let _ = writeln!(out, "    \"medium\": {},", aggregate.medium);
+    let _ = writeln!(out, "    \"low\": {},", aggregate.low);
+    let _ = writeln!(out, "    \"info\": {}", aggregate.info);
+    out.push_str("  },\n");
+    let _ = writeln!(out, "  \"ai_estimated\": {},", aggregate.ai_estimated);
+    out.push_str("  \"top_patterns\": [\n");
+    for (idx, (rule_id, count)) in aggregate.top_rules.iter().take(10).enumerate() {
+        out.push_str("    {\n");
+        let _ = writeln!(out, "      \"id\": \"{}\",", escape_json(rule_id));
+        let _ = writeln!(out, "      \"count\": {}", count);
+        if idx + 1 == aggregate.top_rules.len().min(10) {
+            out.push_str("    }\n");
+        } else {
+            out.push_str("    },\n");
+        }
+    }
+    out.push_str("  ]\n");
+    out.push_str("}\n");
+    out
+}
+
 fn print_help() {
     println!("AIShield CLI (foundation)\n");
     println!("Usage:");
-    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif] [--rules c1,c2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--output FILE] [--config FILE] [--no-config]");
+    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif] [--rules c1,c2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--output FILE] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
     println!("  aishield fix <path> [--rules-dir DIR] [--config FILE] [--no-config]");
     println!("  aishield init [--output PATH]");
+    println!("  aishield stats [--last Nd] [--history-file FILE] [--format table|json] [--config FILE] [--no-config]");
     println!("  aishield hook install [--severity LEVEL] [--path TARGET]");
 }
 
@@ -405,6 +745,19 @@ fn render_table(result: &ScanResult) -> String {
         result.summary.by_severity.get("info").copied().unwrap_or(0),
     );
 
+    let ai_estimated = result
+        .findings
+        .iter()
+        .filter(|finding| finding.ai_confidence >= 70.0)
+        .count();
+    let _ = writeln!(
+        out,
+        "AI-Generated (estimated): {} of {} findings",
+        ai_estimated, result.summary.total
+    );
+    let top_pattern = most_frequent_rule_id(result).unwrap_or_else(|| "none".to_string());
+    let _ = writeln!(out, "Top pattern: {}", top_pattern);
+
     out
 }
 
@@ -416,6 +769,13 @@ fn truncate(input: &str, width: usize) -> String {
 }
 
 fn render_json(result: &ScanResult) -> String {
+    let ai_estimated = result
+        .findings
+        .iter()
+        .filter(|finding| finding.ai_confidence >= 70.0)
+        .count();
+    let top_pattern = most_frequent_rule_id(result).unwrap_or_else(|| "none".to_string());
+
     let mut out = String::new();
     out.push_str("{\n");
     out.push_str("  \"summary\": {\n");
@@ -429,6 +789,12 @@ fn render_json(result: &ScanResult) -> String {
         out,
         "    \"matched_rules\": {},",
         result.summary.matched_rules
+    );
+    let _ = writeln!(out, "    \"ai_estimated\": {},", ai_estimated);
+    let _ = writeln!(
+        out,
+        "    \"top_pattern\": \"{}\",",
+        escape_json(&top_pattern)
     );
     out.push_str("    \"by_severity\": {\n");
 
@@ -717,6 +1083,8 @@ struct AppConfig {
     min_ai_confidence: Option<f32>,
     severity_threshold: Option<SeverityThreshold>,
     fail_on_findings: bool,
+    history_file: PathBuf,
+    record_history: bool,
 }
 
 impl Default for AppConfig {
@@ -729,6 +1097,8 @@ impl Default for AppConfig {
             min_ai_confidence: None,
             severity_threshold: None,
             fail_on_findings: false,
+            history_file: PathBuf::from(".aishield-history.log"),
+            record_history: true,
         }
     }
 }
@@ -777,6 +1147,8 @@ impl AppConfig {
                     config.severity_threshold = Some(SeverityThreshold::parse(value)?)
                 }
                 "fail_on_findings" => config.fail_on_findings = parse_bool(value)?,
+                "history_file" => config.history_file = PathBuf::from(strip_quotes(value)),
+                "record_history" => config.record_history = parse_bool(value)?,
                 _ => {}
             }
         }
@@ -799,6 +1171,22 @@ impl OutputFormat {
             "json" => Ok(Self::Json),
             "sarif" => Ok(Self::Sarif),
             _ => Err("format must be table, json, or sarif".to_string()),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum StatsOutputFormat {
+    Table,
+    Json,
+}
+
+impl StatsOutputFormat {
+    fn parse(raw: &str) -> Result<Self, String> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "table" => Ok(Self::Table),
+            "json" => Ok(Self::Json),
+            _ => Err("stats format must be table or json".to_string()),
         }
     }
 }

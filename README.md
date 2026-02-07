@@ -24,6 +24,7 @@ This repository currently contains a solid foundation for Phase 1:
 - Output formats: `table`, `json`, `sarif`
 - Config support via `.aishield.yml`
 - Report file output via `--output`
+- Scan history tracking plus `aishield stats --last Nd` analytics
 - Local pre-commit hook installer
 - GitHub Actions workflow uploading SARIF to GitHub Security
 - Expanded vulnerable fixture suite and regression tests for rule coverage
@@ -57,6 +58,9 @@ cargo run -p aishield-cli -- init
 
 # install a pre-commit gate
 cargo run -p aishield-cli -- hook install --severity high
+
+# view local scan analytics (last 30 days by default)
+cargo run -p aishield-cli -- stats --last 30d
 ```
 
 ## CLI commands
@@ -95,6 +99,12 @@ aishield init [--output PATH]
 aishield hook install [--severity LEVEL] [--path TARGET]
 ```
 
+### `stats`
+
+```bash
+aishield stats [--last Nd] [--history-file FILE] [--format table|json] [--config FILE] [--no-config]
+```
+
 ## Configuration
 
 Example `.aishield.yml`:
@@ -108,6 +118,8 @@ ai_only: false
 min_ai_confidence: 0.70
 severity_threshold: medium
 fail_on_findings: false
+history_file: .aishield-history.log
+record_history: true
 ```
 
 CLI flags override config values.
