@@ -6,6 +6,8 @@ The format is based on Keep a Changelog and follows semantic versioning.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-02-07
+
 ### Added
 
 - Release automation workflow on tag push (`.github/workflows/release.yml`)
@@ -29,5 +31,6 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - Machine-output dedup normalization for JSON/SARIF to reduce CI noise
 - Expanded documentation for CLI, configuration, outputs, and CI
 
-[Unreleased]: https://github.com/mackeh/AIShield/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/mackeh/AIShield/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/mackeh/AIShield/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/mackeh/AIShield/releases/tag/v0.1.0
