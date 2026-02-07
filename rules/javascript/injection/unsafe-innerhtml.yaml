@@ -1,0 +1,14 @@
+id: AISHIELD-JS-INJ-004
+title: Unsanitized innerHTML Assignment
+severity: high
+confidence_that_ai_generated: 0.77
+languages: [javascript]
+category: injection
+ai_tendency: LLM-generated frontend snippets often assign user input into innerHTML.
+pattern:
+  contains:
+    - "innerhtml ="
+    - "innerhtml="
+fix:
+  suggestion: Use textContent or sanitize untrusted input before rendering.
+tags: [xss, injection]

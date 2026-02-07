@@ -1,0 +1,14 @@
+id: AISHIELD-JS-AUTH-001
+title: Timing-Unsafe Token Comparison
+severity: high
+confidence_that_ai_generated: 0.84
+languages: [javascript]
+category: auth
+ai_tendency: AI-generated middleware frequently compares secrets with strict equality.
+pattern:
+  contains:
+    - "token === "
+    - "apikey === "
+fix:
+  suggestion: Use crypto.timingSafeEqual() for constant-time comparison of secrets.
+tags: [auth, timing-attack]

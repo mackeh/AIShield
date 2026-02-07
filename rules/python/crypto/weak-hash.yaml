@@ -1,0 +1,17 @@
+id: AISHIELD-PY-CRYPTO-001
+title: AI-Suggested Weak Hash Algorithm
+severity: high
+confidence_that_ai_generated: 0.85
+languages: [python]
+category: crypto
+ai_tendency: LLMs frequently suggest md5/sha1 from outdated tutorials and examples.
+pattern:
+  contains:
+    - "hashlib.md5("
+    - "hashlib.sha1("
+negative_patterns:
+  - "checksum"
+  - "non-security"
+fix:
+  suggestion: Use sha256 for integrity checks and bcrypt/argon2id for password hashing.
+tags: [crypto, owasp-top10]

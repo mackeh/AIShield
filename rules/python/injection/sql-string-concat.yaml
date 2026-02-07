@@ -1,0 +1,17 @@
+id: AISHIELD-PY-INJ-001
+title: SQL Query Built with String Concatenation
+severity: high
+confidence_that_ai_generated: 0.78
+languages: [python]
+category: injection
+ai_tendency: AI tools often produce readable but unsafe SQL using concatenated strings.
+pattern:
+  contains:
+    - "execute(f\"select"
+    - "execute(\"select \" +"
+    - "cursor.execute(\"select \" +"
+negative_patterns:
+  - "execute(query,"
+fix:
+  suggestion: Use parameterized queries via placeholders and bound parameters.
+tags: [injection, sql]
