@@ -1,0 +1,15 @@
+id: AISHIELD-JS-AUTH-002
+title: JWT Verification Weakening Option
+severity: high
+confidence_that_ai_generated: 0.85
+languages: [javascript]
+category: auth
+ai_tendency: AI may include permissive jwt.verify options to bypass validation issues.
+pattern:
+  all:
+    - "jwt.verify("
+    - "ignoreexpiration"
+    - "true"
+fix:
+  suggestion: Enforce strict token verification, including expiration and claims.
+tags: [auth, jwt]

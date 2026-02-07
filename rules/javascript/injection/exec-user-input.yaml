@@ -1,0 +1,14 @@
+id: AISHIELD-JS-INJ-003
+title: Potential Command Injection via exec
+severity: high
+confidence_that_ai_generated: 0.83
+languages: [javascript]
+category: injection
+ai_tendency: Generated backend snippets often concatenate user input into shell commands.
+pattern:
+  all:
+    - "exec("
+    - "+"
+fix:
+  suggestion: Use execFile/spawn with argument arrays and input allowlists.
+tags: [injection, command]

@@ -1,0 +1,13 @@
+id: AISHIELD-JS-CRYPTO-002
+title: Deprecated createCipher Usage
+severity: high
+confidence_that_ai_generated: 0.82
+languages: [javascript]
+category: crypto
+ai_tendency: LLMs trained on older Node code may emit createCipher.
+pattern:
+  any:
+    - "crypto.createcipher("
+fix:
+  suggestion: Use crypto.createCipheriv with random IV and authenticated modes.
+tags: [crypto, encryption]

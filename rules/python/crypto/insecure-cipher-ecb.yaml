@@ -1,0 +1,14 @@
+id: AISHIELD-PY-CRYPTO-005
+title: ECB Mode Encryption
+severity: high
+confidence_that_ai_generated: 0.81
+languages: [python]
+category: crypto
+ai_tendency: AI-generated crypto examples often default to ECB due older examples.
+pattern:
+  all:
+    - "aes.mode_ecb"
+    - "aes.new("
+fix:
+  suggestion: Replace ECB with AEAD modes such as GCM or ChaCha20-Poly1305.
+tags: [crypto, encryption]

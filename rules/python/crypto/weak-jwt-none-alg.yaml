@@ -1,0 +1,14 @@
+id: AISHIELD-PY-CRYPTO-002
+title: JWT Uses None Algorithm
+severity: critical
+confidence_that_ai_generated: 0.89
+languages: [python]
+category: crypto
+ai_tendency: AI snippets sometimes disable JWT signing for quick demos.
+pattern:
+  all:
+    - "jwt.encode("
+    - "algorithm=\"none\""
+fix:
+  suggestion: Use a strong signed algorithm such as HS256/RS256 and manage keys securely.
+tags: [crypto, jwt]

@@ -1,0 +1,18 @@
+id: AISHIELD-PY-CRYPTO-004
+title: Predictable Random Token Generation
+severity: high
+confidence_that_ai_generated: 0.82
+languages: [python]
+category: crypto
+ai_tendency: LLMs frequently use random.random for token creation.
+pattern:
+  any:
+    - "random.random()"
+    - "random.randint("
+  all:
+    - "token"
+  not:
+    - "secrets.token"
+fix:
+  suggestion: Use secrets.token_urlsafe() or secrets.token_hex() for security-sensitive tokens.
+tags: [crypto, randomness, auth]

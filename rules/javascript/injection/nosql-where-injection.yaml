@@ -1,0 +1,14 @@
+id: AISHIELD-JS-INJ-007
+title: NoSQL Injection via $where
+severity: high
+confidence_that_ai_generated: 0.79
+languages: [javascript]
+category: injection
+ai_tendency: AI snippets can misuse MongoDB $where with user input.
+pattern:
+  all:
+    - "$where"
+    - "req.query"
+fix:
+  suggestion: Avoid $where with untrusted input; use structured query operators.
+tags: [injection, nosql]

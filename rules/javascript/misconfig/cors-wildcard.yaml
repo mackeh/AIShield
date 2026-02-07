@@ -1,0 +1,14 @@
+id: AISHIELD-JS-MISC-001
+title: Wildcard CORS Origin
+severity: medium
+confidence_that_ai_generated: 0.73
+languages: [javascript]
+category: misconfig
+ai_tendency: Generated Express setups frequently default to permissive CORS.
+pattern:
+  any:
+    - "origin: \"*\""
+    - "origin: '*'"
+fix:
+  suggestion: Restrict CORS to trusted domains and required methods only.
+tags: [misconfig, cors]

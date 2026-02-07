@@ -1,0 +1,14 @@
+id: AISHIELD-PY-INJ-003
+title: subprocess with shell=True
+severity: high
+confidence_that_ai_generated: 0.83
+languages: [python]
+category: injection
+ai_tendency: LLMs frequently enable shell=True to make subprocess snippets work quickly.
+pattern:
+  all:
+    - "subprocess."
+    - "shell=true"
+fix:
+  suggestion: Avoid shell=True; pass arguments as a list and validate input.
+tags: [injection, command]

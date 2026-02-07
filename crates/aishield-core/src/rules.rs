@@ -412,8 +412,8 @@ fn strip_quotes(input: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_rule;
-    use std::path::Path;
+    use super::{parse_rule, RuleSet};
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn parses_any_all_not_pattern_fields() {
@@ -457,5 +457,16 @@ pattern:
         assert_eq!(rule.pattern_any, vec!["innerhtml ="]);
         assert!(rule.pattern_all.is_empty());
         assert!(rule.matches_line("node.innerhtml = userinput").is_some());
+    }
+
+    #[test]
+    fn repository_rulepack_has_foundational_coverage() {
+        let rules_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../rules");
+        let ruleset = RuleSet::load_from_dir(&rules_dir).expect("load repository rules");
+        assert!(
+            ruleset.rules.len() >= 30,
+            "expected at least 30 foundational rules, found {}",
+            ruleset.rules.len()
+        );
     }
 }

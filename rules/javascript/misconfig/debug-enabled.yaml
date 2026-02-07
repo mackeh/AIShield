@@ -1,0 +1,14 @@
+id: AISHIELD-JS-MISC-002
+title: Debug Logging in Production Path
+severity: low
+confidence_that_ai_generated: 0.69
+languages: [javascript]
+category: misconfig
+ai_tendency: AI-generated boilerplate tends to leave verbose debug logs enabled.
+pattern:
+  any:
+    - "debug: true"
+    - "app.set('env', 'development')"
+fix:
+  suggestion: Gate debug behavior by environment and disable in production.
+tags: [misconfig, logging]

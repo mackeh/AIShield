@@ -1,0 +1,17 @@
+id: AISHIELD-JS-CRYPTO-003
+title: Predictable Random Token Generation
+severity: high
+confidence_that_ai_generated: 0.83
+languages: [javascript]
+category: crypto
+ai_tendency: AI snippets frequently use Math.random for secrets and reset tokens.
+pattern:
+  all:
+    - "math.random()"
+  any:
+    - "token"
+    - "secret"
+    - "reset"
+fix:
+  suggestion: Use crypto.randomBytes for security-sensitive random values.
+tags: [crypto, randomness, auth]

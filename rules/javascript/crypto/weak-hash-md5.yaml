@@ -1,0 +1,18 @@
+id: AISHIELD-JS-CRYPTO-001
+title: Weak Hash Algorithm (MD5/SHA1)
+severity: high
+confidence_that_ai_generated: 0.84
+languages: [javascript]
+category: crypto
+ai_tendency: AI-generated Node snippets often use md5/sha1 due legacy examples.
+pattern:
+  all:
+    - "createhash("
+  any:
+    - "'md5'"
+    - "\"md5\""
+    - "'sha1'"
+    - "\"sha1\""
+fix:
+  suggestion: Use SHA-256+ for integrity and dedicated password hash algorithms for credentials.
+tags: [crypto, hashing]

@@ -1,0 +1,14 @@
+id: AISHIELD-JS-INJ-005
+title: Potential Path Traversal via fs.readFile
+severity: high
+confidence_that_ai_generated: 0.78
+languages: [javascript]
+category: injection
+ai_tendency: AI-generated file APIs often use raw request parameters as file paths.
+pattern:
+  all:
+    - "fs.readfile("
+    - "req.query"
+fix:
+  suggestion: Resolve and validate paths against a fixed base directory.
+tags: [injection, path-traversal]

@@ -1,0 +1,15 @@
+id: AISHIELD-JS-INJ-002
+title: Dynamic Code Execution with eval
+severity: critical
+confidence_that_ai_generated: 0.81
+languages: [javascript]
+category: injection
+ai_tendency: AI assistants may propose eval for dynamic expression handling.
+pattern:
+  any:
+    - "eval("
+  not:
+    - "json.parse("
+fix:
+  suggestion: Replace eval with explicit parsing and strict input validation.
+tags: [injection, code-execution]

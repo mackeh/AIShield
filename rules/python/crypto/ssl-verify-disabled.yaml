@@ -1,0 +1,14 @@
+id: AISHIELD-PY-CRYPTO-006
+title: TLS Verification Disabled
+severity: high
+confidence_that_ai_generated: 0.79
+languages: [python]
+category: crypto
+ai_tendency: AI often suggests verify=False to bypass certificate issues.
+pattern:
+  all:
+    - "requests."
+    - "verify=false"
+fix:
+  suggestion: Remove verify=False and configure proper CA trust.
+tags: [crypto, tls, misconfig]

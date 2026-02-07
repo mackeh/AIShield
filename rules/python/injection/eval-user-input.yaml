@@ -1,0 +1,16 @@
+id: AISHIELD-PY-INJ-004
+title: Dynamic Code Execution with eval/exec
+severity: critical
+confidence_that_ai_generated: 0.8
+languages: [python]
+category: injection
+ai_tendency: AI can suggest eval for expression parsing in unsafe contexts.
+pattern:
+  any:
+    - "eval("
+    - "exec("
+  not:
+    - "ast.literal_eval("
+fix:
+  suggestion: Use safe parsers or explicit dispatch tables instead of eval/exec.
+tags: [injection, code-execution]

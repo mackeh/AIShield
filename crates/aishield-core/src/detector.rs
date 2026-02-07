@@ -318,6 +318,24 @@ function good(token, expected) {
         let _ = fs::remove_dir_all(root);
     }
 
+    #[test]
+    fn fixture_suite_triggers_broad_rule_coverage() {
+        let rules_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../rules");
+        let fixture_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
+
+        let rules = RuleSet::load_from_dir(&rules_dir).expect("load repository rules");
+        let analyzer = Analyzer::new(rules);
+        let result = analyzer
+            .analyze_path(fixture_dir.as_path(), &AnalysisOptions::default())
+            .expect("scan fixture suite");
+
+        assert!(
+            result.summary.total >= 20,
+            "expected at least 20 findings in fixture suite, got {}",
+            result.summary.total
+        );
+    }
+
     fn temp_path(prefix: &str) -> PathBuf {
         let stamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)

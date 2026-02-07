@@ -1,0 +1,14 @@
+id: AISHIELD-PY-INJ-002
+title: Potential Command Injection via os.system
+severity: high
+confidence_that_ai_generated: 0.84
+languages: [python]
+category: injection
+ai_tendency: AI assistants often build shell commands with string concatenation.
+pattern:
+  all:
+    - "os.system("
+    - "+"
+fix:
+  suggestion: Use subprocess with argument arrays and strict input allowlists.
+tags: [injection, command]
