@@ -11,6 +11,8 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - `github` scan output format for GitHub Actions inline PR annotations
 - CI workflow step to emit AIShield PR annotations alongside SARIF upload
 - `scan --changed-from <ref>` to scope scans/annotations to changed files
+- Optional SAST bridge (`--bridge`) for Semgrep/Bandit with parallel execution
+- Bridge findings normalized into unified AIShield result schema with dedup
 
 ## [0.1.1] - 2026-02-07
 

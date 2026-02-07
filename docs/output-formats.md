@@ -7,6 +7,8 @@ AIShield supports four scan output formats:
 - `sarif`: GitHub Code Scanning compatible format
 - `github`: GitHub Actions annotation commands for inline PR feedback
 
+Scan output can optionally include findings from external bridge engines (`semgrep`, `bandit`) when enabled via `--bridge`.
+
 ## Table
 
 Default format.

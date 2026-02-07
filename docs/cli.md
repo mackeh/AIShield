@@ -22,6 +22,7 @@ aishield scan <path> \
   [--rules-dir DIR] \
   [--format table|json|sarif|github] \
   [--dedup none|normalized] \
+  [--bridge semgrep,bandit|all] \
   [--rules c1,c2] \
   [--exclude p1,p2] \
   [--ai-only] \
@@ -41,6 +42,7 @@ Options:
 - `--rules-dir DIR`: rules directory (default `rules`)
 - `--format`: output format (`table`, `json`, `sarif`, `github`)
 - `--dedup`: machine-output dedup mode (`none`, `normalized`)
+- `--bridge`: optional external SAST engines (`semgrep`, `bandit`, or `all`)
 - `--rules`: comma-separated category filters (`auth,crypto,injection,...`)
 - `--exclude`: comma-separated path fragments to skip
 - `--ai-only`: only run rules at/above AI-confidence threshold
@@ -75,6 +77,9 @@ cargo run -p aishield-cli -- scan . --format sarif --output aishield.sarif
 
 # inline GitHub Actions annotations
 cargo run -p aishield-cli -- scan . --format github
+
+# bridge mode (requires local tool installation)
+cargo run -p aishield-cli -- scan . --bridge all
 ```
 
 ## `fix`

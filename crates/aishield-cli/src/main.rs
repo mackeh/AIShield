@@ -1,15 +1,17 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::env;
 use std::fmt::Write as FmtWrite;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use aishield_core::{
     AnalysisOptions, Analyzer, Finding, RuleSet, ScanResult, ScanSummary, Severity,
 };
+use serde_json::Value;
 
 fn main() {
     if let Err(err) = run() {
@@ -50,6 +52,7 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     let mut rules_dir_override = None;
     let mut format_override = None;
     let mut dedup_mode_override = None;
+    let mut bridge_engines_override = None::<Vec<BridgeEngine>>;
     let mut categories_override = None;
     let mut exclude_paths_override = None;
     let mut ai_only_flag = false;
@@ -83,6 +86,12 @@ fn run_scan(args: &[String]) -> Result<(), String> {
                 i += 1;
                 dedup_mode_override = Some(DedupMode::parse(
                     args.get(i).ok_or("--dedup requires a value")?,
+                )?);
+            }
+            "--bridge" => {
+                i += 1;
+                bridge_engines_override = Some(parse_bridge_engines(
+                    args.get(i).ok_or("--bridge requires a value")?,
                 )?);
             }
             "--rules" => {
@@ -154,6 +163,7 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     let dedup_mode = dedup_mode_override
         .or(config.dedup_mode)
         .unwrap_or_else(|| DedupMode::default_for_format(format));
+    let bridge_engines = bridge_engines_override.unwrap_or_else(|| config.bridge_engines.clone());
     let categories = categories_override.unwrap_or_else(|| config.rules.clone());
     let mut exclude_paths = config.exclude_paths.clone();
     if let Some(extra) = exclude_paths_override {
@@ -200,6 +210,19 @@ fn run_scan(args: &[String]) -> Result<(), String> {
             .analyze_path(&target, &options)
             .map_err(|err| format!("failed to scan {}: {err}", target.display()))?
     };
+
+    if !bridge_engines.is_empty() {
+        let bridge_result = collect_bridge_findings(&target, &bridge_engines);
+        for warning in bridge_result.warnings {
+            eprintln!("warning: {warning}");
+        }
+
+        if !bridge_result.findings.is_empty() {
+            result.findings.extend(bridge_result.findings);
+            result = dedup_machine_output(&result, DedupMode::Normalized);
+            result.summary = recompute_summary(&result);
+        }
+    }
 
     if let Some(threshold) = severity_threshold {
         result.findings = result
@@ -315,6 +338,318 @@ fn collect_changed_targets(target: &Path, from_ref: &str) -> Result<Vec<PathBuf>
     }
 
     Ok(targets)
+}
+
+struct BridgeScanResult {
+    findings: Vec<Finding>,
+    warnings: Vec<String>,
+}
+
+fn parse_bridge_engines(raw: &str) -> Result<Vec<BridgeEngine>, String> {
+    let mut out = Vec::new();
+    let mut seen = HashSet::new();
+    let items = parse_list_like(raw);
+    if items.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    for item in items {
+        let mut engines = match item.as_str() {
+            "all" => vec![BridgeEngine::Semgrep, BridgeEngine::Bandit],
+            _ => vec![BridgeEngine::parse(&item)?],
+        };
+        for engine in engines.drain(..) {
+            if seen.insert(engine.as_str()) {
+                out.push(engine);
+            }
+        }
+    }
+
+    Ok(out)
+}
+
+fn collect_bridge_findings(target: &Path, engines: &[BridgeEngine]) -> BridgeScanResult {
+    let mut handles = Vec::new();
+    for engine in engines {
+        let target = target.to_path_buf();
+        let engine = *engine;
+        handles.push(thread::spawn(move || {
+            match run_bridge_engine(engine, &target) {
+                Ok(findings) => (engine, findings, None),
+                Err(err) => (
+                    engine,
+                    Vec::new(),
+                    Some(format!("{} bridge unavailable: {}", engine.as_str(), err)),
+                ),
+            }
+        }));
+    }
+
+    let mut findings = Vec::new();
+    let mut warnings = Vec::new();
+    for handle in handles {
+        match handle.join() {
+            Ok((_engine, engine_findings, warning)) => {
+                findings.extend(engine_findings);
+                if let Some(warning) = warning {
+                    warnings.push(warning);
+                }
+            }
+            Err(_) => warnings.push("bridge worker thread panicked".to_string()),
+        }
+    }
+
+    BridgeScanResult { findings, warnings }
+}
+
+fn run_bridge_engine(engine: BridgeEngine, target: &Path) -> Result<Vec<Finding>, String> {
+    match engine {
+        BridgeEngine::Semgrep => run_semgrep_bridge(target),
+        BridgeEngine::Bandit => run_bandit_bridge(target),
+    }
+}
+
+fn run_semgrep_bridge(target: &Path) -> Result<Vec<Finding>, String> {
+    let output = Command::new("semgrep")
+        .args([
+            "scan",
+            "--json",
+            "--quiet",
+            "--disable-version-check",
+            &target.display().to_string(),
+        ])
+        .output()
+        .map_err(|err| format!("failed to execute semgrep: {err}"))?;
+
+    if !(output.status.success() || output.status.code() == Some(1)) {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(if stderr.trim().is_empty() {
+            format!("semgrep exited with status {}", output.status)
+        } else {
+            stderr.trim().to_string()
+        });
+    }
+
+    let payload: Value = serde_json::from_slice(&output.stdout)
+        .map_err(|err| format!("invalid semgrep JSON output: {err}"))?;
+    let results = payload
+        .get("results")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    let mut findings = Vec::new();
+    for result in results {
+        let check_id = result
+            .get("check_id")
+            .and_then(Value::as_str)
+            .unwrap_or("UNKNOWN");
+        let path = result
+            .get("path")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let line = result
+            .get("start")
+            .and_then(|v| v.get("line"))
+            .and_then(Value::as_u64)
+            .unwrap_or(1) as usize;
+        let column = result
+            .get("start")
+            .and_then(|v| v.get("col"))
+            .and_then(Value::as_u64)
+            .unwrap_or(1) as usize;
+
+        let message = result
+            .get("extra")
+            .and_then(|v| v.get("message"))
+            .and_then(Value::as_str)
+            .unwrap_or(check_id)
+            .to_string();
+        let snippet = result
+            .get("extra")
+            .and_then(|v| v.get("lines"))
+            .and_then(Value::as_str)
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| message.clone());
+        let severity = semgrep_severity_to_internal(
+            result
+                .get("extra")
+                .and_then(|v| v.get("severity"))
+                .and_then(Value::as_str)
+                .unwrap_or("warning"),
+        );
+
+        findings.push(Finding {
+            id: format!("SAST-SEMGRP-{}", sanitize_bridge_id(check_id)),
+            title: message,
+            severity,
+            file: display_path_for_finding(target, path),
+            line,
+            column,
+            snippet,
+            ai_confidence: 30.0,
+            risk_score: bridge_risk_score(severity),
+            category: Some("sast-bridge".to_string()),
+            tags: vec!["sast-bridge".to_string(), "semgrep".to_string()],
+            ai_tendency: None,
+            fix_suggestion: None,
+        });
+    }
+
+    Ok(findings)
+}
+
+fn run_bandit_bridge(target: &Path) -> Result<Vec<Finding>, String> {
+    let output = Command::new("bandit")
+        .args(["-r", "-f", "json", &target.display().to_string()])
+        .output()
+        .map_err(|err| format!("failed to execute bandit: {err}"))?;
+
+    if !(output.status.success() || output.status.code() == Some(1)) {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(if stderr.trim().is_empty() {
+            format!("bandit exited with status {}", output.status)
+        } else {
+            stderr.trim().to_string()
+        });
+    }
+
+    let payload: Value = serde_json::from_slice(&output.stdout)
+        .map_err(|err| format!("invalid bandit JSON output: {err}"))?;
+    let results = payload
+        .get("results")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    let mut findings = Vec::new();
+    for result in results {
+        let test_id = result
+            .get("test_id")
+            .and_then(Value::as_str)
+            .unwrap_or("UNKNOWN");
+        let message = result
+            .get("issue_text")
+            .and_then(Value::as_str)
+            .unwrap_or(test_id)
+            .to_string();
+        let file = result
+            .get("filename")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let line = result
+            .get("line_number")
+            .and_then(Value::as_u64)
+            .unwrap_or(1) as usize;
+        let column = result
+            .get("col_offset")
+            .and_then(Value::as_u64)
+            .unwrap_or(1) as usize;
+        let snippet = result
+            .get("code")
+            .and_then(Value::as_str)
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| message.clone());
+        let severity = bandit_severity_to_internal(
+            result
+                .get("issue_severity")
+                .and_then(Value::as_str)
+                .unwrap_or("medium"),
+        );
+
+        findings.push(Finding {
+            id: format!("SAST-BANDIT-{}", sanitize_bridge_id(test_id)),
+            title: message,
+            severity,
+            file: display_path_for_finding(target, file),
+            line,
+            column,
+            snippet,
+            ai_confidence: 30.0,
+            risk_score: bridge_risk_score(severity),
+            category: Some("sast-bridge".to_string()),
+            tags: vec!["sast-bridge".to_string(), "bandit".to_string()],
+            ai_tendency: None,
+            fix_suggestion: None,
+        });
+    }
+
+    Ok(findings)
+}
+
+fn sanitize_bridge_id(input: &str) -> String {
+    let mut out = String::new();
+    for ch in input.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_uppercase());
+        } else if !out.ends_with('_') {
+            out.push('_');
+        }
+    }
+    out.trim_matches('_').to_string()
+}
+
+fn display_path_for_finding(target: &Path, raw_path: &str) -> String {
+    let candidate = PathBuf::from(raw_path);
+    if path_matches_target(&candidate, target) {
+        return relative_to_target(target, &candidate);
+    }
+
+    if let Ok(cwd) = env::current_dir() {
+        let joined = cwd.join(&candidate);
+        if path_matches_target(&joined, target) {
+            return relative_to_target(target, &joined);
+        }
+    }
+
+    raw_path.to_string()
+}
+
+fn relative_to_target(target: &Path, path: &Path) -> String {
+    if target == Path::new(".") {
+        return path.display().to_string();
+    }
+
+    if target.is_file() {
+        return path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| path.display().to_string());
+    }
+
+    path.strip_prefix(target)
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|_| path.display().to_string())
+}
+
+fn semgrep_severity_to_internal(raw: &str) -> Severity {
+    match raw.to_ascii_lowercase().as_str() {
+        "error" => Severity::High,
+        "warning" => Severity::Medium,
+        "info" => Severity::Low,
+        _ => Severity::Medium,
+    }
+}
+
+fn bandit_severity_to_internal(raw: &str) -> Severity {
+    match raw.to_ascii_lowercase().as_str() {
+        "high" => Severity::High,
+        "medium" => Severity::Medium,
+        "low" => Severity::Low,
+        _ => Severity::Medium,
+    }
+}
+
+fn bridge_risk_score(severity: Severity) -> f32 {
+    match severity {
+        Severity::Critical => 90.0,
+        Severity::High => 80.0,
+        Severity::Medium => 65.0,
+        Severity::Low => 45.0,
+        Severity::Info => 30.0,
+    }
 }
 
 fn path_matches_target(candidate: &Path, target: &Path) -> bool {
@@ -457,7 +792,7 @@ fn run_init(args: &[String]) -> Result<(), String> {
         return Err(format!("{} already exists", output.display()));
     }
 
-    let config = "version: 1\nrules_dir: rules\nformat: table\ndedup_mode: normalized\nrules: []\nexclude_paths: []\nai_only: false\nmin_ai_confidence: 0.70\nseverity_threshold: medium\nfail_on_findings: false\nhistory_file: .aishield-history.log\nrecord_history: true\n";
+    let config = "version: 1\nrules_dir: rules\nformat: table\ndedup_mode: normalized\nbridge_engines: []\nrules: []\nexclude_paths: []\nai_only: false\nmin_ai_confidence: 0.70\nseverity_threshold: medium\nfail_on_findings: false\nhistory_file: .aishield-history.log\nrecord_history: true\n";
 
     let mut file = File::create(&output).map_err(|err| err.to_string())?;
     file.write_all(config.as_bytes())
@@ -1152,7 +1487,7 @@ fn render_stats_json(aggregate: &StatsAggregate, days: u64, history_file: &Path)
 fn print_help() {
     println!("AIShield CLI (foundation)\n");
     println!("Usage:");
-    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
+    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--bridge semgrep,bandit|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
     println!("  aishield fix <path> [--rules-dir DIR] [--write] [--dry-run] [--config FILE] [--no-config]");
     println!("  aishield init [--output PATH]");
     println!("  aishield create-rule --id ID --title TITLE --language LANG --category CAT [--severity LEVEL] [--pattern-any P] [--pattern-all P] [--pattern-not P] [--tags t1,t2] [--suggestion TEXT] [--out-dir DIR] [--force]");
@@ -1843,6 +2178,7 @@ struct AppConfig {
     rules_dir: PathBuf,
     format: OutputFormat,
     dedup_mode: Option<DedupMode>,
+    bridge_engines: Vec<BridgeEngine>,
     rules: Vec<String>,
     exclude_paths: Vec<String>,
     ai_only: bool,
@@ -1859,6 +2195,7 @@ impl Default for AppConfig {
             rules_dir: PathBuf::from("rules"),
             format: OutputFormat::Table,
             dedup_mode: None,
+            bridge_engines: Vec::new(),
             rules: Vec::new(),
             exclude_paths: Vec::new(),
             ai_only: false,
@@ -1903,6 +2240,7 @@ impl AppConfig {
                 "rules_dir" => config.rules_dir = PathBuf::from(strip_quotes(value)),
                 "format" => config.format = OutputFormat::parse(value)?,
                 "dedup_mode" => config.dedup_mode = Some(DedupMode::parse(value)?),
+                "bridge_engines" => config.bridge_engines = parse_bridge_engines(value)?,
                 "rules" => config.rules = parse_list_like(value),
                 "exclude_paths" => config.exclude_paths = parse_list_like(value),
                 "ai_only" => config.ai_only = parse_bool(value)?,
@@ -1973,6 +2311,29 @@ impl DedupMode {
         match format {
             OutputFormat::Table => Self::None,
             OutputFormat::Json | OutputFormat::Sarif | OutputFormat::Github => Self::Normalized,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum BridgeEngine {
+    Semgrep,
+    Bandit,
+}
+
+impl BridgeEngine {
+    fn parse(raw: &str) -> Result<Self, String> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "semgrep" => Ok(Self::Semgrep),
+            "bandit" => Ok(Self::Bandit),
+            _ => Err("bridge engine must be semgrep, bandit, or all".to_string()),
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            BridgeEngine::Semgrep => "semgrep",
+            BridgeEngine::Bandit => "bandit",
         }
     }
 }
@@ -2187,5 +2548,21 @@ mod tests {
         );
         assert!(rendered.contains("AIShield summary:"));
         assert!(rendered.contains("dedup_mode=normalized"));
+    }
+
+    #[test]
+    fn bridge_engine_parser_supports_all_alias_and_empty_list() {
+        let engines = super::parse_bridge_engines("all").expect("parse all");
+        let values = engines.iter().map(|e| e.as_str()).collect::<Vec<_>>();
+        assert_eq!(values, vec!["semgrep", "bandit"]);
+
+        let empty = super::parse_bridge_engines("[]").expect("parse empty list");
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn bridge_engine_parser_rejects_invalid_engine() {
+        let err = super::parse_bridge_engines("foo").expect_err("should reject invalid bridge");
+        assert!(err.contains("bridge engine"));
     }
 }
