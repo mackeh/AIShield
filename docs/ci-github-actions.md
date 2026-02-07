@@ -70,8 +70,8 @@ cargo run -p aishield-cli -- scan . --format sarif --dedup normalized --output a
 # PR-only annotations scoped to changed files
 cargo run -p aishield-cli -- scan . --format github --dedup normalized --changed-from "$BASE_SHA"
 
-# include external bridges (if semgrep/bandit are installed in runner)
-cargo run -p aishield-cli -- scan . --format sarif --bridge semgrep,bandit --output aishield.sarif
+# include external bridges (if tools are installed in runner)
+cargo run -p aishield-cli -- scan . --format sarif --bridge semgrep,bandit,eslint --output aishield.sarif
 ```
 
 ## Local Debugging

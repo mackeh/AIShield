@@ -22,7 +22,7 @@ This repository currently contains a solid foundation for Phase 1:
 - 32 foundational rules across crypto, injection, auth, and misconfiguration
 - Severity + composite risk scoring per finding
 - Output formats: `table`, `json`, `sarif`, `github` (PR annotations)
-- Optional SAST bridge for Semgrep and Bandit (parallel orchestration)
+- Optional SAST bridge for Semgrep, Bandit, and ESLint (parallel orchestration)
 - Config support via `.aishield.yml`
 - Report file output via `--output`
 - Scan history tracking plus `aishield stats --last Nd` analytics
@@ -75,7 +75,7 @@ cargo run -p aishield-cli -- scan . --format sarif --output aishield.sarif
 cargo run -p aishield-cli -- scan . --format github
 
 # run built-in rules + external SAST engines (if installed)
-cargo run -p aishield-cli -- scan . --bridge semgrep,bandit
+cargo run -p aishield-cli -- scan . --bridge semgrep,bandit,eslint
 
 # disable machine-output dedup if needed
 cargo run -p aishield-cli -- scan . --format sarif --dedup none
@@ -99,7 +99,7 @@ aishield scan <path> \
   [--rules-dir DIR] \
   [--format table|json|sarif|github] \
   [--dedup none|normalized] \
-  [--bridge semgrep,bandit|all] \
+  [--bridge semgrep,bandit,eslint|all] \
   [--rules auth,crypto] \
   [--exclude vendor/,dist/] \
   [--ai-only] \
@@ -185,7 +185,7 @@ CLI flags override config values.
 `dedup_mode` controls machine-output normalization (`json`/`sarif`) to reduce duplicate findings in CI.  
 Default behavior is `normalized` for machine formats and `none` for table output.
 
-`bridge_engines` enables optional external SAST orchestration (`semgrep`, `bandit`) when available.
+`bridge_engines` enables optional external SAST orchestration (`semgrep`, `bandit`, `eslint`) when available.
 
 ## Rule engine overview
 

@@ -28,7 +28,7 @@ record_history: true
 - `rules_dir`: root directory for YAML rules
 - `format`: default output format (`table|json|sarif|github`)
 - `dedup_mode`: output dedup mode (`none|normalized`)
-- `bridge_engines`: optional external engine list (`[semgrep]`, `[bandit]`, `[semgrep, bandit]`)
+- `bridge_engines`: optional external engine list (`[semgrep]`, `[bandit]`, `[eslint]`, `[semgrep, bandit, eslint]`)
 - `rules`: category filters list, same behavior as `--rules`
 - `exclude_paths`: list of path fragments to skip
 - `ai_only`: if `true`, include only AI-likelihood-filtered rules

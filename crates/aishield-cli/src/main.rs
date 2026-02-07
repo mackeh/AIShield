@@ -355,7 +355,11 @@ fn parse_bridge_engines(raw: &str) -> Result<Vec<BridgeEngine>, String> {
 
     for item in items {
         let mut engines = match item.as_str() {
-            "all" => vec![BridgeEngine::Semgrep, BridgeEngine::Bandit],
+            "all" => vec![
+                BridgeEngine::Semgrep,
+                BridgeEngine::Bandit,
+                BridgeEngine::Eslint,
+            ],
             _ => vec![BridgeEngine::parse(&item)?],
         };
         for engine in engines.drain(..) {
@@ -406,6 +410,7 @@ fn run_bridge_engine(engine: BridgeEngine, target: &Path) -> Result<Vec<Finding>
     match engine {
         BridgeEngine::Semgrep => run_semgrep_bridge(target),
         BridgeEngine::Bandit => run_bandit_bridge(target),
+        BridgeEngine::Eslint => run_eslint_bridge(target),
     }
 }
 
@@ -579,6 +584,80 @@ fn run_bandit_bridge(target: &Path) -> Result<Vec<Finding>, String> {
     Ok(findings)
 }
 
+fn run_eslint_bridge(target: &Path) -> Result<Vec<Finding>, String> {
+    let output = Command::new("eslint")
+        .args(["-f", "json", &target.display().to_string()])
+        .output()
+        .map_err(|err| format!("failed to execute eslint: {err}"))?;
+
+    if !(output.status.success() || output.status.code() == Some(1)) {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(if stderr.trim().is_empty() {
+            format!("eslint exited with status {}", output.status)
+        } else {
+            stderr.trim().to_string()
+        });
+    }
+
+    let payload: Value = serde_json::from_slice(&output.stdout)
+        .map_err(|err| format!("invalid eslint JSON output: {err}"))?;
+    let file_results = payload.as_array().cloned().unwrap_or_default();
+
+    let mut findings = Vec::new();
+    for file_result in file_results {
+        let file_path = file_result
+            .get("filePath")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let messages = file_result
+            .get("messages")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+
+        for message in messages {
+            let rule_id = message
+                .get("ruleId")
+                .and_then(Value::as_str)
+                .unwrap_or("UNKNOWN");
+            let title = message
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or(rule_id)
+                .to_string();
+            let line = message.get("line").and_then(Value::as_u64).unwrap_or(1) as usize;
+            let column = message.get("column").and_then(Value::as_u64).unwrap_or(1) as usize;
+            let severity = eslint_severity_to_internal(
+                message.get("severity").and_then(Value::as_i64).unwrap_or(1),
+            );
+            let snippet = message
+                .get("source")
+                .and_then(Value::as_str)
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| title.clone());
+
+            findings.push(Finding {
+                id: format!("SAST-ESLINT-{}", sanitize_bridge_id(rule_id)),
+                title,
+                severity,
+                file: display_path_for_finding(target, file_path),
+                line,
+                column,
+                snippet,
+                ai_confidence: 30.0,
+                risk_score: bridge_risk_score(severity),
+                category: Some("sast-bridge".to_string()),
+                tags: vec!["sast-bridge".to_string(), "eslint".to_string()],
+                ai_tendency: None,
+                fix_suggestion: None,
+            });
+        }
+    }
+
+    Ok(findings)
+}
+
 fn sanitize_bridge_id(input: &str) -> String {
     let mut out = String::new();
     for ch in input.chars() {
@@ -639,6 +718,14 @@ fn bandit_severity_to_internal(raw: &str) -> Severity {
         "medium" => Severity::Medium,
         "low" => Severity::Low,
         _ => Severity::Medium,
+    }
+}
+
+fn eslint_severity_to_internal(raw: i64) -> Severity {
+    match raw {
+        2 => Severity::High,
+        1 => Severity::Medium,
+        _ => Severity::Low,
     }
 }
 
@@ -1487,7 +1574,7 @@ fn render_stats_json(aggregate: &StatsAggregate, days: u64, history_file: &Path)
 fn print_help() {
     println!("AIShield CLI (foundation)\n");
     println!("Usage:");
-    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--bridge semgrep,bandit|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
+    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
     println!("  aishield fix <path> [--rules-dir DIR] [--write] [--dry-run] [--config FILE] [--no-config]");
     println!("  aishield init [--output PATH]");
     println!("  aishield create-rule --id ID --title TITLE --language LANG --category CAT [--severity LEVEL] [--pattern-any P] [--pattern-all P] [--pattern-not P] [--tags t1,t2] [--suggestion TEXT] [--out-dir DIR] [--force]");
@@ -2319,6 +2406,7 @@ impl DedupMode {
 enum BridgeEngine {
     Semgrep,
     Bandit,
+    Eslint,
 }
 
 impl BridgeEngine {
@@ -2326,7 +2414,8 @@ impl BridgeEngine {
         match raw.trim().to_ascii_lowercase().as_str() {
             "semgrep" => Ok(Self::Semgrep),
             "bandit" => Ok(Self::Bandit),
-            _ => Err("bridge engine must be semgrep, bandit, or all".to_string()),
+            "eslint" => Ok(Self::Eslint),
+            _ => Err("bridge engine must be semgrep, bandit, eslint, or all".to_string()),
         }
     }
 
@@ -2334,6 +2423,7 @@ impl BridgeEngine {
         match self {
             BridgeEngine::Semgrep => "semgrep",
             BridgeEngine::Bandit => "bandit",
+            BridgeEngine::Eslint => "eslint",
         }
     }
 }
@@ -2554,7 +2644,7 @@ mod tests {
     fn bridge_engine_parser_supports_all_alias_and_empty_list() {
         let engines = super::parse_bridge_engines("all").expect("parse all");
         let values = engines.iter().map(|e| e.as_str()).collect::<Vec<_>>();
-        assert_eq!(values, vec!["semgrep", "bandit"]);
+        assert_eq!(values, vec!["semgrep", "bandit", "eslint"]);
 
         let empty = super::parse_bridge_engines("[]").expect("parse empty list");
         assert!(empty.is_empty());
