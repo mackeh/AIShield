@@ -10,6 +10,18 @@ The format is based on Keep a Changelog and follows semantic versioning.
 
 - No unreleased entries yet.
 
+## [0.3.1] - 2026-02-08
+
+### Fixed
+
+- Analytics stack startup now waits for API health before executing smoke checks, improving CI reliability in cold-start environments
+- Docs workflow stabilized to avoid hard failure when GitHub Pages is not configured for deployment
+- Resolved VitePress dead links across contributor guides and database setup documentation
+
+### Changed
+
+- Added a dedicated docs testing guide page (`docs/guides/testing-guide.md`) and refreshed guide cross-links
+
 ## [0.3.0] - 2026-02-08
 
 ### Added
@@ -84,7 +96,8 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - Machine-output dedup normalization for JSON/SARIF to reduce CI noise
 - Expanded documentation for CLI, configuration, outputs, and CI
 
-[Unreleased]: https://github.com/mackeh/AIShield/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/mackeh/AIShield/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/mackeh/AIShield/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/mackeh/AIShield/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mackeh/AIShield/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/mackeh/AIShield/compare/v0.1.0...v0.1.1
