@@ -1,5 +1,13 @@
 use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
 use uuid::Uuid;
+
+/// Shared application state
+#[derive(Clone)]
+pub struct AppState {
+    pub db_pool: PgPool,
+    pub api_key_hash: String,
+}
 
 /// Request payload for scan ingestion
 #[derive(Debug, Clone, Deserialize, Serialize)]

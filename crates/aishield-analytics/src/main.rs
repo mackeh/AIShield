@@ -19,14 +19,8 @@ mod db;
 mod handlers;
 mod models;
 
-use handlers::{ingest_scan, get_analytics_summary, get_trends, get_top_rules, health_check};
-
-/// Shared application state
-#[derive(Clone)]
-pub struct AppState {
-    pub db_pool: PgPool,
-    pub api_key_hash: String, // SHA256 hash of valid API key
-}
+use handlers::{get_analytics_summary, get_top_rules, get_trends, health_check, ingest_scan};
+use models::AppState;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

@@ -1,7 +1,7 @@
 use crate::models::*;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
+use sha2::Digest;
 use sqlx::{PgPool, Row};
-use std::collections::HashMap;
 use uuid::Uuid;
 
 /// Insert a scan into the database
@@ -12,7 +12,7 @@ pub async fn insert_scan(
     let scan_id = Uuid::new_v4();
     let now = Utc::now();
 
-    let result = sqlx::query(
+    let _result = sqlx::query(
         r#"
         INSERT INTO scans (
             scan_id, timestamp, org_id, team_id, repo_id, repo_name,
@@ -66,19 +66,14 @@ pub async fn insert_findings(
 
     for finding in findings {
         // Create deterministic hash
-        let finding_hash = format!(
-            "{:x}",
-            sha2::Sha256::digest(
-                format!(
-                    "{}::{}::{}::{}",
-                    scan_id,
-                    finding.file_path,
-                    finding.line_number.unwrap_or(0),
-                    finding.rule_id
-                )
-                .as_bytes()
-            )
+        let hash_input = format!(
+            "{}::{}::{}::{}",
+            scan_id,
+            finding.file_path,
+            finding.line_number.unwrap_or(0),
+            finding.rule_id
         );
+        let finding_hash = format!("{:x}", sha2::Sha256::digest(hash_input.as_bytes()));
 
         sqlx::query(
             r#"
