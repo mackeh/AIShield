@@ -1,8 +1,29 @@
-# AIShield Docs Index
+# AIShield Documentation
 
-- `cli.md` - CLI command and option reference
-- `configuration.md` - config keys, defaults, precedence
-- `output-formats.md` - table/json/sarif outputs and dedup metadata
-- `ci-github-actions.md` - CI workflow setup and troubleshooting
-- `releasing.md` - versioning and release workflow
-- `rules-authoring.md` - custom rule authoring guide
+This directory now serves as the source for the VitePress documentation site.
+
+## Run the docs site locally
+
+```bash
+npm install
+npm run docs:dev
+```
+
+## Build for production
+
+```bash
+npm run docs:build
+```
+
+## Doc map
+
+- `index.md`: docs landing page
+- `getting-started.md`: quick start and local docs development
+- `architecture.md`: project and runtime architecture
+- `roadmap.md`: roadmap snapshot and current progress
+- `cli.md`: CLI reference
+- `configuration.md`: `.aishield.yml` keys and precedence
+- `output-formats.md`: table/json/sarif/github outputs + dedup behavior
+- `ci-github-actions.md`: CI integration and troubleshooting
+- `releasing.md`: release/tag workflow
+- `rules-authoring.md`: custom rule authoring guide

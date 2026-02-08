@@ -1,0 +1,35 @@
+# Roadmap Snapshot
+
+This page mirrors `project.md` and highlights the current implementation direction.
+
+## Phase 1: Foundation
+
+- [x] Rust workspace (`aishield-core`, `aishield-cli`)
+- [x] YAML rule engine + foundational detection coverage
+- [x] Multi-format output (`table`, `json`, `sarif`, `github`)
+- [x] CLI commands for scan/fix/init/hook/stats/bench
+- [x] Documentation site (VitePress)
+
+## Phase 2: Intelligence
+
+- [x] Heuristic AI-likelihood scoring integrated
+- [x] SAST bridge normalization and dedup path
+- [x] Go/Rust/Java rulepacks expanded toward 20-per-language target
+- [x] Interactive fix TUI upgrades (search/filter, badges, preview pane)
+- [ ] ONNX AI-vs-human classifier integration
+- [ ] Full PR annotation + SARIF workflow hardening across all repo contexts
+
+## Phase 3+: Platform and Ecosystem
+
+- [ ] VS Code extension
+- [ ] Web dashboard and analytics pipeline
+- [ ] Additional language ecosystems (C#, Ruby, PHP, Kotlin, Swift)
+- [ ] Infra/IaC scanning (Terraform, Kubernetes YAML, Dockerfiles)
+
+## Milestone Notes
+
+Near-term focus is reliability and signal quality:
+
+- reduce duplicate/noisy findings in CI
+- improve remediation coverage and fix confidence
+- harden release and security workflows

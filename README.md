@@ -49,9 +49,25 @@ tests/fixtures/    # vulnerable sample files
 
 ## Documentation
 
+AIShield now includes a VitePress documentation site with local full-text search and structured navigation.
+
+### Local docs site
+
+```bash
+npm install
+npm run docs:dev
+npm run docs:build
+```
+
+### Key docs pages
+
+- `docs/index.md`: documentation home
+- `docs/getting-started.md`: install, scan, and fix workflows
+- `docs/architecture.md`: scanner, CLI, CI, and rules architecture
+- `docs/roadmap.md`: roadmap snapshot and implementation status
 - `docs/cli.md`: command reference and options
 - `docs/configuration.md`: `.aishield.yml` keys, defaults, and precedence
-- `docs/output-formats.md`: table/json/sarif schemas and dedup behavior
+- `docs/output-formats.md`: table/json/sarif/github output behavior
 - `docs/ci-github-actions.md`: GitHub Actions integration and troubleshooting
 - `docs/releasing.md`: release and version-tag workflow
 - `docs/rules-authoring.md`: custom rule authoring guide
