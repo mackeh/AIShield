@@ -97,6 +97,9 @@ cargo run -p aishield-cli -- scan . --cross-file
 # use ONNX classifier path (falls back to heuristic if unavailable)
 cargo run -p aishield-cli -- scan . --ai-model onnx --onnx-model models/aishield.onnx
 
+# ONNX-enabled binary build path
+cargo run -p aishield-cli --features onnx -- scan . --ai-model onnx --onnx-model models/ai-classifier/model.onnx
+
 # send alerts to webhook for high+ findings
 cargo run -p aishield-cli -- scan . --notify-webhook https://hooks.example/security --notify-min-severity high
 

@@ -1,4 +1,11 @@
 use std::path::{Path, PathBuf};
+#[cfg(feature = "onnx")]
+use std::{
+    cell::RefCell,
+    collections::{hash_map::DefaultHasher, HashMap},
+    hash::{Hash, Hasher},
+    process::Command,
+};
 
 use crate::rules::Rule;
 
@@ -42,14 +49,14 @@ impl Default for AiClassifierOptions {
 
 pub struct AiLikelihoodScorer {
     options: AiClassifierOptions,
-    onnx_calibration: Option<OnnxCalibration>,
+    onnx_backend: Option<OnnxBackend>,
 }
 
 impl AiLikelihoodScorer {
     pub fn from_options(options: &AiClassifierOptions) -> Self {
         Self {
             options: options.clone(),
-            onnx_calibration: maybe_load_onnx_calibration(options),
+            onnx_backend: maybe_load_onnx_backend(options),
         }
     }
 
@@ -59,7 +66,13 @@ impl AiLikelihoodScorer {
             return heuristic;
         }
 
-        apply_onnx_calibration(heuristic, path, snippet, self.onnx_calibration.as_ref())
+        let Some(probability) =
+            predict_with_onnx_backend(self.onnx_backend.as_ref(), rule, path, snippet, heuristic)
+        else {
+            return heuristic;
+        };
+
+        blend_onnx_with_heuristic(probability, heuristic)
     }
 }
 
@@ -169,52 +182,229 @@ fn estimate_heuristic_likelihood(rule: &Rule, path: &Path, snippet: &str) -> f32
     (score.clamp(0.0, 100.0) * 10.0).round() / 10.0
 }
 
-#[derive(Debug, Clone)]
-struct OnnxCalibration {
-    model_size_bytes: u64,
+#[cfg(feature = "onnx")]
+#[derive(Debug)]
+struct OnnxBackend {
+    model_path: PathBuf,
+    runner_path: PathBuf,
+    python_bin: String,
+    cache: RefCell<HashMap<u64, f32>>,
 }
 
 #[cfg(feature = "onnx")]
-fn maybe_load_onnx_calibration(options: &AiClassifierOptions) -> Option<OnnxCalibration> {
+fn maybe_load_onnx_backend(options: &AiClassifierOptions) -> Option<OnnxBackend> {
     if options.mode != AiClassifierMode::Onnx {
         return None;
     }
 
-    let model_path = options.onnx_model_path.as_deref()?;
-    let metadata = std::fs::metadata(model_path).ok()?;
-    Some(OnnxCalibration {
-        model_size_bytes: metadata.len(),
+    let model_path = options.onnx_model_path.as_ref()?.to_path_buf();
+    if std::fs::metadata(&model_path).is_err() {
+        return None;
+    }
+
+    let runner_path = discover_onnx_runner_path(&model_path)?;
+    let python_bin = discover_python_bin()?;
+
+    Some(OnnxBackend {
+        model_path,
+        runner_path,
+        python_bin,
+        cache: RefCell::new(HashMap::new()),
     })
 }
 
 #[cfg(not(feature = "onnx"))]
-fn maybe_load_onnx_calibration(_options: &AiClassifierOptions) -> Option<OnnxCalibration> {
+struct OnnxBackend;
+
+#[cfg(not(feature = "onnx"))]
+fn maybe_load_onnx_backend(_options: &AiClassifierOptions) -> Option<OnnxBackend> {
     None
 }
 
-fn apply_onnx_calibration(
-    heuristic: f32,
-    path: &Path,
-    snippet: &str,
-    calibration: Option<&OnnxCalibration>,
-) -> f32 {
-    let Some(calibration) = calibration else {
-        return heuristic;
-    };
-
-    let mut adjustment = 0.0;
-    let size_signal = (calibration.model_size_bytes % 997) as f32 / 997.0;
-    adjustment += (size_signal - 0.5) * 3.0;
-
-    let snippet_signal = (snippet.len().min(300) as f32 / 300.0) - 0.5;
-    adjustment += snippet_signal * 2.0;
-
-    let path_text = path.to_string_lossy().to_ascii_lowercase();
-    if contains_any(&path_text, &["generated", "assistant", "autogen", "llm"]) {
-        adjustment += 1.5;
+#[cfg(feature = "onnx")]
+fn discover_onnx_runner_path(model_path: &Path) -> Option<PathBuf> {
+    if let Ok(raw) = std::env::var("AISHIELD_ONNX_RUNNER") {
+        let candidate = PathBuf::from(raw.trim());
+        if !candidate.as_os_str().is_empty() && candidate.exists() {
+            return Some(candidate);
+        }
     }
 
-    ((heuristic + adjustment).clamp(0.0, 100.0) * 10.0).round() / 10.0
+    let sibling = model_path.parent()?.join("onnx_runner.py");
+    if sibling.exists() {
+        return Some(sibling);
+    }
+
+    let repo_default = PathBuf::from("models/ai-classifier/onnx_runner.py");
+    if repo_default.exists() {
+        return Some(repo_default);
+    }
+
+    None
+}
+
+#[cfg(feature = "onnx")]
+fn discover_python_bin() -> Option<String> {
+    let candidates = if let Ok(raw) = std::env::var("AISHIELD_ONNX_PYTHON") {
+        vec![raw]
+    } else {
+        vec!["python3".to_string(), "python".to_string()]
+    };
+
+    for candidate in candidates {
+        if let Ok(output) = Command::new(&candidate).arg("--version").output() {
+            if output.status.success() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
+
+#[cfg(feature = "onnx")]
+fn predict_with_onnx_backend(
+    backend: Option<&OnnxBackend>,
+    rule: &Rule,
+    path: &Path,
+    snippet: &str,
+    heuristic: f32,
+) -> Option<f32> {
+    let backend = backend?;
+
+    let features = build_onnx_features(rule, path, snippet, heuristic);
+    let key = feature_cache_key(&features);
+    if let Some(score) = backend.cache.borrow().get(&key).copied() {
+        return Some(score);
+    }
+
+    let feature_payload = features
+        .iter()
+        .map(|value| format!("{value:.6}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let output = Command::new(&backend.python_bin)
+        .arg(&backend.runner_path)
+        .arg("--model")
+        .arg(&backend.model_path)
+        .arg("--features")
+        .arg(feature_payload)
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let parsed = raw.parse::<f32>().ok()?;
+    let probability = if (0.0..=1.0).contains(&parsed) {
+        parsed
+    } else if (1.0..=100.0).contains(&parsed) {
+        parsed / 100.0
+    } else {
+        return None;
+    };
+
+    backend.cache.borrow_mut().insert(key, probability);
+    Some(probability)
+}
+
+#[cfg(not(feature = "onnx"))]
+fn predict_with_onnx_backend(
+    _backend: Option<&OnnxBackend>,
+    _rule: &Rule,
+    _path: &Path,
+    _snippet: &str,
+    _heuristic: f32,
+) -> Option<f32> {
+    None
+}
+
+fn blend_onnx_with_heuristic(probability: f32, heuristic_score: f32) -> f32 {
+    let onnx_score = probability.clamp(0.0, 1.0) * 100.0;
+    ((onnx_score * 0.70 + heuristic_score * 0.30).clamp(0.0, 100.0) * 10.0).round() / 10.0
+}
+
+#[cfg(feature = "onnx")]
+fn build_onnx_features(rule: &Rule, path: &Path, snippet: &str, heuristic_score: f32) -> Vec<f32> {
+    let snippet_lower = snippet.to_ascii_lowercase();
+    let path_lower = path.to_string_lossy().to_ascii_lowercase();
+    let snippet_chars = snippet.chars().collect::<Vec<_>>();
+    let alnum_chars = snippet_chars
+        .iter()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .count() as f32;
+    let digit_chars = snippet_chars
+        .iter()
+        .filter(|ch| ch.is_ascii_digit())
+        .count() as f32;
+    let upper_chars = snippet_chars
+        .iter()
+        .filter(|ch| ch.is_ascii_uppercase())
+        .count() as f32;
+    let punctuation_chars = snippet_chars
+        .iter()
+        .filter(|ch| !ch.is_ascii_alphanumeric() && !ch.is_ascii_whitespace())
+        .count() as f32;
+    let total_chars = snippet_chars.len().max(1) as f32;
+    let token_count = snippet
+        .split_whitespace()
+        .filter(|token| !token.trim().is_empty())
+        .count() as f32;
+
+    vec![
+        rule.confidence_that_ai_generated.clamp(0.0, 1.0),
+        heuristic_score.clamp(0.0, 100.0) / 100.0,
+        (snippet.len().min(600) as f32) / 600.0,
+        (token_count.min(160.0)) / 160.0,
+        contains_any(&path_lower, &["generated", "autogen", "assistant", "llm"]) as u8 as f32,
+        contains_any(
+            &path_lower,
+            &[
+                "test", "tests", "fixture", "fixtures", "example", "examples",
+            ],
+        ) as u8 as f32,
+        contains_any(
+            &snippet_lower,
+            &[
+                "todo",
+                "quick fix",
+                "verify=false",
+                "shell=true",
+                "eval(",
+                "runtime.getruntime().exec",
+            ],
+        ) as u8 as f32,
+        contains_any(
+            &snippet_lower,
+            &[
+                "compare_digest(",
+                "timingsafeequal(",
+                "constanttimecompare(",
+                "preparedstatement",
+            ],
+        ) as u8 as f32,
+        contains_any(
+            &snippet_lower,
+            &["token", "apikey", "password", "user_input", "incoming"],
+        ) as u8 as f32,
+        if alnum_chars > 0.0 {
+            digit_chars / alnum_chars
+        } else {
+            0.0
+        },
+        upper_chars / total_chars,
+        punctuation_chars / total_chars,
+    ]
+}
+
+#[cfg(feature = "onnx")]
+fn feature_cache_key(features: &[f32]) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    for value in features {
+        value.to_bits().hash(&mut hasher);
+    }
+    hasher.finish()
 }
 
 fn contains_any(haystack: &str, needles: &[&str]) -> bool {
@@ -237,6 +427,7 @@ mod tests {
     #[cfg(feature = "onnx")]
     use std::{
         fs,
+        process::Command,
         time::{SystemTime, UNIX_EPOCH},
     };
 
@@ -348,12 +539,31 @@ mod tests {
 
     #[cfg(feature = "onnx")]
     #[test]
-    fn onnx_mode_with_model_path_applies_calibration() {
-        let model_path = temp_path("aishield-onnx-model").with_extension("onnx");
+    fn onnx_mode_with_runner_uses_runtime_prediction() {
+        if !python_available() {
+            return;
+        }
+
+        let temp_dir = temp_path("aishield-onnx-model-dir");
+        fs::create_dir_all(&temp_dir).expect("create temp dir");
+        let model_path = temp_dir.join("model.onnx");
+        let runner_path = temp_dir.join("onnx_runner.py");
         fs::write(&model_path, vec![0u8; 2048]).expect("write fake model");
+        fs::write(
+            &runner_path,
+            r#"#!/usr/bin/env python3
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument("--model", required=True)
+parser.add_argument("--features", required=True)
+parser.parse_args()
+print("0.95")
+"#,
+        )
+        .expect("write fake runner");
 
         let r = rule(0.75);
-        let default_score =
+        let heuristic_score =
             estimate_ai_likelihood(&r, Path::new("src/auth/login.py"), "if token == provided:");
         let onnx_score = estimate_ai_likelihood_with_options(
             &r,
@@ -364,9 +574,45 @@ mod tests {
                 onnx_model_path: Some(model_path.clone()),
             },
         );
-        assert_ne!(default_score, onnx_score);
+        assert!(onnx_score > heuristic_score);
 
-        let _ = fs::remove_file(model_path);
+        let _ = fs::remove_dir_all(temp_dir);
+    }
+
+    #[cfg(feature = "onnx")]
+    #[test]
+    fn onnx_mode_falls_back_when_runner_is_missing() {
+        let temp_dir = temp_path("aishield-onnx-no-runner");
+        fs::create_dir_all(&temp_dir).expect("create temp dir");
+        let model_path = temp_dir.join("model.onnx");
+        fs::write(&model_path, vec![0u8; 512]).expect("write fake model");
+
+        let r = rule(0.80);
+        let heuristic_score =
+            estimate_ai_likelihood(&r, Path::new("src/auth/login.py"), "if token == provided:");
+        let onnx_score = estimate_ai_likelihood_with_options(
+            &r,
+            Path::new("src/auth/login.py"),
+            "if token == provided:",
+            &AiClassifierOptions {
+                mode: AiClassifierMode::Onnx,
+                onnx_model_path: Some(model_path),
+            },
+        );
+        assert_eq!(onnx_score, heuristic_score);
+
+        let _ = fs::remove_dir_all(temp_dir);
+    }
+
+    #[cfg(feature = "onnx")]
+    fn python_available() -> bool {
+        ["python3", "python"].iter().any(|bin| {
+            Command::new(bin)
+                .arg("--version")
+                .output()
+                .map(|result| result.status.success())
+                .unwrap_or(false)
+        })
     }
 
     #[cfg(feature = "onnx")]

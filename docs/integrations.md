@@ -15,6 +15,10 @@ AIShield ships workspace recommendations and task shortcuts:
 - `.vscode/extensions.json`
 - `.vscode/tasks.json`
 
+AIShield also includes a VS Code extension bootstrap:
+
+- `integrations/vscode-extension`
+
 Recommended tasks:
 
 - `AIShield: test`
@@ -23,6 +27,16 @@ Recommended tasks:
 - `AIShield: docs dev server`
 
 You can run tasks from **Terminal -> Run Task**.
+
+Extension quick start:
+
+```bash
+cd integrations/vscode-extension
+npm install
+npm run build
+```
+
+See `docs/vscode-extension.md` for commands and settings.
 
 ## GitHub Actions
 
@@ -131,5 +145,6 @@ Useful local commands:
 ```bash
 cargo test
 cargo run -p aishield-cli -- scan .
+cargo run -p aishield-cli --features onnx -- scan . --ai-model onnx --onnx-model models/ai-classifier/model.onnx
 npm run docs:build
 ```

@@ -1,0 +1,93 @@
+{
+  "name": "aishield-vscode-extension",
+  "displayName": "AIShield",
+  "description": "AIShield security diagnostics for AI-generated code in VS Code.",
+  "version": "0.1.0",
+  "publisher": "aishield",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Linters",
+    "Programming Languages",
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:aishield.scanWorkspace",
+    "onCommand:aishield.scanCurrentFile",
+    "onCommand:aishield.clearDiagnostics",
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "aishield.scanWorkspace",
+        "title": "AIShield: Scan Workspace"
+      },
+      {
+        "command": "aishield.scanCurrentFile",
+        "title": "AIShield: Scan Current File"
+      },
+      {
+        "command": "aishield.clearDiagnostics",
+        "title": "AIShield: Clear Diagnostics"
+      }
+    ],
+    "configuration": {
+      "title": "AIShield",
+      "properties": {
+        "aishield.cliCommand": {
+          "type": "string",
+          "default": "cargo run -p aishield-cli --",
+          "description": "Command prefix used to invoke AIShield CLI."
+        },
+        "aishield.extraScanArgs": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "description": "Extra arguments appended to scan commands."
+        },
+        "aishield.minSeverity": {
+          "type": "string",
+          "default": "low",
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "info"
+          ],
+          "description": "Minimum severity for diagnostics."
+        },
+        "aishield.useOnnx": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable ONNX AI-likelihood scoring mode."
+        },
+        "aishield.onnxModelPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to ONNX model file used when useOnnx=true."
+        },
+        "aishield.scanOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run AIShield scan on file save."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "watch": "tsc -watch -p ."
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.17",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.7.3"
+  }
+}

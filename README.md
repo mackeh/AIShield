@@ -71,6 +71,9 @@ cargo run -p aishield-cli -- scan . --cross-file
 # optional ONNX-backed AI-likelihood scoring (with fallback to heuristic)
 cargo run -p aishield-cli -- scan . --ai-model onnx --onnx-model models/aishield.onnx
 
+# ONNX runtime-enabled build path
+cargo run -p aishield-cli --features onnx -- scan . --ai-model onnx --onnx-model models/ai-classifier/model.onnx
+
 # send webhook alert for high+ findings
 cargo run -p aishield-cli -- scan . --notify-webhook https://hooks.example/security --notify-min-severity high
 
@@ -107,6 +110,16 @@ Supported templates:
 - `vscode`
 - `pre-commit`
 
+## VS Code Extension Bootstrap
+
+```bash
+cd integrations/vscode-extension
+npm install
+npm run build
+```
+
+Then open `integrations/vscode-extension` in VS Code and run extension host (`F5`).
+
 ## Core Commands
 
 - `scan`: run analysis with filters, dedup mode, bridge engines, and output formats
@@ -133,9 +146,11 @@ Key docs:
 
 - `docs/getting-started.md`
 - `docs/cli.md`
+- `docs/ai-classifier.md`
 - `docs/configuration.md`
 - `docs/output-formats.md`
 - `docs/integrations.md`
+- `docs/vscode-extension.md`
 - `docs/ci-github-actions.md`
 - `docs/rules-authoring.md`
 - `docs/contributing.md`
@@ -158,7 +173,9 @@ Current implementation includes:
 - infrastructure scanning bootstrap for Terraform, Kubernetes, and Dockerfile misconfig patterns
 - experimental cross-file auth-route heuristics (`--cross-file`)
 - ONNX classifier integration bootstrap (`--ai-model onnx --onnx-model FILE`)
+- ONNX runtime runner bridge via `models/ai-classifier/onnx_runner.py`
 - optional SAST bridge for Semgrep/Bandit/ESLint
+- VS Code extension bootstrap in `integrations/vscode-extension`
 - hardened SARIF upload and PR annotation workflows across push/PR contexts
 - VitePress documentation site + GitHub Pages deployment workflow
 

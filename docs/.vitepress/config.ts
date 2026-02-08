@@ -27,6 +27,7 @@ export default defineConfig({
     nav: [
       { text: "Guide", link: "/getting-started" },
       { text: "CLI", link: "/cli" },
+      { text: "AI Classifier", link: "/ai-classifier" },
       { text: "Integrations", link: "/integrations" },
       { text: "Configuration", link: "/configuration" },
       { text: "CI/CD", link: "/ci-github-actions" },
@@ -46,6 +47,7 @@ export default defineConfig({
         text: "CLI & Outputs",
         items: [
           { text: "CLI Reference", link: "/cli" },
+          { text: "AI Classifier", link: "/ai-classifier" },
           { text: "Output Formats", link: "/output-formats" },
           { text: "Configuration", link: "/configuration" },
         ],
@@ -54,6 +56,7 @@ export default defineConfig({
         text: "Operations",
         items: [
           { text: "Integrations", link: "/integrations" },
+          { text: "VS Code Extension", link: "/vscode-extension" },
           { text: "GitHub Actions", link: "/ci-github-actions" },
           { text: "Releasing", link: "/releasing" },
           { text: "Security Policy", link: "https://github.com/mackeh/AIShield/blob/main/SECURITY.md" },

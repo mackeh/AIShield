@@ -69,3 +69,9 @@ If `dedup_mode` is not set:
 - `json`, `sarif`, and `github` output default to `normalized`
 
 This reduces noisy duplicate findings in CI while keeping table output closer to raw scan data.
+
+## ONNX Notes
+
+- Build with ONNX feature for full runtime path:
+  - `cargo run -p aishield-cli --features onnx -- scan . --ai-model onnx --onnx-model models/ai-classifier/model.onnx`
+- If ONNX runtime prerequisites are unavailable, AIShield falls back to heuristic scoring.

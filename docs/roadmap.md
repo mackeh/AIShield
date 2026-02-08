@@ -18,12 +18,14 @@ This page mirrors `project.md` and highlights the current implementation directi
 - [x] Go/Rust/Java rulepacks expanded toward 20-per-language target
 - [x] Interactive fix TUI upgrades (search/filter, badges, preview pane)
 - [x] ONNX classifier integration bootstrap (feature-flagged with heuristic fallback)
-- [ ] Full ONNX model runtime integration + trained model distribution
+- [x] ONNX runtime runner bridge integration (model execution path + fallback behavior)
+- [ ] Trained model distribution and calibration tuning
 - [x] Full PR annotation + SARIF workflow hardening across repo contexts
 
 ## Phase 3+: Platform and Ecosystem
 
-- [ ] VS Code extension
+- [x] VS Code extension bootstrap (scan commands + diagnostics)
+- [ ] Advanced VS Code UX (hover cards, quick fixes, AI security lens)
 - [ ] Web dashboard and analytics pipeline
 - [x] Alerting bootstrap via scan webhooks
 - [x] Experimental cross-file auth-route heuristics (`--cross-file`)
