@@ -57,13 +57,13 @@ BEGIN
       CASE WHEN random() > 0.3 THEN 'main' ELSE 'develop' END,
       md5(random()::text),
       '0.3.0',
-      floor(random() * 50)::int,                    -- total_findings
+      20 + floor(random() * 30)::int,               -- total_findings (20-49)
       floor(random() * 5)::int,                     -- critical
       floor(random() * 15)::int,                    -- high
       floor(random() * 20)::int,                    -- medium
       floor(random() * 10)::int,                    -- low
       0,                                             -- info
-      floor(random() * 20)::int,                    -- AI estimated
+      floor(random() * 20)::int,                    -- AI estimated (always <= total_findings)
       500 + floor(random() * 3000)::int,            -- scan duration
       50 + floor(random() * 500)::int,              -- files
       169,                                           -- rules

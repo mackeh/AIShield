@@ -65,8 +65,21 @@ CREATE TABLE scans (
   CONSTRAINT valid_ai_count CHECK (ai_estimated_count >= 0 AND ai_estimated_count <= total_findings)
 );
 
--- Convert to TimescaleDB hypertable (partition by timestamp, 7-day chunks)
-SELECT create_hypertable('scans', 'timestamp', chunk_time_interval => INTERVAL '7 days');
+-- Convert to TimescaleDB hypertable (partition by timestamp, 7-day chunks).
+-- Some schemas use unique constraints that are incompatible with hypertable partitioning rules.
+-- Do not abort full bootstrap if conversion is not possible.
+DO $$
+BEGIN
+  PERFORM create_hypertable(
+    'scans',
+    'timestamp',
+    chunk_time_interval => INTERVAL '7 days',
+    if_not_exists => TRUE
+  );
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE NOTICE 'Skipping hypertable conversion for scans: %', SQLERRM;
+END $$;
 
 -- Create indexes for common query patterns
 CREATE INDEX idx_scans_org_time ON scans (org_id, team_id, timestamp DESC);
@@ -75,11 +88,23 @@ CREATE INDEX idx_scans_branch ON scans (repo_id, branch, timestamp DESC) WHERE b
 CREATE INDEX idx_scans_ci_run ON scans (ci_run_id) WHERE ci_run_id IS NOT NULL;
 CREATE INDEX idx_scans_scan_id ON scans (scan_id);
 
--- Add compression policy (compress chunks older than 30 days)
-SELECT add_compression_policy('scans', INTERVAL '30 days');
+-- Add compression policy (compress chunks older than 30 days) when hypertable is available.
+DO $$
+BEGIN
+  PERFORM add_compression_policy('scans', INTERVAL '30 days');
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE NOTICE 'Skipping compression policy for scans: %', SQLERRM;
+END $$;
 
 -- Add retention policy (drop chunks older than 2 years)
-SELECT add_retention_policy('scans', INTERVAL '2 years');
+DO $$
+BEGIN
+  PERFORM add_retention_policy('scans', INTERVAL '2 years');
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE NOTICE 'Skipping retention policy for scans: %', SQLERRM;
+END $$;
 
 -- Create table comment
 COMMENT ON TABLE scans IS 'Time-series scan results for AIShield analytics';
