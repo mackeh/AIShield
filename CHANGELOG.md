@@ -8,6 +8,12 @@ The format is based on Keep a Changelog and follows semantic versioning.
 
 ### Added
 
+- No unreleased entries yet.
+
+## [0.2.0] - 2026-02-08
+
+### Added
+
 - `github` scan output format for GitHub Actions inline PR annotations
 - CI workflow step to emit AIShield PR annotations alongside SARIF upload
 - `scan --changed-from <ref>` to scope scans/annotations to changed files
@@ -63,6 +69,7 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - Machine-output dedup normalization for JSON/SARIF to reduce CI noise
 - Expanded documentation for CLI, configuration, outputs, and CI
 
-[Unreleased]: https://github.com/mackeh/AIShield/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/mackeh/AIShield/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/mackeh/AIShield/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/mackeh/AIShield/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/mackeh/AIShield/releases/tag/v0.1.0

@@ -6,7 +6,7 @@ AIShield uses tag-driven GitHub Releases.
 
 - `main` is green in CI
 - `CHANGELOG.md` has an updated `Unreleased` section
-- version/tag follows semver (`v0.1.1`, `v0.2.0`, ...)
+- version/tag follows semver (`v0.2.0`, `v0.2.1`, ...)
 - if ONNX model distribution changes, update `models/ai-classifier/model-manifest.json`
 
 ## Release Steps
@@ -16,8 +16,8 @@ AIShield uses tag-driven GitHub Releases.
 3. Create and push the tag:
 
 ```bash
-git tag -a v0.1.1 -m "AIShield v0.1.1"
-git push origin v0.1.1
+git tag -a v0.2.0 -m "AIShield v0.2.0"
+git push origin v0.2.0
 ```
 
 4. GitHub Actions workflow `.github/workflows/release.yml` automatically creates/updates the release with generated notes.
@@ -28,7 +28,7 @@ git push origin v0.1.1
 If a tag already exists and you need to recreate/update release metadata:
 
 - run workflow `Release` via `workflow_dispatch`
-- pass the tag name (for example `v0.1.1`)
+- pass the tag name (for example `v0.2.0`)
 
 ## Notes
 

@@ -2,7 +2,7 @@
   "name": "aishield-vscode-extension",
   "displayName": "AIShield",
   "description": "AIShield security diagnostics for AI-generated code in VS Code.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "aishield",
   "license": "MIT",
   "engines": {
