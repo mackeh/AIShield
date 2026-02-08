@@ -81,6 +81,8 @@ cargo run -p aishield-cli -- fix . --interactive
 - Scan history with severity breakdown
 - AI-generated code detection metrics
 
+![AIShield Dashboard](docs/assets/dashboard-screenshot.png)
+
 ---
 
 ## 🏗️ Architecture

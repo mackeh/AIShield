@@ -8,6 +8,10 @@ use std::process::Command;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+mod analytics_client;
+mod config;
+mod git_utils;
+
 use aishield_core::{
     AiCalibrationProfile, AiCalibrationSettings, AiClassifierMode, AiClassifierOptions,
     AnalysisOptions, Analyzer, Finding, RuleSet, ScanResult, ScanSummary, Severity,
@@ -50,6 +54,8 @@ fn run() -> Result<(), String> {
         "create-rule" => run_create_rule(&args[1..]),
         "stats" => run_stats(&args[1..]),
         "hook" => run_hook(&args[1..]),
+        "config" => run_config(&args[1..]),
+        "analytics" => run_analytics(&args[1..]),
         "--help" | "-h" | "help" => {
             print_help();
             Ok(())
@@ -86,6 +92,7 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     let mut notify_severity_override = None::<SeverityThreshold>;
     let mut history_file_override = None;
     let mut no_history_flag = false;
+    let mut analytics_push_flag = false;
     let mut staged_only = false;
     let mut changed_from = None::<String>;
     let mut config_path = PathBuf::from(".aishield.yml");
@@ -203,6 +210,7 @@ fn run_scan(args: &[String]) -> Result<(), String> {
                 ));
             }
             "--no-history" => no_history_flag = true,
+            "--analytics-push" => analytics_push_flag = true,
             "--staged" => staged_only = true,
             "--changed-from" => {
                 i += 1;
@@ -349,6 +357,13 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     if record_history {
         if let Err(err) = append_history(&history_file, &target, &result) {
             eprintln!("warning: failed to append scan history: {err}");
+        }
+    }
+
+    // Push to analytics API if enabled
+    if analytics_push_flag {
+        if let Err(err) = push_to_analytics(&target, &result) {
+            eprintln!("warning: analytics push failed: {err}");
         }
     }
 
@@ -2930,6 +2945,227 @@ fn run_create_rule(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+fn run_config(args: &[String]) -> Result<(), String> {
+    if args.is_empty() {
+        return Err("config requires a subcommand: set, get, or show\nUsage:\n  aishield config set analytics.url <url>\n  aishield config get analytics.url\n  aishield config show".to_string());
+    }
+
+    match args[0].as_str() {
+        "set" => {
+            if args.len() < 3 {
+                return Err("config set requires a key and value\nUsage: aishield config set <key> <value>\nExample: aishield config set analytics.url http://localhost:8080".to_string());
+            }
+
+            let key = &args[1];
+            let value = &args[2];
+
+            let mut config = config::Config::load().unwrap_or_default();
+            config.set(key, value)?;
+            config.save()?;
+
+            println!(
+                "✓ Set {} = {}",
+                key,
+                if key.contains("api_key") {
+                    "***"
+                } else {
+                    value
+                }
+            );
+            Ok(())
+        }
+        "get" => {
+            if args.len() < 2 {
+                return Err("config get requires a key\nUsage: aishield config get <key>\nExample: aishield config get analytics.url".to_string());
+            }
+
+            let key = &args[1];
+            let config = config::Config::load().unwrap_or_default().merge_with_env();
+
+            match config.get(key) {
+                Some(value) => {
+                    println!("{}", value);
+                    Ok(())
+                }
+                None => Err(format!("config key '{}' not set", key)),
+            }
+        }
+        "show" => {
+            let config = config::Config::load().unwrap_or_default().merge_with_env();
+
+            println!("Analytics Configuration:");
+            println!("  enabled:  {}", config.analytics.enabled);
+            println!(
+                "  url:      {}",
+                config.analytics.url.as_deref().unwrap_or("<not set>")
+            );
+            println!(
+                "  api_key:  {}",
+                if config.analytics.api_key.is_some() {
+                    "***"
+                } else {
+                    "<not set>"
+                }
+            );
+            println!(
+                "  org_id:   {}",
+                config.analytics.org_id.as_deref().unwrap_or("<not set>")
+            );
+            println!(
+                "  team_id:  {}",
+                config.analytics.team_id.as_deref().unwrap_or("<not set>")
+            );
+            println!();
+            println!(
+                "Config file: {}",
+                config::Config::get_config_path()?.display()
+            );
+            Ok(())
+        }
+        other => Err(format!(
+            "unknown config subcommand `{}`\nAvailable: set, get, show",
+            other
+        )),
+    }
+}
+
+fn run_analytics(args: &[String]) -> Result<(), String> {
+    if args.is_empty() {
+        return Err("analytics requires a subcommand: migrate-history\nUsage:\n  aishield analytics migrate-history [--dry-run] [--history-file <path>]".to_string());
+    }
+
+    match args[0].as_str() {
+        "migrate-history" => {
+            let mut dry_run = false;
+            let mut history_file = PathBuf::from(".aishield-history.log");
+
+            let mut i = 1;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--dry-run" => dry_run = true,
+                    "--history-file" => {
+                        i += 1;
+                        history_file =
+                            PathBuf::from(args.get(i).ok_or("--history-file requires a value")?);
+                    }
+                    other => return Err(format!("unknown option `{}`", other)),
+                }
+                i += 1;
+            }
+
+            // Load config
+            let config = config::Config::load()
+                .map_err(|e| format!("Failed to load config: {}", e))?
+                .merge_with_env();
+
+            // Check if analytics is configured
+            if config.analytics.url.is_none() {
+                return Err(
+                    "Analytics URL not configured\nRun: aishield config set analytics.url <url>"
+                        .to_string(),
+                );
+            }
+
+            if config.analytics.api_key.is_none() {
+                return Err("Analytics API key not configured\nRun: aishield config set analytics.api_key <key>".to_string());
+            }
+
+            // Load history
+            println!("Loading history from {}...", history_file.display());
+            let records = load_history(&history_file)?;
+
+            if records.is_empty() {
+                println!("No history records found");
+                return Ok(());
+            }
+
+            println!("Found {} history records", records.len());
+
+            if dry_run {
+                println!("\n[DRY RUN] Would migrate {} scans:", records.len());
+                for (idx, record) in records.iter().take(5).enumerate() {
+                    println!(
+                        "  {}. {} - {} findings ({} critical, {} high)",
+                        idx + 1,
+                        record.target,
+                        record.total,
+                        record.critical,
+                        record.high
+                    );
+                }
+                if records.len() > 5 {
+                    println!("  ... and {} more", records.len() - 5);
+                }
+                return Ok(());
+            }
+
+            // Migrate each record
+            let client = analytics_client::AnalyticsClient::new(&config.analytics)?;
+            let runtime = tokio::runtime::Runtime::new()
+                .map_err(|e| format!("Failed to create async runtime: {}", e))?;
+
+            let mut success_count = 0;
+            let mut error_count = 0;
+
+            println!("\nMigrating history records...");
+            for (idx, record) in records.iter().enumerate() {
+                let target_path = PathBuf::from(&record.target);
+
+                // Extract git metadata (best effort)
+                let repo_metadata = git_utils::RepoMetadata::from_path(&target_path);
+
+                // Create scan metadata
+                let scan_metadata = analytics_client::ScanMetadata::from_repo(
+                    &repo_metadata,
+                    record.target.clone(),
+                    &config.analytics,
+                );
+
+                // Create minimal scan summary from history record
+                let scan_summary = analytics_client::ScanResultSummary {
+                    total_findings: record.total,
+                    critical: record.critical,
+                    high: record.high,
+                    medium: record.medium,
+                    low: record.low,
+                    info: record.info,
+                    ai_estimated_count: record.ai_estimated,
+                    scan_duration_ms: 0,
+                    files_scanned: 0,
+                    rules_loaded: 0,
+                    findings: vec![], // No detailed findings from history
+                };
+
+                // Push to analytics
+                match runtime.block_on(client.push_scan_result(&scan_summary, &scan_metadata)) {
+                    Ok(scan_id) => {
+                        success_count += 1;
+                        if (idx + 1) % 10 == 0 {
+                            println!("  Migrated {}/{} scans...", idx + 1, records.len());
+                        }
+                    }
+                    Err(e) => {
+                        error_count += 1;
+                        eprintln!("  Warning: Failed to migrate scan #{}: {}", idx + 1, e);
+                    }
+                }
+            }
+
+            println!("\n✓ Migration complete:");
+            println!("  Success: {}", success_count);
+            if error_count > 0 {
+                println!("  Errors:  {}", error_count);
+            }
+
+            Ok(())
+        }
+        other => Err(format!(
+            "unknown analytics subcommand `{}`\nAvailable: migrate-history",
+            other
+        )),
+    }
+}
+
 fn run_stats(args: &[String]) -> Result<(), String> {
     let mut days: u64 = 30;
     let mut history_file = PathBuf::from(".aishield-history.log");
@@ -3353,6 +3589,93 @@ fn append_history(history_file: &Path, target: &Path, result: &ScanResult) -> Re
         .map_err(|err| format!("failed opening {}: {err}", history_file.display()))?;
     file.write_all(record.to_line().as_bytes())
         .map_err(|err| format!("failed writing {}: {err}", history_file.display()))?;
+    Ok(())
+}
+
+fn push_to_analytics(target: &Path, result: &ScanResult) -> Result<(), String> {
+    // Load config and merge with env vars
+    let config = config::Config::load()
+        .map_err(|e| format!("Failed to load config: {}", e))?
+        .merge_with_env();
+
+    // Check if analytics is configured
+    if config.analytics.url.is_none() {
+        return Err("Analytics URL not configured (use 'aishield config set analytics.url <url>' or set AISHIELD_ANALYTICS_URL)".to_string());
+    }
+
+    if config.analytics.api_key.is_none() {
+        return Err("Analytics API key not configured (use 'aishield config set analytics.api_key <key>' or set AISHIELD_API_KEY)".to_string());
+    }
+
+    // Extract repository metadata
+    let repo_metadata = git_utils::RepoMetadata::from_path(target);
+
+    // Create scan metadata
+    let scan_metadata = analytics_client::ScanMetadata::from_repo(
+        &repo_metadata,
+        target.display().to_string(),
+        &config.analytics,
+    );
+
+    // Convert scan result to analytics format
+    let scan_summary = analytics_client::ScanResultSummary {
+        total_findings: result.summary.total,
+        critical: *result.summary.by_severity.get("critical").unwrap_or(&0),
+        high: *result.summary.by_severity.get("high").unwrap_or(&0),
+        medium: *result.summary.by_severity.get("medium").unwrap_or(&0),
+        low: *result.summary.by_severity.get("low").unwrap_or(&0),
+        info: *result.summary.by_severity.get("info").unwrap_or(&0),
+        ai_estimated_count: result
+            .findings
+            .iter()
+            .filter(|f| f.ai_confidence >= 70.0)
+            .count(),
+        scan_duration_ms: 0, // Not tracked in current ScanResult
+        files_scanned: result.summary.scanned_files,
+        rules_loaded: result.summary.matched_rules,
+        findings: result
+            .findings
+            .iter()
+            .map(|f| analytics_client::FindingDetail {
+                rule_id: f.id.clone(),
+                rule_title: f.title.clone(),
+                severity: match f.severity {
+                    Severity::Critical => "Critical",
+                    Severity::High => "High",
+                    Severity::Medium => "Medium",
+                    Severity::Low => "Low",
+                    Severity::Info => "Info",
+                }
+                .to_string(),
+                file_path: f.file.clone(),
+                line_number: Some(f.line),
+                snippet: Some(f.snippet.clone()), // Skip snippet to reduce payload size
+                ai_confidence: if f.ai_confidence > 0.0 {
+                    Some(f.ai_confidence)
+                } else {
+                    None
+                },
+                ai_tendency: f.ai_tendency.clone(),
+                fix_suggestion: f.fix_suggestion.clone(),
+                cwe_id: None,         // TODO: Extract from rule metadata
+                owasp_category: None, // TODO: Extract from rule metadata
+            })
+            .collect(),
+    };
+
+    // Create analytics client
+    let client = analytics_client::AnalyticsClient::new(&config.analytics)?;
+
+    // Create tokio runtime for async operation
+    let runtime = tokio::runtime::Runtime::new()
+        .map_err(|e| format!("Failed to create async runtime: {}", e))?;
+
+    // Push to analytics API
+    let scan_id = runtime
+        .block_on(client.push_scan_result(&scan_summary, &scan_metadata))
+        .map_err(|e| format!("API error: {}", e))?;
+
+    println!("✓ Scan pushed to analytics (ID: {})", scan_id);
     Ok(())
 }
 
