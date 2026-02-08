@@ -107,6 +107,15 @@ Interactive TUI controls:
 - `enter`: apply selected (or highlighted item if none selected)
 - `q`/`esc`: cancel
 
+TUI enhancements:
+
+- `/`: enter search/filter mode
+- type query terms to filter candidate list (match by rule, file, title, severity)
+- `backspace`: remove search characters
+- `enter`/`esc` in search mode: exit search mode
+- severity badges are shown per row for quick prioritization
+- right-side preview diff pane shows candidate before/after line changes
+
 Examples:
 
 ```bash

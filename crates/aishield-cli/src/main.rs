@@ -1193,7 +1193,7 @@ fn run_fix(args: &[String]) -> Result<(), String> {
     if interactive && write_changes {
         return Err("use either --interactive or --write, not both".to_string());
     }
-    if interactive && !io::stdin().is_terminal() {
+    if interactive && (!io::stdin().is_terminal() || !io::stdout().is_terminal()) {
         return Err("interactive mode requires a terminal (use --write or --dry-run)".to_string());
     }
 
@@ -1325,6 +1325,7 @@ struct InteractiveAutofixCandidate {
     file_display: String,
     rule_id: String,
     title: String,
+    severity: Severity,
     line: usize,
     column: usize,
     fix_suggestion: Option<String>,
@@ -1368,7 +1369,7 @@ fn run_fix_interactive(target: &Path, result: &ScanResult, dry_run: bool) -> Res
         return Ok(());
     }
 
-    let selection = run_fix_tui(&candidates, dry_run)?;
+    let selection = run_fix_tui(&candidates, &file_contents, dry_run)?;
     let Some(selected_indices) = selection else {
         println!("No autofix changes selected.");
         return Ok(());
@@ -1441,6 +1442,7 @@ fn collect_interactive_candidates(
                 file_display: finding.file.clone(),
                 rule_id: finding.id.clone(),
                 title: finding.title.clone(),
+                severity: finding.severity,
                 line: finding.line,
                 column: finding.column,
                 fix_suggestion: finding.fix_suggestion.clone(),
@@ -1453,6 +1455,7 @@ fn collect_interactive_candidates(
 
 fn run_fix_tui(
     candidates: &[InteractiveAutofixCandidate],
+    file_contents: &BTreeMap<PathBuf, String>,
     dry_run: bool,
 ) -> Result<Option<Vec<usize>>, String> {
     enable_raw_mode().map_err(|err| format!("failed to enable raw mode: {err}"))?;
@@ -1463,7 +1466,7 @@ fn run_fix_tui(
     let backend = CrosstermBackend::new(stdout);
     let mut terminal =
         Terminal::new(backend).map_err(|err| format!("failed to initialize terminal UI: {err}"))?;
-    let ui_result = run_fix_tui_loop(&mut terminal, candidates, dry_run);
+    let ui_result = run_fix_tui_loop(&mut terminal, candidates, file_contents, dry_run);
 
     let _ = disable_raw_mode();
     let _ = execute!(terminal.backend_mut(), LeaveAlternateScreen);
@@ -1475,21 +1478,36 @@ fn run_fix_tui(
 fn run_fix_tui_loop(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     candidates: &[InteractiveAutofixCandidate],
+    file_contents: &BTreeMap<PathBuf, String>,
     dry_run: bool,
 ) -> Result<Option<Vec<usize>>, String> {
     let mut cursor = 0usize;
+    let mut search_query = String::new();
+    let mut search_mode = false;
     let mut selected = vec![false; candidates.len()];
     let mut list_state = ListState::default();
 
     loop {
-        list_state.select(Some(cursor));
+        let visible_indices = filtered_candidate_indices(candidates, &search_query);
+        if visible_indices.is_empty() {
+            cursor = 0;
+            list_state.select(None);
+        } else {
+            if cursor >= visible_indices.len() {
+                cursor = visible_indices.len().saturating_sub(1);
+            }
+            list_state.select(Some(cursor));
+        }
+
+        let active_index = visible_indices.get(cursor).copied();
+
         terminal
             .draw(|frame| {
                 let chunks = Layout::vertical([
                     Constraint::Length(3),
-                    Constraint::Min(8),
-                    Constraint::Length(6),
                     Constraint::Length(3),
+                    Constraint::Min(12),
+                    Constraint::Length(4),
                 ])
                 .split(frame.area());
 
@@ -1506,21 +1524,40 @@ fn run_fix_tui_loop(
                             .add_modifier(Modifier::BOLD),
                     )),
                     Line::from(format!(
-                        "Candidates: {} | Selected: {}",
+                        "Candidates: {} | Filtered: {} | Selected: {}",
                         candidates.len(),
+                        visible_indices.len(),
                         selected.iter().filter(|v| **v).count()
                     )),
                 ])
                 .block(Block::default().borders(Borders::ALL).title("Summary"));
                 frame.render_widget(header, chunks[0]);
 
-                let items = candidates
+                let search = Paragraph::new(vec![Line::from(format!(
+                    "Search: {}{}",
+                    search_query,
+                    if search_mode { "█" } else { "" }
+                ))])
+                .block(Block::default().borders(Borders::ALL).title("Filter (/ to edit, esc to exit)"));
+                frame.render_widget(search, chunks[1]);
+
+                let body = Layout::horizontal([Constraint::Percentage(48), Constraint::Percentage(52)])
+                    .split(chunks[2]);
+                let right = Layout::vertical([Constraint::Length(7), Constraint::Min(5)]).split(body[1]);
+
+                let items = visible_indices
                     .iter()
-                    .enumerate()
-                    .map(|(idx, candidate)| {
-                        let mark = if selected[idx] { 'x' } else { ' ' };
+                    .map(|idx| {
+                        let candidate = &candidates[*idx];
+                        let mark = if selected[*idx] { 'x' } else { ' ' };
+                        let sev_badge = severity_badge(candidate.severity);
+                        let sev_style = Style::default().fg(severity_color(candidate.severity));
                         ListItem::new(Line::from(vec![
                             Span::raw(format!("[{}] ", mark)),
+                            Span::styled(
+                                format!("[{}] ", sev_badge),
+                                sev_style.add_modifier(Modifier::BOLD),
+                            ),
                             Span::styled(
                                 format!("[{}] ", candidate.rule_id),
                                 Style::default().fg(Color::Yellow),
@@ -1537,16 +1574,20 @@ fn run_fix_tui_loop(
                     .collect::<Vec<_>>();
 
                 let list = List::new(items)
-                    .block(Block::default().borders(Borders::ALL).title("Autofix Candidates"))
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .title("Autofix Candidates"),
+                    )
                     .highlight_style(
                         Style::default()
                             .bg(Color::DarkGray)
                             .add_modifier(Modifier::BOLD),
                     )
                     .highlight_symbol("> ");
-                frame.render_stateful_widget(list, chunks[1], &mut list_state);
+                frame.render_stateful_widget(list, body[0], &mut list_state);
 
-                let details = candidates.get(cursor).map(|candidate| {
+                let details = active_index.map(|idx| &candidates[idx]).map(|candidate| {
                     let suggestion = candidate
                         .fix_suggestion
                         .as_deref()
@@ -1561,22 +1602,39 @@ fn run_fix_tui_loop(
                             candidate.file_display, candidate.line, candidate.column
                         )),
                         Line::from(format!(
-                            "Rule: {} | Proposed replacements: {}",
-                            candidate.rule_id, candidate.proposed_replacements
+                            "Rule: {} [{}] | Proposed replacements: {}",
+                            candidate.rule_id,
+                            candidate.severity.as_str(),
+                            candidate.proposed_replacements
                         )),
                         Line::from(""),
                         Line::from(format!("Fix: {suggestion}")),
                     ]
                 });
-                let detail_text = details.unwrap_or_else(|| vec![Line::from("No candidate selected.")]);
+                let detail_text =
+                    details.unwrap_or_else(|| vec![Line::from("No candidate selected.")]);
                 let detail = Paragraph::new(detail_text)
                     .wrap(Wrap { trim: true })
                     .block(Block::default().borders(Borders::ALL).title("Details"));
-                frame.render_widget(detail, chunks[2]);
+                frame.render_widget(detail, right[0]);
+
+                let preview = if let Some(idx) = active_index {
+                    build_preview_diff(&candidates[idx], file_contents)
+                } else {
+                    "No candidate selected.".to_string()
+                };
+                let preview_widget = Paragraph::new(preview)
+                    .wrap(Wrap { trim: false })
+                    .block(Block::default().borders(Borders::ALL).title("Preview Diff"));
+                frame.render_widget(preview_widget, right[1]);
 
                 let footer = Paragraph::new(vec![
-                    Line::from("Keys: ↑/↓ move  space toggle  a select-all  c clear  enter apply  q cancel"),
-                    Line::from("If no rows are selected, Enter applies the highlighted row."),
+                    Line::from(
+                        "Keys: ↑/↓ move  space toggle  a select-all  c clear  / search  enter apply  q cancel",
+                    ),
+                    Line::from(
+                        "Search mode: type to filter, backspace delete, enter/esc leave search",
+                    ),
                 ])
                 .block(Block::default().borders(Borders::ALL).title("Controls"));
                 frame.render_widget(footer, chunks[3]);
@@ -1599,12 +1657,32 @@ fn run_fix_tui_loop(
             continue;
         }
 
+        if search_mode {
+            match key.code {
+                KeyCode::Esc | KeyCode::Enter => {
+                    search_mode = false;
+                }
+                KeyCode::Backspace => {
+                    search_query.pop();
+                }
+                KeyCode::Char(ch) => {
+                    if !ch.is_control() {
+                        search_query.push(ch);
+                        cursor = 0;
+                    }
+                }
+                _ => {}
+            }
+            continue;
+        }
+
         match key.code {
             KeyCode::Up | KeyCode::Char('k') => {
                 cursor = cursor.saturating_sub(1);
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                if cursor + 1 < candidates.len() {
+                let max = visible_indices.len();
+                if cursor + 1 < max {
                     cursor += 1;
                 }
             }
@@ -1612,21 +1690,32 @@ fn run_fix_tui_loop(
                 cursor = 0;
             }
             KeyCode::Char('G') => {
-                cursor = candidates.len().saturating_sub(1);
+                cursor = visible_indices.len().saturating_sub(1);
             }
             KeyCode::Char(' ') => {
-                if let Some(slot) = selected.get_mut(cursor) {
-                    *slot = !*slot;
+                if let Some(active) = active_index.and_then(|idx| selected.get_mut(idx)) {
+                    *active = !*active;
                 }
             }
             KeyCode::Char('a') => {
-                selected.fill(true);
+                for idx in &visible_indices {
+                    if let Some(slot) = selected.get_mut(*idx) {
+                        *slot = true;
+                    }
+                }
             }
             KeyCode::Char('c') => {
-                selected.fill(false);
+                for idx in &visible_indices {
+                    if let Some(slot) = selected.get_mut(*idx) {
+                        *slot = false;
+                    }
+                }
+            }
+            KeyCode::Char('/') => {
+                search_mode = true;
             }
             KeyCode::Enter => {
-                return Ok(Some(resolve_selected_indices(&selected, cursor)));
+                return Ok(Some(resolve_selected_indices(&selected, active_index)));
             }
             KeyCode::Esc | KeyCode::Char('q') => {
                 return Ok(None);
@@ -1636,14 +1725,113 @@ fn run_fix_tui_loop(
     }
 }
 
-fn resolve_selected_indices(selected: &[bool], cursor: usize) -> Vec<usize> {
+fn filtered_candidate_indices(
+    candidates: &[InteractiveAutofixCandidate],
+    query: &str,
+) -> Vec<usize> {
+    let terms = query
+        .split_whitespace()
+        .map(|part| part.to_ascii_lowercase())
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+
+    if terms.is_empty() {
+        return (0..candidates.len()).collect::<Vec<_>>();
+    }
+
+    candidates
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, candidate)| {
+            let haystack = format!(
+                "{} {} {} {}:{}:{} {}",
+                candidate.rule_id,
+                candidate.title,
+                candidate.file_display,
+                candidate.file_path.display(),
+                candidate.line,
+                candidate.column,
+                candidate.severity.as_str()
+            )
+            .to_ascii_lowercase();
+            let matched = terms.iter().all(|term| haystack.contains(term));
+            if matched {
+                Some(idx)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>()
+}
+
+fn build_preview_diff(
+    candidate: &InteractiveAutofixCandidate,
+    file_contents: &BTreeMap<PathBuf, String>,
+) -> String {
+    let Some(content) = file_contents.get(&candidate.file_path) else {
+        return "No preview available for this file.".to_string();
+    };
+
+    let replacements = autofix_replacements(&candidate.rule_id);
+    if replacements.is_empty() {
+        return "No autofix replacement template found for this rule.".to_string();
+    }
+
+    let mut out = String::new();
+    let mut shown = 0usize;
+
+    'outer: for (from, to) in replacements {
+        for (line_idx, line) in content.lines().enumerate() {
+            if line.contains(from) {
+                let replaced = line.replace(from, to);
+                let _ = writeln!(out, "@@ line {} @@", line_idx + 1);
+                let _ = writeln!(out, "- {}", truncate(line.trim(), 110));
+                let _ = writeln!(out, "+ {}", truncate(replaced.trim(), 110));
+                out.push('\n');
+                shown += 1;
+                if shown >= 4 {
+                    break 'outer;
+                }
+            }
+        }
+    }
+
+    if shown == 0 {
+        out.push_str("No line-level preview available for current file content.");
+    }
+    out
+}
+
+fn severity_badge(severity: Severity) -> &'static str {
+    match severity {
+        Severity::Critical => "CRIT",
+        Severity::High => "HIGH",
+        Severity::Medium => "MED",
+        Severity::Low => "LOW",
+        Severity::Info => "INFO",
+    }
+}
+
+fn severity_color(severity: Severity) -> Color {
+    match severity {
+        Severity::Critical => Color::Red,
+        Severity::High => Color::LightRed,
+        Severity::Medium => Color::Yellow,
+        Severity::Low => Color::Blue,
+        Severity::Info => Color::Gray,
+    }
+}
+
+fn resolve_selected_indices(selected: &[bool], fallback: Option<usize>) -> Vec<usize> {
     let mut indices = selected
         .iter()
         .enumerate()
         .filter_map(|(idx, is_selected)| if *is_selected { Some(idx) } else { None })
         .collect::<Vec<_>>();
     if indices.is_empty() {
-        indices.push(cursor);
+        if let Some(idx) = fallback {
+            indices.push(idx);
+        }
     }
     indices
 }
@@ -3404,9 +3592,9 @@ mod tests {
     use super::{
         apply_replacements, autofix_replacements, count_replacements, dedup_machine_output,
         empty_summary, escape_github_annotation_message, escape_github_annotation_property,
-        normalize_snippet, parse_fix_target_spec, percentile, render_github_annotations,
-        render_sarif, resolve_selected_indices, DedupMode, Finding, OutputSummary, ScanResult,
-        Severity,
+        filtered_candidate_indices, normalize_snippet, parse_fix_target_spec, percentile,
+        render_github_annotations, render_sarif, resolve_selected_indices, DedupMode, Finding,
+        OutputSummary, ScanResult, Severity,
     };
 
     fn finding(
@@ -3687,14 +3875,52 @@ mod tests {
     #[test]
     fn resolve_selected_indices_uses_cursor_when_none_selected() {
         let selected = vec![false, false, false];
-        let resolved = resolve_selected_indices(&selected, 1);
+        let resolved = resolve_selected_indices(&selected, Some(1));
         assert_eq!(resolved, vec![1]);
     }
 
     #[test]
     fn resolve_selected_indices_prefers_explicit_selections() {
         let selected = vec![true, false, true, false];
-        let resolved = resolve_selected_indices(&selected, 3);
+        let resolved = resolve_selected_indices(&selected, Some(3));
         assert_eq!(resolved, vec![0, 2]);
+    }
+
+    #[test]
+    fn filtered_candidate_indices_matches_rule_and_file_tokens() {
+        let candidates = vec![
+            super::InteractiveAutofixCandidate {
+                file_path: "src/auth.py".into(),
+                file_display: "src/auth.py".to_string(),
+                rule_id: "AISHIELD-PY-AUTH-002".to_string(),
+                title: "JWT Signature Verification Disabled".to_string(),
+                severity: Severity::High,
+                line: 12,
+                column: 5,
+                fix_suggestion: None,
+                proposed_replacements: 1,
+            },
+            super::InteractiveAutofixCandidate {
+                file_path: "src/ui.js".into(),
+                file_display: "src/ui.js".to_string(),
+                rule_id: "AISHIELD-JS-INJ-004".to_string(),
+                title: "Unsanitized innerHTML Assignment".to_string(),
+                severity: Severity::High,
+                line: 22,
+                column: 3,
+                fix_suggestion: None,
+                proposed_replacements: 1,
+            },
+        ];
+
+        assert_eq!(filtered_candidate_indices(&candidates, "auth jwt"), vec![0]);
+        assert_eq!(
+            filtered_candidate_indices(&candidates, "ui innerhtml"),
+            vec![1]
+        );
+        assert_eq!(
+            filtered_candidate_indices(&candidates, "missing"),
+            Vec::<usize>::new()
+        );
     }
 }

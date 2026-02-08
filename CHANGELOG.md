@@ -22,6 +22,7 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - Expanded safe autofix replacements for additional JavaScript/Java crypto and debug patterns
 - Expanded safe autofix coverage to priority Python/JavaScript/Go/Java rules (toward top-20 remediation target)
 - Upgraded `fix --interactive` to a keyboard-driven TUI MVP using ratatui
+- Added TUI search/filter mode, severity badges, and preview diff pane for interactive fixes
 
 ## [0.1.1] - 2026-02-07
 

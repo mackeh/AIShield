@@ -131,6 +131,7 @@ aishield fix <path[:line[:col]]> [--rules-dir DIR] [--write|--interactive] [--dr
 `--dry-run` reports what would change without writing files.
 `--interactive` launches a keyboard-driven TUI for reviewing/applying autofixes.
 TUI keys: `↑/↓` move, `space` toggle, `a` select-all, `c` clear, `enter` apply, `q` cancel.
+TUI features: live search/filter (`/`), severity badges, and preview diff pane for selected autofix.
 You can target a specific finding location like `aishield fix src/auth/login.py:34`.
 
 ### `bench`
