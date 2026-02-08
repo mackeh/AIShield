@@ -3138,7 +3138,7 @@ fn run_analytics(args: &[String]) -> Result<(), String> {
 
                 // Push to analytics
                 match runtime.block_on(client.push_scan_result(&scan_summary, &scan_metadata)) {
-                    Ok(scan_id) => {
+                    Ok(_scan_id) => {
                         success_count += 1;
                         if (idx + 1) % 10 == 0 {
                             println!("  Migrated {}/{} scans...", idx + 1, records.len());
@@ -3669,6 +3669,14 @@ fn push_to_analytics(target: &Path, result: &ScanResult) -> Result<(), String> {
     // Create tokio runtime for async operation
     let runtime = tokio::runtime::Runtime::new()
         .map_err(|e| format!("Failed to create async runtime: {}", e))?;
+
+    // Validate endpoint before attempting push for clearer operator feedback.
+    let is_healthy = runtime
+        .block_on(client.health_check())
+        .map_err(|e| format!("Analytics health check failed: {}", e))?;
+    if !is_healthy {
+        return Err("Analytics API is unreachable or unhealthy".to_string());
+    }
 
     // Push to analytics API
     let scan_id = runtime

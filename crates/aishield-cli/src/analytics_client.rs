@@ -64,39 +64,39 @@ impl AnalyticsClient {
             .as_ref()
             .ok_or("Analytics URL not configured")?
             .clone();
-        
+
         let api_key = config
             .api_key
             .as_ref()
             .ok_or("Analytics API key not configured")?
             .clone();
-        
+
         let http_client = Client::builder()
             .timeout(Duration::from_secs(10))
             .build()
             .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-        
+
         Ok(Self {
             http_client,
             base_url,
             api_key,
         })
     }
-    
+
     /// Test connection to analytics API
     pub async fn health_check(&self) -> Result<bool, String> {
         let url = format!("{}/api/health", self.base_url);
-        
+
         let response = self
             .http_client
             .get(&url)
             .send()
             .await
             .map_err(|e| format!("Health check failed: {}", e))?;
-        
+
         Ok(response.status().is_success())
     }
-    
+
     /// Push scan result to analytics API
     pub async fn push_scan_result(
         &self,
@@ -104,7 +104,7 @@ impl AnalyticsClient {
         metadata: &ScanMetadata,
     ) -> Result<String, String> {
         let url = format!("{}/api/v1/scans/ingest", self.base_url);
-        
+
         let request_body = serde_json::json!({
             "org_id": metadata.org_id,
             "team_id": metadata.team_id,
@@ -116,17 +116,17 @@ impl AnalyticsClient {
             "cli_version": metadata.cli_version,
             "scan_result": scan_result,
         });
-        
+
         // Retry logic: 2 attempts with exponential backoff
         let mut last_error = String::new();
-        
+
         for attempt in 0..=2 {
             if attempt > 0 {
                 // Exponential backoff: 1s, 2s
                 let delay = Duration::from_secs(2u64.pow(attempt as u32 - 1));
                 tokio::time::sleep(delay).await;
             }
-            
+
             match self.try_push(&url, &request_body).await {
                 Ok(scan_id) => return Ok(scan_id),
                 Err(e) => {
@@ -138,10 +138,10 @@ impl AnalyticsClient {
                 }
             }
         }
-        
+
         Err(last_error)
     }
-    
+
     /// Attempt to push scan (single try)
     async fn try_push(&self, url: &str, body: &serde_json::Value) -> Result<String, String> {
         let response = self
@@ -153,27 +153,27 @@ impl AnalyticsClient {
             .send()
             .await
             .map_err(|e| format!("Network error: {}", e))?;
-        
+
         let status = response.status();
-        
+
         if status.is_success() {
             #[derive(Deserialize)]
             struct IngestResponse {
                 scan_id: String,
             }
-            
+
             let resp: IngestResponse = response
                 .json()
                 .await
                 .map_err(|e| format!("Failed to parse response: {}", e))?;
-            
+
             Ok(resp.scan_id)
         } else {
             let error_body = response
                 .text()
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
-            
+
             Err(format!("API error ({}): {}", status, error_body))
         }
     }

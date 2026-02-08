@@ -102,6 +102,13 @@ pub struct TimeSeriesPoint {
     pub date: String,
     pub scans: i64,
     pub findings: i64,
+    pub critical: i64,
+    pub high: i64,
+    pub medium: i64,
+    pub low: i64,
+    pub info: i64,
+    pub ai_estimated: i64,
+    pub high_or_above: i64,
     pub ai_ratio: f64,
 }
 
@@ -117,6 +124,7 @@ pub struct TopRule {
 pub struct TopRepo {
     pub repo_id: String,
     pub repo_name: String,
+    pub scans: i64,
     pub findings: i64,
     pub ai_ratio: f64,
 }

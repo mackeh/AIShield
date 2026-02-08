@@ -5,10 +5,7 @@ use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
 /// Insert a scan into the database
-pub async fn insert_scan(
-    pool: &PgPool,
-    request: &IngestScanRequest,
-) -> Result<Uuid, sqlx::Error> {
+pub async fn insert_scan(pool: &PgPool, request: &IngestScanRequest) -> Result<Uuid, sqlx::Error> {
     let scan_id = Uuid::new_v4();
     let now = Utc::now();
 
@@ -109,12 +106,25 @@ pub async fn insert_findings(
     Ok(findings.len())
 }
 
-/// Get analytics summary for an org/team
+/// Get analytics summary for the rolling `days` window.
 pub async fn get_summary(
     pool: &PgPool,
     org_id: Option<&str>,
     team_id: Option<&str>,
+    repo_id: Option<&str>,
     days: i32,
+) -> Result<SummaryStats, sqlx::Error> {
+    get_summary_for_window(pool, org_id, team_id, repo_id, days, 0).await
+}
+
+/// Get analytics summary between `window_start_days_ago` and `window_end_days_ago`.
+pub async fn get_summary_for_window(
+    pool: &PgPool,
+    org_id: Option<&str>,
+    team_id: Option<&str>,
+    repo_id: Option<&str>,
+    window_start_days_ago: i32,
+    window_end_days_ago: i32,
 ) -> Result<SummaryStats, sqlx::Error> {
     let row = sqlx::query(
         r#"
@@ -127,20 +137,24 @@ pub async fn get_summary(
             COALESCE(SUM(low_count), 0) as low,
             COALESCE(SUM(info_count), 0) as info,
             COALESCE(SUM(ai_estimated_count), 0) as ai_estimated,
-            CASE 
-                WHEN SUM(total_findings) > 0 
+            CASE
+                WHEN SUM(total_findings) > 0
                 THEN CAST(SUM(ai_estimated_count) AS FLOAT) / CAST(SUM(total_findings) AS FLOAT)
-                ELSE 0 
+                ELSE 0
             END as ai_ratio
         FROM scans
         WHERE timestamp > NOW() - $1 * INTERVAL '1 day'
-            AND ($2::TEXT IS NULL OR org_id = $2)
-            AND ($3::TEXT IS NULL OR team_id = $3)
+            AND timestamp <= NOW() - $2 * INTERVAL '1 day'
+            AND ($3::TEXT IS NULL OR org_id = $3)
+            AND ($4::TEXT IS NULL OR team_id = $4)
+            AND ($5::TEXT IS NULL OR repo_id = $5)
         "#,
     )
-    .bind(days)
+    .bind(window_start_days_ago)
+    .bind(window_end_days_ago)
     .bind(org_id)
     .bind(team_id)
+    .bind(repo_id)
     .fetch_one(pool)
     .await?;
 
@@ -161,6 +175,8 @@ pub async fn get_summary(
 pub async fn get_time_series(
     pool: &PgPool,
     org_id: Option<&str>,
+    team_id: Option<&str>,
+    repo_id: Option<&str>,
     days: i32,
 ) -> Result<Vec<TimeSeriesPoint>, sqlx::Error> {
     let rows = sqlx::query(
@@ -169,20 +185,31 @@ pub async fn get_time_series(
             DATE(timestamp) as date,
             COUNT(DISTINCT scan_id) as scans,
             COALESCE(SUM(total_findings), 0) as findings,
-            CASE 
-                WHEN SUM(total_findings) > 0 
+            COALESCE(SUM(critical_count), 0) as critical,
+            COALESCE(SUM(high_count), 0) as high,
+            COALESCE(SUM(medium_count), 0) as medium,
+            COALESCE(SUM(low_count), 0) as low,
+            COALESCE(SUM(info_count), 0) as info,
+            COALESCE(SUM(ai_estimated_count), 0) as ai_estimated,
+            COALESCE(SUM(critical_count), 0) + COALESCE(SUM(high_count), 0) as high_or_above,
+            CASE
+                WHEN SUM(total_findings) > 0
                 THEN CAST(SUM(ai_estimated_count) AS FLOAT) / CAST(SUM(total_findings) AS FLOAT)
-                ELSE 0 
+                ELSE 0
             END as ai_ratio
         FROM scans
         WHERE timestamp > NOW() - $1 * INTERVAL '1 day'
             AND ($2::TEXT IS NULL OR org_id = $2)
+            AND ($3::TEXT IS NULL OR team_id = $3)
+            AND ($4::TEXT IS NULL OR repo_id = $4)
         GROUP BY DATE(timestamp)
         ORDER BY date ASC
         "#,
     )
     .bind(days)
     .bind(org_id)
+    .bind(team_id)
+    .bind(repo_id)
     .fetch_all(pool)
     .await?;
 
@@ -192,6 +219,13 @@ pub async fn get_time_series(
             date: row.get::<chrono::NaiveDate, _>("date").to_string(),
             scans: row.get("scans"),
             findings: row.get("findings"),
+            critical: row.get("critical"),
+            high: row.get("high"),
+            medium: row.get("medium"),
+            low: row.get("low"),
+            info: row.get("info"),
+            ai_estimated: row.get("ai_estimated"),
+            high_or_above: row.get("high_or_above"),
             ai_ratio: row.get("ai_ratio"),
         })
         .collect())
@@ -201,6 +235,8 @@ pub async fn get_time_series(
 pub async fn get_top_rules_list(
     pool: &PgPool,
     org_id: Option<&str>,
+    team_id: Option<&str>,
+    repo_id: Option<&str>,
     days: i32,
     limit: i32,
 ) -> Result<Vec<TopRule>, sqlx::Error> {
@@ -215,13 +251,17 @@ pub async fn get_top_rules_list(
         JOIN scans s ON f.scan_id = s.scan_id
         WHERE s.timestamp > NOW() - $1 * INTERVAL '1 day'
             AND ($2::TEXT IS NULL OR s.org_id = $2)
+            AND ($3::TEXT IS NULL OR s.team_id = $3)
+            AND ($4::TEXT IS NULL OR s.repo_id = $4)
         GROUP BY f.rule_id, f.rule_title, f.severity
         ORDER BY count DESC
-        LIMIT $3
+        LIMIT $5
         "#,
     )
     .bind(days)
     .bind(org_id)
+    .bind(team_id)
+    .bind(repo_id)
     .bind(limit)
     .fetch_all(pool)
     .await?;
@@ -241,6 +281,8 @@ pub async fn get_top_rules_list(
 pub async fn get_top_repos_list(
     pool: &PgPool,
     org_id: Option<&str>,
+    team_id: Option<&str>,
+    repo_id: Option<&str>,
     days: i32,
     limit: i32,
 ) -> Result<Vec<TopRepo>, sqlx::Error> {
@@ -249,19 +291,24 @@ pub async fn get_top_repos_list(
         SELECT
             repo_id,
             repo_name,
+            COUNT(DISTINCT scan_id) as scans,
             SUM(total_findings) as findings,
             AVG(ai_ratio) as ai_ratio
         FROM scans
         WHERE timestamp > NOW() - $1 * INTERVAL '1 day'
             AND ($2::TEXT IS NULL OR org_id = $2)
+            AND ($3::TEXT IS NULL OR team_id = $3)
+            AND ($4::TEXT IS NULL OR repo_id = $4)
             AND repo_id IS NOT NULL
         GROUP BY repo_id, repo_name
         ORDER BY findings DESC
-        LIMIT $3
+        LIMIT $5
         "#,
     )
     .bind(days)
     .bind(org_id)
+    .bind(team_id)
+    .bind(repo_id)
     .bind(limit)
     .fetch_all(pool)
     .await?;
@@ -271,6 +318,7 @@ pub async fn get_top_repos_list(
         .map(|row| TopRepo {
             repo_id: row.get("repo_id"),
             repo_name: row.get("repo_name"),
+            scans: row.get("scans"),
             findings: row.get("findings"),
             ai_ratio: row.get::<f64, _>("ai_ratio"),
         })

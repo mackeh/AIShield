@@ -1,6 +1,6 @@
 # AIShield - Project Status
 
-## Current Status: Week 4 Complete ✅
+## Current Status: Week 5 Reliability Hardening In Progress 🚧
 
 **Last Updated**: February 8, 2026
 
@@ -9,20 +9,21 @@
 - ✅ **Week 2**: Analytics API Server (100%)
 - ✅ **Week 3**: CLI Integration (100%)
 - ✅ **Week 4**: Dashboard Upgrade (100%)
-- 📋 **Week 5+**: Advanced Features (Planned)
+- 🚧 **Week 5**: API mode stabilization, trend deltas, reporting polish (In Progress)
 
-**Overall Completion**: 80% (Core platform ready)
+**Overall Completion**: 85% (Core platform shipped, quality hardening active)
 
 ### Quick Links
-- [📊 Final Summary](file://.gemini/antigravity/brain/2f2ff23a-291b-4271-81e2-5816e0465957/FINAL_SUMMARY.md)
-- [📝 Task Tracker](file://.gemini/antigravity/brain/2f2ff23a-291b-4271-81e2-5816e0465957/task.md)
-- [🚀 Week 4 Walkthrough](file://.gemini/antigravity/brain/2f2ff23a-291b-4271-81e2-5816e0465957/week4_dashboard_walkthrough.md)
-- [⚡ Quick Start Guide](file://dashboard/QUICKSTART.md)
+- [⚡ Dashboard Quick Start](dashboard/QUICKSTART.md)
+- [🧪 Week 5 Testing Guide](WEEK5_TESTING.md)
+- [📊 Dashboard E2E Report](dashboard/E2E_TEST_REPORT.md)
+- [🗺️ Roadmap Snapshot](docs/roadmap.md)
 
 ### Next Steps
-1. Run manual E2E testing (see `dashboard/E2E_TEST_REPORT.md`)
-2. Deploy to staging environment
-3. Begin Week 5 development
+1. Run manual + scripted E2E checks in API mode (`WEEK5_TESTING.md`)
+2. Validate analytics endpoint compatibility against a seeded PostgreSQL instance
+3. Address remaining warning-level cleanup in CLI and analytics crates
+4. Deploy stabilized dashboard/API stack to staging
 
 ---
-*For detailed information, see [FINAL_SUMMARY.md](.gemini/antigravity/brain/*/FINAL_SUMMARY.md)*
+*For implementation direction, see `project.md` and `docs/roadmap.md`.*

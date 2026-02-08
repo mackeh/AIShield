@@ -52,6 +52,7 @@ export class AnalyticsAPIClient {
     const params = new URLSearchParams();
     if (filters.org_id) params.append('org_id', filters.org_id);
     if (filters.team_id) params.append('team_id', filters.team_id);
+    if (filters.repo_id) params.append('repo_id', filters.repo_id);
     if (filters.days) params.append('days', filters.days);
    
     return this.request(`/api/v1/analytics/summary?${params}`);
@@ -89,24 +90,26 @@ export class AnalyticsAPIClient {
     if (filters.team_id) params.append('team_id', filters.team_id);
     if (filters.days) params.append('days', filters.days);
     
-    const url = `/v1/analytics/ai-metrics?${params}`;
+    const url = `/api/v1/analytics/ai-metrics?${params}`;
     console.log(`[API Client] Fetching AI metrics: ${url}`);
     
     return this.request(url);
   }
-}
 
   /**
    * Generate compliance report
    */
   async generateReport(params) {
+    if (!this.isConfigured()) {
+      throw new Error('API client not configured');
+    }
+
     const query = new URLSearchParams(params);
-    const token = this.apiKey;
     
     // We fetch as blob to handle file download
     const response = await fetch(`${this.baseUrl}/api/v1/reports/compliance?${query}`, {
       headers: {
-        'x-api-key': token
+        'x-api-key': this.apiKey,
       }
     });
 

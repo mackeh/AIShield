@@ -412,18 +412,19 @@ More troubleshooting: [docs/troubleshooting.md](docs/troubleshooting.md) _(comin
 **Phase Completion**:
 
 - ✅ Phase 1 (Foundation): Complete
-- ☑️ Phase 2 (Intelligence): 80% complete
-- ☑️ Phase 3 (Platform): 60% complete
+- ✅ Phase 2 (Intelligence): Core deliverables complete
+- ☑️ Phase 3+ (Platform/Ecosystem): Core integrations shipped, reliability hardening in progress
 
 **Recent Additions**:
 
 - 169 rules across 13 languages
-- VS Code extension with advanced UX
-- SAST bridge integration
+- Analytics API + dashboard (AI metrics and compliance reporting)
+- VS Code extension GA polish (security lens, quick fixes, telemetry)
+- ONNX classifier model path with heuristic fallback
 - Expanded Kotlin/Swift rulepacks (20 rules each)
-- VitePress documentation site
+- VitePress documentation site and week-by-week testing guides
 
-Roadmap: [project.md](project.md) | [docs/roadmap.md](docs/roadmap.md)
+Tracking docs: [PROJECT_STATUS.md](PROJECT_STATUS.md) | [WEEK5_TESTING.md](WEEK5_TESTING.md) | [docs/roadmap.md](docs/roadmap.md)
 
 ---
 

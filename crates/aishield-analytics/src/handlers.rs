@@ -1,12 +1,12 @@
 use crate::{auth, db, models::*};
-use std::sync::Arc;
 use axum::{
     extract::{Query, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Json, Response},
 };
-use tracing::{debug, error, info, warn};
 use csv::Writer;
+use std::sync::Arc;
+use tracing::{debug, error, info, warn};
 
 /// Custom error type for API handlers
 #[derive(Debug)]
@@ -110,8 +110,8 @@ pub async fn get_analytics_summary(
     verify_auth(&headers, &state.api_key_hash)?;
 
     debug!(
-        "Getting analytics summary: org={:?}, team={:?}, days={}",
-        query.org_id, query.team_id, query.days
+        "Getting analytics summary: org={:?}, team={:?}, repo={:?}, days={}",
+        query.org_id, query.team_id, query.repo_id, query.days
     );
 
     // Get current period summary
@@ -119,33 +119,72 @@ pub async fn get_analytics_summary(
         &state.db_pool,
         query.org_id.as_deref(),
         query.team_id.as_deref(),
+        query.repo_id.as_deref(),
+        query.days,
+    )
+    .await?;
+
+    // Compare against previous window with same size.
+    let previous = db::get_summary_for_window(
+        &state.db_pool,
+        query.org_id.as_deref(),
+        query.team_id.as_deref(),
+        query.repo_id.as_deref(),
+        query.days * 2,
         query.days,
     )
     .await?;
 
     // Get time series
-    let time_series = db::get_time_series(&state.db_pool, query.org_id.as_deref(), query.days)
-        .await
-        .unwrap_or_default();
+    let time_series = db::get_time_series(
+        &state.db_pool,
+        query.org_id.as_deref(),
+        query.team_id.as_deref(),
+        query.repo_id.as_deref(),
+        query.days,
+    )
+    .await
+    .unwrap_or_default();
 
     // Get top rules
-    let top_rules =
-        db::get_top_rules_list(&state.db_pool, query.org_id.as_deref(), query.days, query.limit)
-            .await
-            .unwrap_or_default();
+    let top_rules = db::get_top_rules_list(
+        &state.db_pool,
+        query.org_id.as_deref(),
+        query.team_id.as_deref(),
+        query.repo_id.as_deref(),
+        query.days,
+        query.limit,
+    )
+    .await
+    .unwrap_or_default();
 
     // Get top repos
-    let top_repos =
-        db::get_top_repos_list(&state.db_pool, query.org_id.as_deref(), query.days, query.limit)
-            .await
-            .unwrap_or_default();
+    let top_repos = db::get_top_repos_list(
+        &state.db_pool,
+        query.org_id.as_deref(),
+        query.team_id.as_deref(),
+        query.repo_id.as_deref(),
+        query.days,
+        query.limit,
+    )
+    .await
+    .unwrap_or_default();
+
+    let trend = TrendStats {
+        findings_delta_pct: percent_change(
+            summary.total_findings as f64,
+            previous.total_findings as f64,
+        ),
+        ai_ratio_delta_pct: percent_change(summary.ai_ratio * 100.0, previous.ai_ratio * 100.0),
+        scans_delta_pct: percent_change(summary.total_scans as f64, previous.total_scans as f64),
+    };
 
     Ok(Json(AnalyticsSummary {
         period: format!("{} days", query.days),
         org_id: query.org_id,
         team_id: query.team_id,
         summary,
-        trend: None, // TODO: Calculate trend vs previous period
+        trend: Some(trend),
         time_series,
         top_rules,
         top_repos,
@@ -161,8 +200,14 @@ pub async fn get_trends(
     // Verify authentication
     verify_auth(&headers, &state.api_key_hash)?;
 
-    let time_series = db::get_time_series(&state.db_pool, query.org_id.as_deref(), query.days)
-        .await?;
+    let time_series = db::get_time_series(
+        &state.db_pool,
+        query.org_id.as_deref(),
+        query.team_id.as_deref(),
+        query.repo_id.as_deref(),
+        query.days,
+    )
+    .await?;
 
     Ok(Json(time_series))
 }
@@ -176,18 +221,36 @@ pub async fn get_top_rules(
     // Verify authentication
     verify_auth(&headers, &state.api_key_hash)?;
 
-    let top_rules =
-        db::get_top_rules_list(&state.db_pool, query.org_id.as_deref(), query.days, query.limit)
-            .await?;
+    let top_rules = db::get_top_rules_list(
+        &state.db_pool,
+        query.org_id.as_deref(),
+        query.team_id.as_deref(),
+        query.repo_id.as_deref(),
+        query.days,
+        query.limit,
+    )
+    .await?;
 
     Ok(Json(top_rules))
 }
 
+fn percent_change(current: f64, previous: f64) -> Option<f64> {
+    if previous <= 0.0 {
+        if current <= 0.0 {
+            return Some(0.0);
+        }
+        return None;
+    }
+    Some(((current - previous) / previous * 1000.0).round() / 10.0)
+}
 
 /// GET /api/v1/scans - List scans
 #[derive(Debug, serde::Deserialize)]
 pub struct ScanListQuery {
     pub org_id: Option<String>,
+    pub team_id: Option<String>,
+    pub repo_id: Option<String>,
+    pub branch: Option<String>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
 }
@@ -202,47 +265,50 @@ pub async fn list_scans(
     let limit = params.limit.unwrap_or(100).min(1000);
     let offset = params.offset.unwrap_or(0);
 
-    // Use runtime query to avoid compile-time DB checks
-    let (query_str, org_filter) = if let Some(org_id) = params.org_id {
-        (
-            "SELECT scan_id, org_id, team_id::text, repo_id, repo_name, branch, commit_sha, 
-                    scanned_at, total_findings, critical, high, medium, low, info, ai_estimated_count
-             FROM scans WHERE org_id = $1
-             ORDER BY scanned_at DESC LIMIT $2 OFFSET $3",
-            Some(org_id)
-        )
-    } else {
-        (
-            "SELECT scan_id, org_id, team_id::text, repo_id, repo_name, branch, commit_sha, 
-                    scanned_at, total_findings, critical, high, medium, low, info, ai_estimated_count
-             FROM scans ORDER BY scanned_at DESC LIMIT $1 OFFSET $2",
-            None
-        )
-    };
-
-    let rows = if let Some(org_id) = org_filter {
-        sqlx::query(query_str)
-            .bind(&org_id)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(&state.db_pool)
-            .await?
-    } else {
-        sqlx::query(query_str)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(&state.db_pool)
-            .await?
-    };
+    let rows = sqlx::query(
+        r#"
+        SELECT
+            scan_id::text as scan_id,
+            org_id,
+            team_id,
+            repo_id,
+            repo_name,
+            branch,
+            commit_sha,
+            timestamp as scanned_at,
+            total_findings,
+            critical_count as critical,
+            high_count as high,
+            medium_count as medium,
+            low_count as low,
+            info_count as info,
+            ai_estimated_count
+        FROM scans
+        WHERE ($1::TEXT IS NULL OR org_id = $1)
+            AND ($2::TEXT IS NULL OR team_id = $2)
+            AND ($3::TEXT IS NULL OR repo_id = $3)
+            AND ($4::TEXT IS NULL OR branch = $4)
+        ORDER BY timestamp DESC
+        LIMIT $5 OFFSET $6
+        "#,
+    )
+    .bind(&params.org_id)
+    .bind(&params.team_id)
+    .bind(&params.repo_id)
+    .bind(&params.branch)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(&state.db_pool)
+    .await?;
 
     let scans: Vec<serde_json::Value> = rows.iter().map(|row| {
         use sqlx::Row;
         serde_json::json!({
             "scan_id": row.get::<String, _>("scan_id"),
-            "org_id": row.get::<String, _>("org_id"),
+            "org_id": row.get::<Option<String>, _>("org_id"),
             "team_id": row.get::<Option<String>, _>("team_id"),
-            "repo_id": row.get::<String, _>("repo_id"),
-            "repo_name": row.get::<String, _>("repo_name"),
+            "repo_id": row.get::<Option<String>, _>("repo_id"),
+            "repo_name": row.get::<Option<String>, _>("repo_name"),
             "branch": row.get::<Option<String>, _>("branch"),
             "commit_sha": row.get::<Option<String>, _>("commit_sha"),
             "scanned_at": row.get::<chrono::DateTime<chrono::Utc>, _>("scanned_at").to_rfc3339(),
@@ -308,9 +374,9 @@ pub struct PatternBreakdown {
 
 #[derive(Debug, serde::Serialize)]
 pub struct ConfidenceDistribution {
-    pub high: i64,    // 80-100%
-    pub medium: i64,  // 60-80%
-    pub low: i64,     // <60%
+    pub high: i64,   // 80-100%
+    pub medium: i64, // 60-80%
+    pub low: i64,    // <60%
 }
 
 pub async fn ai_metrics(
@@ -319,60 +385,65 @@ pub async fn ai_metrics(
     Query(params): Query<AIMetricsQuery>,
 ) -> Result<Json<AIMetricsResponse>, ApiError> {
     verify_auth(&headers, &state.api_key_hash)?;
-    
+
     let days = params.days.unwrap_or(30);
     info!("Fetching AI metrics for {} days", days);
-    
-    // Get total findings and AI findings count
+
+    // Treat ai_confidence >= 0.6 as AI-generated for stable, schema-compatible metrics.
     let summary_query = r#"
         SELECT 
-            COUNT(*) FILTER (WHERE is_ai_generated = true) as ai_count,
+            COUNT(*) FILTER (WHERE COALESCE(f.ai_confidence, 0) >= 0.6) as ai_count,
             COUNT(*) as total_count
         FROM findings f
-        INNER JOIN scans s ON f.scan_id = s.id
-        WHERE s.scanned_at >= NOW() - INTERVAL '1 day' * $1
+        INNER JOIN scans s ON f.scan_id = s.scan_id
+        WHERE s.timestamp >= NOW() - INTERVAL '1 day' * $1
             AND ($2::text IS NULL OR s.org_id = $2)
             AND ($3::text IS NULL OR s.team_id = $3)
     "#;
-    
+
     let summary_row: (i64, i64) = sqlx::query_as(summary_query)
         .bind(days)
         .bind(&params.org_id)
         .bind(&params.team_id)
         .fetch_one(&state.db_pool)
         .await?;
-    
+
     let (ai_count, total_count) = summary_row;
     let ai_percentage = if total_count > 0 {
         (ai_count as f64 / total_count as f64) * 100.0
     } else {
         0.0
     };
-    
+
     // Get tool breakdown
     let tool_query = r#"
         SELECT 
-            COALESCE(f.ai_tool, 'Unknown') as tool,
+            CASE
+                WHEN COALESCE(f.ai_tendency, '') ILIKE '%copilot%' THEN 'GitHub Copilot'
+                WHEN COALESCE(f.ai_tendency, '') ILIKE '%chatgpt%' THEN 'ChatGPT'
+                WHEN COALESCE(f.ai_tendency, '') ILIKE '%claude%' THEN 'Claude'
+                ELSE 'AI-assisted'
+            END as tool,
             COUNT(*) as count,
-            AVG(COALESCE(f.confidence_score, 0.0)) as avg_confidence
+            AVG(COALESCE(f.ai_confidence, 0.0) * 100.0) as avg_confidence
         FROM findings f
-        INNER JOIN scans s ON f.scan_id = s.id
-        WHERE s.scanned_at >= NOW() - INTERVAL '1 day' * $1
-            AND f.is_ai_generated = true
+        INNER JOIN scans s ON f.scan_id = s.scan_id
+        WHERE s.timestamp >= NOW() - INTERVAL '1 day' * $1
+            AND COALESCE(f.ai_confidence, 0) >= 0.6
             AND ($2::text IS NULL OR s.org_id = $2)
             AND ($3::text IS NULL OR s.team_id = $3)
-        GROUP BY f.ai_tool
+        GROUP BY 1
         ORDER BY count DESC
         LIMIT 10
     "#;
-    
+
     let tool_rows: Vec<(String, i64, f64)> = sqlx::query_as(tool_query)
         .bind(days)
         .bind(&params.org_id)
         .bind(&params.team_id)
         .fetch_all(&state.db_pool)
         .await?;
-    
+
     let by_tool: Vec<ToolBreakdown> = tool_rows
         .into_iter()
         .map(|(tool, count, avg_conf)| {
@@ -389,66 +460,72 @@ pub async fn ai_metrics(
             }
         })
         .collect();
-    
+
     // Get pattern breakdown
     let pattern_query = r#"
         SELECT 
-            f.pattern_id,
-            f.message as description,
+            f.rule_id as pattern_id,
+            COALESCE(f.rule_title, f.rule_id) as description,
             COUNT(*) as count,
-            f.ai_tool as tool,
-            AVG(COALESCE(f.confidence_score, 0.0)) as avg_confidence
+            CASE
+                WHEN COALESCE(f.ai_tendency, '') ILIKE '%copilot%' THEN 'GitHub Copilot'
+                WHEN COALESCE(f.ai_tendency, '') ILIKE '%chatgpt%' THEN 'ChatGPT'
+                WHEN COALESCE(f.ai_tendency, '') ILIKE '%claude%' THEN 'Claude'
+                ELSE 'AI-assisted'
+            END as tool,
+            AVG(COALESCE(f.ai_confidence, 0.0) * 100.0) as avg_confidence
         FROM findings f
-        INNER JOIN scans s ON f.scan_id = s.id
-        WHERE s.scanned_at >= NOW() - INTERVAL '1 day' * $1
-            AND f.is_ai_generated = true
+        INNER JOIN scans s ON f.scan_id = s.scan_id
+        WHERE s.timestamp >= NOW() - INTERVAL '1 day' * $1
+            AND COALESCE(f.ai_confidence, 0) >= 0.6
             AND ($2::text IS NULL OR s.org_id = $2)
             AND ($3::text IS NULL OR s.team_id = $3)
-        GROUP BY f.pattern_id, f.message, f.ai_tool
+        GROUP BY 1, 2, 4
         ORDER BY count DESC
         LIMIT 10
     "#;
-    
-    let pattern_rows: Vec<(String, String, i64, Option<String>, f64)> = 
+
+    let pattern_rows: Vec<(String, String, i64, Option<String>, f64)> =
         sqlx::query_as(pattern_query)
             .bind(days)
             .bind(&params.org_id)
             .bind(&params.team_id)
             .fetch_all(&state.db_pool)
             .await?;
-    
+
     let by_pattern: Vec<PatternBreakdown> = pattern_rows
         .into_iter()
-        .map(|(pattern_id, desc, count, tool, avg_conf)| PatternBreakdown {
-            pattern_id,
-            description: desc,
-            count,
-            tool,
-            avg_confidence: avg_conf,
-        })
+        .map(
+            |(pattern_id, desc, count, tool, avg_conf)| PatternBreakdown {
+                pattern_id,
+                description: desc,
+                count,
+                tool,
+                avg_confidence: avg_conf,
+            },
+        )
         .collect();
-    
+
     // Get confidence distribution
     let conf_query = r#"
         SELECT 
-            COUNT(*) FILTER (WHERE f.confidence_score >= 80) as high,
-            COUNT(*) FILTER (WHERE f.confidence_score >= 60 AND f.confidence_score < 80) as medium,
-            COUNT(*) FILTER (WHERE f.confidence_score < 60) as low
+            COUNT(*) FILTER (WHERE f.ai_confidence >= 0.8) as high,
+            COUNT(*) FILTER (WHERE f.ai_confidence >= 0.6 AND f.ai_confidence < 0.8) as medium,
+            COUNT(*) FILTER (WHERE f.ai_confidence > 0 AND f.ai_confidence < 0.6) as low
         FROM findings f
-        INNER JOIN scans s ON f.scan_id = s.id
-        WHERE s.scanned_at >= NOW() - INTERVAL '1 day' * $1
-            AND f.is_ai_generated = true
+        INNER JOIN scans s ON f.scan_id = s.scan_id
+        WHERE s.timestamp >= NOW() - INTERVAL '1 day' * $1
             AND ($2::text IS NULL OR s.org_id = $2)
             AND ($3::text IS NULL OR s.team_id = $3)
     "#;
-    
+
     let (high, medium, low): (i64, i64, i64) = sqlx::query_as(conf_query)
         .bind(days)
         .bind(&params.org_id)
         .bind(&params.team_id)
         .fetch_one(&state.db_pool)
         .await?;
-    
+
     Ok(Json(AIMetricsResponse {
         summary: AIMetricsSummary {
             total_ai_findings: ai_count,
@@ -468,12 +545,10 @@ pub async fn ai_metrics(
 // COMPLIANCE REPORT CSV export
 // Appended to handlers.rs
 
-
-
 #[derive(Debug, serde::Deserialize)]
 pub struct ComplianceReportQuery {
-    pub org_id: String,  // Required
-    pub format: String,  //CSV format
+    pub org_id: String, // Required
+    pub format: String, //CSV format
     pub start_date: Option<String>,
     pub end_date: Option<String>,
 }
@@ -484,48 +559,85 @@ pub async fn generate_compliance_report(
     Query(params): Query<ComplianceReportQuery>,
 ) -> Result<Response, ApiError> {
     verify_auth(&headers, &state.api_key_hash)?;
-    
+
+    let requested_format = params.format.to_lowercase();
+    if requested_format != "csv" && requested_format != "pdf" {
+        return Err(ApiError {
+            status: StatusCode::BAD_REQUEST,
+            message: "Unsupported format. Allowed values: csv, pdf".to_string(),
+        });
+    }
+
     info!("Generating compliance report for org: {}", params.org_id);
-    
+
     // Default date range
-    let end_date = params.end_date.unwrap_or_else(|| chrono::Utc::now().format("%Y-%m-%d").to_string());
-    let start_date = params.start_date.unwrap_or_else(|| (chrono::Utc::now() - chrono::Duration::days(30)).format("%Y-%m-%d").to_string());
-    
+    let end_date = params
+        .end_date
+        .unwrap_or_else(|| chrono::Utc::now().format("%Y-%m-%d").to_string());
+    let start_date = params.start_date.unwrap_or_else(|| {
+        (chrono::Utc::now() - chrono::Duration::days(30))
+            .format("%Y-%m-%d")
+            .to_string()
+    });
+
     // Fetch scan data
     let query = r#"
         SELECT 
             s.org_id,
             COALESCE(s.team_id, 'N/A') as team_id,
             COALESCE(s.repo_id, 'N/A') as repo_id,
-            s.scanned_at,
+            s.timestamp as scanned_at,
             COUNT(f.id) as total_findings,
             COUNT(f.id) FILTER (WHERE f.severity = 'critical') as critical,
             COUNT(f.id) FILTER (WHERE f.severity = 'high') as high,
             COUNT(f.id) FILTER (WHERE f.severity = 'medium') as medium,
             COUNT(f.id) FILTER (WHERE f.severity = 'low') as low
         FROM scans s
-        LEFT JOIN findings f ON s.id = f.scan_id
+        LEFT JOIN findings f ON s.scan_id = f.scan_id
         WHERE s.org_id = $1
-            AND s.scanned_at >= $2::date
-            AND s.scanned_at <= $3::date
-        GROUP BY s.org_id, s.team_id, s.repo_id, s.scanned_at
-        ORDER BY s.scanned_at DESC
+            AND s.timestamp >= $2::date
+            AND s.timestamp <= $3::date + INTERVAL '1 day'
+        GROUP BY s.org_id, s.team_id, s.repo_id, s.timestamp
+        ORDER BY s.timestamp DESC
     "#;
-    
-    let rows: Vec<(String, String, String, chrono::NaiveDateTime, i64, i64, i64, i64, i64)> = 
-        sqlx::query_as(query)
-            .bind(&params.org_id)
-            .bind(&start_date)
-            .bind(&end_date)
-            .fetch_all(&state.db_pool)
-            .await?;
-    
+
+    let rows: Vec<(
+        String,
+        String,
+        String,
+        chrono::DateTime<chrono::Utc>,
+        i64,
+        i64,
+        i64,
+        i64,
+        i64,
+    )> = sqlx::query_as(query)
+        .bind(&params.org_id)
+        .bind(&start_date)
+        .bind(&end_date)
+        .fetch_all(&state.db_pool)
+        .await?;
+
     // Generate CSV
     let mut wtr = Writer::from_writer(vec![]);
-    
-    wtr.write_record(&["Organization", "Team", "Repository", "Scan Date", "Total Findings", "Critical", "High", "Medium", "Low", "Compliance Score"])
-        .map_err(|e| ApiError { status: StatusCode::INTERNAL_SERVER_ERROR, message: format!("CSV error: {}", e) })?;
-    
+
+    wtr.write_record(&[
+        "Organization",
+        "Team",
+        "Repository",
+        "Scan Date",
+        "Total Findings",
+        "Critical",
+        "High",
+        "Medium",
+        "Low",
+        "Compliance Score",
+    ])
+    .map_err(|e| ApiError {
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+        message: format!("CSV error: {}", e),
+    })?;
+
     for row in rows {
         let (org, team, repo, date, total, critical, high, medium, low) = row;
         let compliance_score = if total > 0 {
@@ -534,13 +646,56 @@ pub async fn generate_compliance_report(
         } else {
             "100.0%".to_string()
         };
-        
-        wtr.write_record(&[org, team, repo, date.format("%Y-%m-%d %H:%M:%S").to_string(), total.to_string(), critical.to_string(), high.to_string(), medium.to_string(), low.to_string(), compliance_score])
-            .map_err(|e| ApiError { status: StatusCode::INTERNAL_SERVER_ERROR, message: format!("CSV error: {}", e) })?;
+
+        wtr.write_record(&[
+            org,
+            team,
+            repo,
+            date.format("%Y-%m-%d %H:%M:%S").to_string(),
+            total.to_string(),
+            critical.to_string(),
+            high.to_string(),
+            medium.to_string(),
+            low.to_string(),
+            compliance_score,
+        ])
+        .map_err(|e| ApiError {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            message: format!("CSV error: {}", e),
+        })?;
     }
-    
-    let data = wtr.into_inner().map_err(|e| ApiError { status: StatusCode::INTERNAL_SERVER_ERROR, message: format!("CSV error: {}", e) })?;
-    let filename = format!("compliance-report-{}.csv", chrono::Utc::now().format("%Y%m%d"));
-    
-    Ok((StatusCode::OK, [("Content-Type", "text/csv"), ("Content-Disposition", &format!("attachment; filename=\"{}\"", filename))], data).into_response())
+
+    let data = wtr.into_inner().map_err(|e| ApiError {
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+        message: format!("CSV error: {}", e),
+    })?;
+    let filename = if requested_format == "pdf" {
+        format!(
+            "compliance-report-{}.txt",
+            chrono::Utc::now().format("%Y%m%d")
+        )
+    } else {
+        format!(
+            "compliance-report-{}.csv",
+            chrono::Utc::now().format("%Y%m%d")
+        )
+    };
+    let content_type = if requested_format == "pdf" {
+        "text/plain"
+    } else {
+        "text/csv"
+    };
+
+    Ok((
+        StatusCode::OK,
+        [
+            ("Content-Type", content_type),
+            (
+                "Content-Disposition",
+                &format!("attachment; filename=\"{}\"", filename),
+            ),
+        ],
+        data,
+    )
+        .into_response())
 }

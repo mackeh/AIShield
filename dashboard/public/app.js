@@ -14,12 +14,13 @@ const severityBody = document.querySelector('#severity-table tbody');
 const historyFile = document.getElementById('history-file');
 const ingestCmd = document.getElementById('ingest-cmd');
 const daysSelect = document.getElementById('days');
-const refreshBtn = document.getElementById('refresh');
+const refreshBtn = document.getElementById('refresh-btn');
 const settingsBtn = document.getElementById('settings-btn');
 const orgFilter = document.getElementById('org-filter');
 const teamFilter = document.getElementById('team-filter');
 const repoFilter = document.getElementById('repo-filter');
 const filterGroup = document.getElementById('filter-group');
+const aiMetricsPanel = document.getElementById('ai-metrics-panel');
 
 const fmt = new Intl.NumberFormat();
 
@@ -47,7 +48,106 @@ orgFilter.addEventListener('change', () => {
 teamFilter.addEventListener('change', () => load());
 repoFilter.addEventListener('change', () => load());
 
-load().catch(console.error);
+load().catch((err) => {
+  console.error(err);
+  updateModeBadge('error');
+});
+
+function normalizeApiSummary(apiSummary = {}) {
+  const scans = Number(apiSummary.total_scans || 0);
+  const findings = Number(apiSummary.total_findings || 0);
+  const severity = {
+    critical: Number(apiSummary.critical || 0),
+    high: Number(apiSummary.high || 0),
+    medium: Number(apiSummary.medium || 0),
+    low: Number(apiSummary.low || 0),
+    info: Number(apiSummary.info || 0),
+  };
+
+  return {
+    scans,
+    findings,
+    severity,
+    high_or_above: severity.critical + severity.high,
+    ai_estimated: Number(apiSummary.ai_estimated || 0),
+    ai_ratio: Number(apiSummary.ai_ratio || 0),
+    avg_findings_per_scan: scans > 0 ? Number((findings / scans).toFixed(2)) : 0,
+  };
+}
+
+function normalizeApiSeries(points = []) {
+  return points.map((point) => {
+    const findings = Number(point.findings || 0);
+    const critical = Number(point.critical || 0);
+    const high = Number(point.high || 0);
+    const medium = Number(point.medium || 0);
+    const low = Number(point.low || 0);
+    const info = Number(point.info || 0);
+    const aiRatio = Number(point.ai_ratio || 0);
+    const aiEstimated = Number(
+      point.ai_estimated !== undefined && point.ai_estimated !== null
+        ? point.ai_estimated
+        : Math.round(findings * aiRatio),
+    );
+
+    return {
+      day: point.date || '-',
+      scans: Number(point.scans || 0),
+      findings,
+      critical,
+      high,
+      medium,
+      low,
+      info,
+      ai_estimated: aiEstimated,
+      high_or_above: Number(point.high_or_above || critical + high),
+      ai_ratio: aiRatio,
+    };
+  });
+}
+
+function normalizeApiTopRules(rows = []) {
+  return rows.map((row) => ({
+    rule: row.rule_title || row.rule_id || 'Unknown rule',
+    count: Number(row.count || 0),
+  }));
+}
+
+function normalizeApiTopTargets(rows = []) {
+  return rows.map((row) => ({
+    target: row.repo_name || row.repo_id || 'unknown-repo',
+    findings: Number(row.findings || 0),
+    scans: Number(row.scans || 0),
+  }));
+}
+
+function buildApiPayload(summaryResponse, filters) {
+  const summary = normalizeApiSummary(summaryResponse.summary || {});
+  const series = normalizeApiSeries(summaryResponse.time_series || []);
+  const payload = {
+    summary,
+    series,
+    top_rules: normalizeApiTopRules(summaryResponse.top_rules || []),
+    top_targets: normalizeApiTopTargets(summaryResponse.top_repos || []),
+    comparison: summaryResponse.trend || {},
+    generated_at: new Date().toISOString(),
+    metadata: {
+      days_with_activity: series.length,
+      total_scans_available: summary.scans,
+    },
+    history_file: `API Mode (${summaryResponse.org_id || 'all orgs'})`,
+  };
+
+  if (filters.org_id || filters.team_id || filters.repo_id) {
+    const filterParts = [];
+    if (filters.org_id) filterParts.push(`org:${filters.org_id}`);
+    if (filters.team_id) filterParts.push(`team:${filters.team_id}`);
+    if (filters.repo_id) filterParts.push(`repo:${filters.repo_id}`);
+    payload.history_file = `API Mode (${filterParts.join(', ')})`;
+  }
+
+  return payload;
+}
 
 async function load() {
   const days = Number(daysSelect.value || 30);
@@ -69,32 +169,10 @@ async function load() {
       if (repoFilter.value) filters.repo_id = repoFilter.value;
       
       const summary = await apiClient.fetchSummary(filters);
-      
-      // Transform API response to match existing dashboard format
-      const payload = {
-        summary: summary.summary,
-        series: summary.time_series,
-        top_rules: summary.top_rules,
-        top_targets: summary.top_repos, // API returns top_repos
-        comparison: summary.trend || {},
-        generated_at: new Date().toISOString(),
-        metadata: {
-          days_with_activity: summary.time_series?.length || 0,
-          total_scans_available: summary.summary?.scans || 0,
-        },
-        history_file: `API Mode (${summary.org_id || 'all orgs'})`,
-      };
-      
-      // Update history file display with filters
-      if (filters.org_id || filters.team_id || filters.repo_id) {
-        const filterParts = [];
-        if (filters.org_id) filterParts.push(`org:${filters.org_id}`);
-        if (filters.team_id) filterParts.push(`team:${filters.team_id}`);
-        if (filters.repo_id) filterParts.push(`repo:${filters.repo_id}`);
-        payload.history_file = `API Mode (${filterParts.join(', ')})`;
-      }
+      const payload = buildApiPayload(summary, filters);
       
       renderDashboard(payload);
+      await renderAIMetrics();
       return;
     } catch (error) {
       console.warn('API fetch failed, falling back to file-based mode:', error.message);
@@ -112,6 +190,9 @@ async function load() {
 
   const payload = await response.json();
   renderDashboard(payload);
+  if (aiMetricsPanel) {
+    aiMetricsPanel.style.display = 'none';
+  }
 }
 
 function renderDashboard(payload) {

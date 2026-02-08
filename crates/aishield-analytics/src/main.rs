@@ -1,13 +1,8 @@
 use axum::{
-    extract::{Query, State},
-    http::StatusCode,
-    response::IntoResponse,
     routing::{get, post},
-    Json, Router,
+    Router,
 };
-use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPoolOptions;
-use sqlx::PgPool;
 use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -81,7 +76,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/v1/scans", get(handlers::list_scans))
         .route("/api/v1/analytics/summary", get(get_analytics_summary))
         .route("/api/v1/analytics/ai-metrics", get(handlers::ai_metrics))
-        .route("/api/v1/reports/compliance", get(handlers::generate_compliance_report))
+        .route(
+            "/api/v1/reports/compliance",
+            get(handlers::generate_compliance_report),
+        )
         .route("/api/v1/analytics/trends", get(get_trends))
         .route("/api/v1/analytics/top-rules", get(get_top_rules))
         .with_state(state)

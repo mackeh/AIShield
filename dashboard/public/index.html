@@ -103,8 +103,17 @@
           <h2>Pipeline Tips</h2>
           <p class="muted">
             Ingest JSON/SARIF reports from CI to keep dashboard history active.
+          </p>
+          <pre id="ingest-cmd" class="cmd"></pre>
+        </div>
+        <div>
+          <h2>Snapshot</h2>
+          <ul id="snapshot" class="list"></ul>
+        </div>
+      </section>
+
       <!-- AI Metrics Dashboard -->
-      <section class="panel wide enterprise-viz" id="ai-metrics-panel" style="display:none;">
+      <section class="panel wide enterprise-viz" id="ai-metrics-panel" style="display: none;">
         <div class="panel-head">
           <h2>🤖 AI Detection Metrics</h2>
           <small>Breakdown by tool and pattern confidence</small>
@@ -122,15 +131,6 @@
             <h3>Confidence Distribution</h3>
             <div id="ai-confidence-dist" class="chart-container"></div>
           </div>
-        </div>
-      </section>
-
-          </p>
-          <pre id="ingest-cmd" class="cmd"></pre>
-        </div>
-        <div>
-          <h2>Snapshot</h2>
-          <ul id="snapshot" class="list"></ul>
         </div>
       </section>
 
