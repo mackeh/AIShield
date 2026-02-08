@@ -2,6 +2,23 @@
 
 Since the dashboard interacts with a real API and Database, here is how to verify the new features.
 
+## Quick Smoke Test (Recommended)
+
+Run the automated endpoint smoke test first:
+
+```bash
+./scripts/smoke-analytics-api.sh
+```
+
+Optional args:
+
+```bash
+./scripts/smoke-analytics-api.sh http://localhost:8080 test_key_e2e_12345 test_org_1
+```
+
+Environment-variable equivalents are also supported:
+`AISHIELD_ANALYTICS_URL`, `AISHIELD_API_KEY`, `AISHIELD_ORG_ID`, `AISHIELD_DAYS`.
+
 ## 1. AI Tool Metrics 🤖
 
 **Objective**: Verify that AI-generated findings are correctly identified, aggregated, and displayed.
