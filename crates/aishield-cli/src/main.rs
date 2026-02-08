@@ -1893,26 +1893,53 @@ fn resolve_finding_path(target: &Path, finding_file: &str) -> PathBuf {
 
 fn autofix_replacements(rule_id: &str) -> Vec<(&'static str, &'static str)> {
     match rule_id {
+        "AISHIELD-PY-AUTH-002" => vec![
+            ("\"verify_signature\": False", "\"verify_signature\": True"),
+            ("'verify_signature': False", "'verify_signature': True"),
+        ],
         "AISHIELD-PY-CRYPTO-001" => vec![
             ("hashlib.md5(", "hashlib.sha256("),
             ("hashlib.sha1(", "hashlib.sha256("),
         ],
+        "AISHIELD-PY-CRYPTO-002" => vec![
+            ("algorithm=\"none\"", "algorithm=\"HS256\""),
+            ("algorithm='none'", "algorithm='HS256'"),
+            ("algorithm = \"none\"", "algorithm = \"HS256\""),
+        ],
+        "AISHIELD-PY-CRYPTO-003" => {
+            vec![(
+                "base64.b64encode(password.encode())",
+                "bcrypt.hashpw(password.encode(), bcrypt.gensalt())",
+            )]
+        }
+        "AISHIELD-PY-CRYPTO-004" => vec![("random.random()", "random.SystemRandom().random()")],
         "AISHIELD-PY-MISC-001" => vec![
             ("DEBUG = True", "DEBUG = False"),
             ("debug=True", "debug=False"),
             ("debug = True", "debug = False"),
         ],
+        "AISHIELD-PY-MISC-002" => vec![
+            ("\"origins\": \"*\"", "\"origins\": \"https://example.com\""),
+            ("'origins': '*'", "'origins': 'https://example.com'"),
+        ],
+        "AISHIELD-PY-MISC-003" => vec![("host=\"0.0.0.0\"", "host=\"127.0.0.1\"")],
         "AISHIELD-PY-CRYPTO-006" => vec![
             ("verify=False", "verify=True"),
             ("verify = False", "verify = True"),
         ],
+        "AISHIELD-PY-INJ-002" => vec![("os.system(", "subprocess.run(")],
         "AISHIELD-PY-INJ-003" => vec![
             ("shell=True", "shell=False"),
             ("shell = True", "shell = False"),
         ],
+        "AISHIELD-PY-INJ-004" => vec![("eval(", "ast.literal_eval(")],
         "AISHIELD-JS-INJ-004" => vec![
             ("innerHTML =", "textContent ="),
             ("innerHTML=", "textContent="),
+        ],
+        "AISHIELD-JS-AUTH-002" => vec![
+            ("ignoreExpiration: true", "ignoreExpiration: false"),
+            ("ignoreExpiration:true", "ignoreExpiration:false"),
         ],
         "AISHIELD-JS-CRYPTO-001" => vec![
             ("createHash('md5')", "createHash('sha256')"),
@@ -1920,13 +1947,31 @@ fn autofix_replacements(rule_id: &str) -> Vec<(&'static str, &'static str)> {
             ("createHash('sha1')", "createHash('sha256')"),
             ("createHash(\"sha1\")", "createHash(\"sha256\")"),
         ],
+        "AISHIELD-JS-CRYPTO-002" => vec![("createCipher(", "createCipheriv(")],
         "AISHIELD-JS-CRYPTO-003" => vec![(
             "Math.random().toString(36).slice(2)",
             "crypto.randomBytes(32).toString('hex')",
         )],
+        "AISHIELD-JS-INJ-002" => vec![("eval(", "JSON.parse(")],
+        "AISHIELD-JS-INJ-003" => vec![("exec(", "execFile(")],
+        "AISHIELD-JS-MISC-001" => vec![("origin: \"*\"", "origin: \"https://example.com\"")],
         "AISHIELD-JAVA-CRYPTO-001" => vec![(
             "MessageDigest.getInstance(\"MD5\")",
             "MessageDigest.getInstance(\"SHA-256\")",
+        )],
+        "AISHIELD-JAVA-CRYPTO-002" => vec![("new Random()", "new java.security.SecureRandom()")],
+        "AISHIELD-JAVA-AUTH-001" => vec![
+            ("if (token == provided)", "if (token.equals(provided))"),
+            ("if(token == provided)", "if(token.equals(provided))"),
+        ],
+        "AISHIELD-GO-CRYPTO-001" => vec![("md5.Sum(", "sha256.Sum256(")],
+        "AISHIELD-GO-INJ-001" => vec![(
+            "exec.Command(\"sh\", \"-c\", \"cat \"+userInput)",
+            "exec.Command(\"cat\", userInput)",
+        )],
+        "AISHIELD-GO-AUTH-001" => vec![(
+            "if token == incoming",
+            "if subtle.ConstantTimeCompare([]byte(token), []byte(incoming)) == 1",
         )],
         "AISHIELD-JS-MISC-002" => vec![
             ("debug: true", "debug: false"),
@@ -3194,10 +3239,10 @@ impl SeverityThreshold {
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_replacements, count_replacements, dedup_machine_output, empty_summary,
-        escape_github_annotation_message, escape_github_annotation_property, normalize_snippet,
-        parse_fix_target_spec, percentile, render_github_annotations, render_sarif, DedupMode,
-        Finding, OutputSummary, ScanResult, Severity,
+        apply_replacements, autofix_replacements, count_replacements, dedup_machine_output,
+        empty_summary, escape_github_annotation_message, escape_github_annotation_property,
+        normalize_snippet, parse_fix_target_spec, percentile, render_github_annotations,
+        render_sarif, DedupMode, Finding, OutputSummary, ScanResult, Severity,
     };
 
     fn finding(
@@ -3433,5 +3478,45 @@ mod tests {
 
         let err_col = parse_fix_target_spec("src/app.py:5:0").expect_err("column must be > 0");
         assert!(err_col.contains("1-based"));
+    }
+
+    #[test]
+    fn autofix_support_covers_priority_rule_set() {
+        let ids = vec![
+            "AISHIELD-PY-AUTH-002",
+            "AISHIELD-PY-CRYPTO-001",
+            "AISHIELD-PY-CRYPTO-002",
+            "AISHIELD-PY-CRYPTO-003",
+            "AISHIELD-PY-CRYPTO-004",
+            "AISHIELD-PY-CRYPTO-006",
+            "AISHIELD-PY-INJ-002",
+            "AISHIELD-PY-INJ-003",
+            "AISHIELD-PY-INJ-004",
+            "AISHIELD-PY-MISC-001",
+            "AISHIELD-PY-MISC-002",
+            "AISHIELD-PY-MISC-003",
+            "AISHIELD-JS-AUTH-002",
+            "AISHIELD-JS-CRYPTO-001",
+            "AISHIELD-JS-CRYPTO-002",
+            "AISHIELD-JS-CRYPTO-003",
+            "AISHIELD-JS-INJ-002",
+            "AISHIELD-JS-INJ-003",
+            "AISHIELD-JS-INJ-004",
+            "AISHIELD-JS-MISC-001",
+            "AISHIELD-JS-MISC-002",
+            "AISHIELD-JAVA-AUTH-001",
+            "AISHIELD-JAVA-CRYPTO-001",
+            "AISHIELD-JAVA-CRYPTO-002",
+            "AISHIELD-GO-AUTH-001",
+            "AISHIELD-GO-CRYPTO-001",
+            "AISHIELD-GO-INJ-001",
+        ];
+
+        for id in ids {
+            assert!(
+                !autofix_replacements(id).is_empty(),
+                "expected autofix mapping for {id}"
+            );
+        }
     }
 }

@@ -29,6 +29,8 @@ This repository currently contains a solid foundation for Phase 1:
 - Local pre-commit hook installer
 - Benchmark command for scan-performance baselining (`aishield bench`)
 - Interactive fix groundwork (`aishield fix --interactive`)
+- Location-targeted remediation (`aishield fix file.py:line[:col]`)
+- Expanded safe autofix mappings across Python/JS/Go/Java high-frequency patterns
 - GitHub Actions workflow uploading SARIF to GitHub Security
 - Expanded vulnerable fixture suite and regression tests for rule coverage
 

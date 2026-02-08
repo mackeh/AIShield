@@ -96,6 +96,7 @@ Options:
 - `--write`: apply changes in place
 - `--dry-run`: show planned edits without writing
 - `--interactive`: prompt per autofix candidate (`yes/no/all/quit`)
+- supports safe replacements for a growing high-frequency rule set across Python/JavaScript/Go/Java
 
 Examples:
 

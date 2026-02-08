@@ -20,6 +20,7 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - Added `fix --interactive` groundwork for prompt-driven autofix selection (`yes/no/all/quit`)
 - Added `fix <path:line[:col]>` targeting to focus remediation on a specific finding location
 - Expanded safe autofix replacements for additional JavaScript/Java crypto and debug patterns
+- Expanded safe autofix coverage to priority Python/JavaScript/Go/Java rules (toward top-20 remediation target)
 
 ## [0.1.1] - 2026-02-07
 
