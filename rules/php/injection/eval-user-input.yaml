@@ -1,0 +1,12 @@
+id: AISHIELD-PHP-INJ-001
+title: eval Executed on User Input
+severity: critical
+confidence_that_ai_generated: 0.82
+languages: [php]
+category: injection
+pattern:
+  any:
+    - "eval($_get"
+fix:
+  suggestion: Remove eval on request input and use strict parser logic.
+tags: [injection, rce]

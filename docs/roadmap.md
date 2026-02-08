@@ -30,7 +30,8 @@ This page mirrors `project.md` and highlights the current implementation directi
 - [ ] Web dashboard and analytics pipeline
 - [x] Alerting bootstrap via scan webhooks
 - [x] Experimental cross-file auth-route heuristics (`--cross-file`)
-- [ ] Additional language ecosystems (C#, Ruby, PHP, Kotlin, Swift)
+- [x] Additional language bootstrap (C#, Ruby, PHP)
+- [ ] Additional language ecosystems (Kotlin, Swift)
 - [x] Infra/IaC scanning bootstrap (Terraform, Kubernetes YAML, Dockerfiles)
 
 ## Milestone Notes

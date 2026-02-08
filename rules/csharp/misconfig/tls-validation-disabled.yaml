@@ -1,0 +1,12 @@
+id: AISHIELD-CS-MISC-001
+title: TLS Certificate Validation Disabled
+severity: high
+confidence_that_ai_generated: 0.78
+languages: [csharp]
+category: misconfig
+pattern:
+  any:
+    - "servercertificatecustomvalidationcallback = (msg, cert, chain, errors) => true"
+fix:
+  suggestion: Remove permissive callback and enforce certificate validation.
+tags: [misconfig, tls]

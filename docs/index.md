@@ -20,7 +20,7 @@ hero:
 
 features:
   - title: AI-focused security rules
-    details: Built-in detections target vulnerabilities often introduced by AI-generated code across Python, JavaScript, Go, Rust, and Java.
+    details: Built-in detections target vulnerabilities often introduced by AI-generated code across Python, JavaScript, Go, Rust, Java, C#, Ruby, and PHP.
   - title: CI-ready outputs
     details: Emit JSON, SARIF, and GitHub annotation output with normalized dedup to reduce noisy duplicate findings in pipelines.
   - title: Practical remediation

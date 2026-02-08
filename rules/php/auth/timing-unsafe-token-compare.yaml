@@ -1,0 +1,12 @@
+id: AISHIELD-PHP-AUTH-001
+title: Timing-Unsafe Token Comparison
+severity: high
+confidence_that_ai_generated: 0.79
+languages: [php]
+category: auth
+pattern:
+  any:
+    - "token == $provided"
+fix:
+  suggestion: Use hash_equals for secret token comparison.
+tags: [auth, timing-attack]

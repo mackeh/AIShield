@@ -1,0 +1,12 @@
+id: AISHIELD-RB-INJ-001
+title: eval Executed on User Input
+severity: critical
+confidence_that_ai_generated: 0.83
+languages: [ruby]
+category: injection
+pattern:
+  any:
+    - "eval(user_input)"
+fix:
+  suggestion: Remove eval on untrusted input and use explicit parsers.
+tags: [injection, rce]

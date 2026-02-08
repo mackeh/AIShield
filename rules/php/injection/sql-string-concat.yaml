@@ -1,0 +1,13 @@
+id: AISHIELD-PHP-INJ-002
+title: SQL Query Built with String Concatenation
+severity: high
+confidence_that_ai_generated: 0.77
+languages: [php]
+category: injection
+pattern:
+  all:
+    - "select * from users where id ="
+    - ". $userinput"
+fix:
+  suggestion: Use prepared statements with bound parameters.
+tags: [injection, sql-injection]
