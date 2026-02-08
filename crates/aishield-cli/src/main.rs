@@ -3382,8 +3382,8 @@ fn autofix_replacements(rule_id: &str) -> Vec<(&'static str, &'static str)> {
         )],
         "AISHIELD-JAVA-CRYPTO-002" => vec![("new Random()", "new java.security.SecureRandom()")],
         "AISHIELD-JAVA-AUTH-001" => vec![
-            ("if (token == provided)", "if (token.equals(provided))"),
-            ("if(token == provided)", "if(token.equals(provided))"),
+            ("if (secret == provided)", "if (secret.equals(provided))"),
+            ("if(secret == provided)", "if(secret.equals(provided))"),
         ],
         "AISHIELD-GO-CRYPTO-001" => vec![("md5.Sum(", "sha256.Sum256(")],
         "AISHIELD-GO-INJ-001" => vec![(
@@ -3391,7 +3391,7 @@ fn autofix_replacements(rule_id: &str) -> Vec<(&'static str, &'static str)> {
             "exec.Command(\"cat\", userInput)",
         )],
         "AISHIELD-GO-AUTH-001" => vec![(
-            "if token == incoming",
+            "if secret == incoming",
             "if subtle.ConstantTimeCompare([]byte(token), []byte(incoming)) == 1",
         )],
         "AISHIELD-JS-MISC-002" => vec![
@@ -3592,6 +3592,115 @@ fn append_history(history_file: &Path, target: &Path, result: &ScanResult) -> Re
     Ok(())
 }
 
+fn enrich_finding_compliance_metadata(finding: &Finding) -> (Option<String>, Option<String>) {
+    let mut cwe_id: Option<&'static str> = None;
+    let mut owasp_category: Option<&'static str> = None;
+
+    for tag in &finding.tags {
+        let normalized = tag.trim().to_ascii_lowercase();
+        apply_compliance_mapping(
+            &mut cwe_id,
+            &mut owasp_category,
+            match normalized.as_str() {
+                "sql-injection" => (Some("CWE-89"), Some("A03:2021 - Injection")),
+                "nosql" => (Some("CWE-943"), Some("A03:2021 - Injection")),
+                "command-injection" | "command" => (Some("CWE-78"), Some("A03:2021 - Injection")),
+                "path-traversal" => (Some("CWE-22"), Some("A01:2021 - Broken Access Control")),
+                "code-execution" => (Some("CWE-94"), Some("A03:2021 - Injection")),
+                "timing-attack" => (
+                    Some("CWE-208"),
+                    Some("A07:2021 - Identification and Authentication Failures"),
+                ),
+                "weak-hash" | "crypto" | "key-management" => {
+                    (Some("CWE-327"), Some("A02:2021 - Cryptographic Failures"))
+                }
+                "secrets" => (
+                    Some("CWE-798"),
+                    Some("A07:2021 - Identification and Authentication Failures"),
+                ),
+                "cors" => (
+                    Some("CWE-942"),
+                    Some("A05:2021 - Security Misconfiguration"),
+                ),
+                "debug" => (
+                    Some("CWE-489"),
+                    Some("A05:2021 - Security Misconfiguration"),
+                ),
+                "supply-chain" => (
+                    Some("CWE-1104"),
+                    Some("A06:2021 - Vulnerable and Outdated Components"),
+                ),
+                "auth" | "token" | "identity" => (
+                    Some("CWE-287"),
+                    Some("A07:2021 - Identification and Authentication Failures"),
+                ),
+                "misconfig" | "hardening" | "network" => {
+                    (Some("CWE-16"), Some("A05:2021 - Security Misconfiguration"))
+                }
+                _ => (None, None),
+            },
+        );
+    }
+
+    let category = finding
+        .category
+        .as_deref()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    apply_compliance_mapping(
+        &mut cwe_id,
+        &mut owasp_category,
+        match category.as_str() {
+            "auth" => (
+                Some("CWE-287"),
+                Some("A07:2021 - Identification and Authentication Failures"),
+            ),
+            "crypto" => (Some("CWE-327"), Some("A02:2021 - Cryptographic Failures")),
+            "injection" => (Some("CWE-74"), Some("A03:2021 - Injection")),
+            "misconfig" => (Some("CWE-16"), Some("A05:2021 - Security Misconfiguration")),
+            _ => (None, None),
+        },
+    );
+
+    let rule_id = finding.id.to_ascii_uppercase();
+    apply_compliance_mapping(
+        &mut cwe_id,
+        &mut owasp_category,
+        if rule_id.contains("-AUTH-") {
+            (
+                Some("CWE-287"),
+                Some("A07:2021 - Identification and Authentication Failures"),
+            )
+        } else if rule_id.contains("-CRYPTO-") {
+            (Some("CWE-327"), Some("A02:2021 - Cryptographic Failures"))
+        } else if rule_id.contains("-INJ-") {
+            (Some("CWE-74"), Some("A03:2021 - Injection"))
+        } else if rule_id.contains("-MISC-") || rule_id.contains("-MISCONFIG-") {
+            (Some("CWE-16"), Some("A05:2021 - Security Misconfiguration"))
+        } else {
+            (None, None)
+        },
+    );
+
+    (
+        cwe_id.map(|value| value.to_string()),
+        owasp_category.map(|value| value.to_string()),
+    )
+}
+
+fn apply_compliance_mapping(
+    cwe_id: &mut Option<&'static str>,
+    owasp_category: &mut Option<&'static str>,
+    candidate: (Option<&'static str>, Option<&'static str>),
+) {
+    if cwe_id.is_none() {
+        *cwe_id = candidate.0;
+    }
+    if owasp_category.is_none() {
+        *owasp_category = candidate.1;
+    }
+}
+
 fn push_to_analytics(target: &Path, result: &ScanResult) -> Result<(), String> {
     // Load config and merge with env vars
     let config = config::Config::load()
@@ -3636,29 +3745,32 @@ fn push_to_analytics(target: &Path, result: &ScanResult) -> Result<(), String> {
         findings: result
             .findings
             .iter()
-            .map(|f| analytics_client::FindingDetail {
-                rule_id: f.id.clone(),
-                rule_title: f.title.clone(),
-                severity: match f.severity {
-                    Severity::Critical => "Critical",
-                    Severity::High => "High",
-                    Severity::Medium => "Medium",
-                    Severity::Low => "Low",
-                    Severity::Info => "Info",
+            .map(|f| {
+                let (cwe_id, owasp_category) = enrich_finding_compliance_metadata(f);
+                analytics_client::FindingDetail {
+                    rule_id: f.id.clone(),
+                    rule_title: f.title.clone(),
+                    severity: match f.severity {
+                        Severity::Critical => "Critical",
+                        Severity::High => "High",
+                        Severity::Medium => "Medium",
+                        Severity::Low => "Low",
+                        Severity::Info => "Info",
+                    }
+                    .to_string(),
+                    file_path: f.file.clone(),
+                    line_number: Some(f.line),
+                    snippet: Some(f.snippet.clone()), // Skip snippet to reduce payload size
+                    ai_confidence: if f.ai_confidence > 0.0 {
+                        Some(f.ai_confidence)
+                    } else {
+                        None
+                    },
+                    ai_tendency: f.ai_tendency.clone(),
+                    fix_suggestion: f.fix_suggestion.clone(),
+                    cwe_id,
+                    owasp_category,
                 }
-                .to_string(),
-                file_path: f.file.clone(),
-                line_number: Some(f.line),
-                snippet: Some(f.snippet.clone()), // Skip snippet to reduce payload size
-                ai_confidence: if f.ai_confidence > 0.0 {
-                    Some(f.ai_confidence)
-                } else {
-                    None
-                },
-                ai_tendency: f.ai_tendency.clone(),
-                fix_suggestion: f.fix_suggestion.clone(),
-                cwe_id: None,         // TODO: Extract from rule metadata
-                owasp_category: None, // TODO: Extract from rule metadata
             })
             .collect(),
     };
@@ -5021,13 +5133,13 @@ mod tests {
 
     use super::{
         apply_replacements, autofix_replacements, build_webhook_payload, count_replacements,
-        dedup_machine_output, empty_summary, escape_github_annotation_message,
-        escape_github_annotation_property, filter_findings_against_baseline,
-        filtered_candidate_indices, init_template_writes, load_baseline_keys, load_onnx_manifest,
-        maybe_send_webhook_notification, normalize_snippet, parse_fix_target_spec,
-        parse_init_templates, percentile, render_github_annotations, render_sarif,
-        resolve_ai_classifier, resolve_selected_indices, DedupMode, Finding, InitTemplate,
-        OutputSummary, ScanResult, Severity, SeverityThreshold,
+        dedup_machine_output, empty_summary, enrich_finding_compliance_metadata,
+        escape_github_annotation_message, escape_github_annotation_property,
+        filter_findings_against_baseline, filtered_candidate_indices, init_template_writes,
+        load_baseline_keys, load_onnx_manifest, maybe_send_webhook_notification, normalize_snippet,
+        parse_fix_target_spec, parse_init_templates, percentile, render_github_annotations,
+        render_sarif, resolve_ai_classifier, resolve_selected_indices, DedupMode, Finding,
+        InitTemplate, OutputSummary, ScanResult, Severity, SeverityThreshold,
     };
 
     fn finding(
@@ -5063,6 +5175,66 @@ mod tests {
     }
 
     #[test]
+    fn enriches_sql_injection_with_specific_cwe_and_owasp() {
+        let mut candidate = finding(
+            "AISHIELD-GO-INJ-003",
+            Severity::High,
+            "src/db.go",
+            42,
+            "query := \"SELECT * FROM users WHERE id = \" + userInput",
+            85.0,
+        );
+        candidate.category = Some("injection".to_string());
+        candidate.tags = vec!["injection".to_string(), "sql-injection".to_string()];
+
+        let (cwe_id, owasp_category) = enrich_finding_compliance_metadata(&candidate);
+        assert_eq!(cwe_id.as_deref(), Some("CWE-89"));
+        assert_eq!(owasp_category.as_deref(), Some("A03:2021 - Injection"));
+    }
+
+    #[test]
+    fn enriches_from_category_when_tags_are_missing() {
+        let mut candidate = finding(
+            "AISHIELD-PY-MISC-001",
+            Severity::Medium,
+            "src/app.py",
+            12,
+            "app.run(debug=True)",
+            70.0,
+        );
+        candidate.category = Some("misconfig".to_string());
+        candidate.tags = vec![];
+
+        let (cwe_id, owasp_category) = enrich_finding_compliance_metadata(&candidate);
+        assert_eq!(cwe_id.as_deref(), Some("CWE-16"));
+        assert_eq!(
+            owasp_category.as_deref(),
+            Some("A05:2021 - Security Misconfiguration")
+        );
+    }
+
+    #[test]
+    fn enriches_from_rule_id_when_category_is_absent() {
+        let mut candidate = finding(
+            "AISHIELD-JAVA-CRYPTO-001",
+            Severity::High,
+            "src/CryptoUtil.java",
+            8,
+            "MessageDigest.getInstance(\"MD5\")",
+            83.0,
+        );
+        candidate.category = None;
+        candidate.tags = vec![];
+
+        let (cwe_id, owasp_category) = enrich_finding_compliance_metadata(&candidate);
+        assert_eq!(cwe_id.as_deref(), Some("CWE-327"));
+        assert_eq!(
+            owasp_category.as_deref(),
+            Some("A02:2021 - Cryptographic Failures")
+        );
+    }
+
+    #[test]
     fn normalized_dedup_keeps_highest_risk_finding_per_key() {
         let raw = result(vec![
             finding(
@@ -5070,7 +5242,7 @@ mod tests {
                 Severity::Medium,
                 "src/app.py",
                 10,
-                "if token == provided:",
+                "if secret == provided:",
                 60.0,
             ),
             finding(
@@ -5078,7 +5250,7 @@ mod tests {
                 Severity::High,
                 "src/app.py",
                 10,
-                "if token==provided:",
+                "if secret==provided:",
                 90.0,
             ),
             finding(
@@ -5086,7 +5258,7 @@ mod tests {
                 Severity::High,
                 "src/app.py",
                 11,
-                "if token == provided:",
+                "if secret == provided:",
                 88.0,
             ),
         ]);
@@ -5113,7 +5285,7 @@ mod tests {
                 Severity::Medium,
                 "src/app.py",
                 10,
-                "if token == provided:",
+                "if secret == provided:",
                 60.0,
             ),
             finding(
@@ -5121,7 +5293,7 @@ mod tests {
                 Severity::High,
                 "src/app.py",
                 10,
-                "if token==provided:",
+                "if secret==provided:",
                 90.0,
             ),
         ]);
@@ -5139,7 +5311,7 @@ mod tests {
                 Severity::High,
                 "src/app.py",
                 10,
-                "if token == provided:",
+                "if secret == provided:",
                 80.0,
             ),
             finding(
@@ -5174,7 +5346,7 @@ mod tests {
       "file": "src/app.py",
       "line": 10,
       "category": "auth",
-      "snippet": "if token == provided:"
+      "snippet": "if secret == provided:"
     }
   ]
 }"#,
@@ -5230,7 +5402,7 @@ mod tests {
             Severity::High,
             "src/app.py",
             10,
-            "if token == provided:",
+            "if secret == provided:",
             88.0,
         )]);
 
@@ -5282,8 +5454,8 @@ mod tests {
     #[test]
     fn snippet_normalization_collapses_whitespace_and_punctuation() {
         assert_eq!(
-            normalize_snippet("if token==provided:"),
-            normalize_snippet("if   token == provided ;")
+            normalize_snippet("if secret==provided:"),
+            normalize_snippet("if   secret == provided ;")
         );
     }
 
@@ -5303,7 +5475,7 @@ mod tests {
             Severity::High,
             "src/app.py",
             10,
-            "if token == provided:",
+            "if secret == provided:",
             88.0,
         )]);
         let summary = OutputSummary {

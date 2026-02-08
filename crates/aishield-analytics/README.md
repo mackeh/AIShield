@@ -12,17 +12,35 @@ REST API server for ingesting AIShield scan results and serving analytics data.
 
 ## Quick Start
 
-### 1. Set Up Database
+### Option A: One-command stack bootstrap (recommended)
+
+From repo root:
+
+```bash
+./scripts/start-analytics-stack.sh
+```
+
+This starts Docker services, boots the analytics API, and runs the endpoint smoke test.
+
+To stop:
+
+```bash
+./scripts/stop-analytics-stack.sh
+```
+
+### Option B: Manual local setup
+
+#### 1. Set Up Database
 
 ```bash
 # Start PostgreSQL with TimescaleDB
-docker-compose -f docker-compose.analytics.yml up -d
+docker compose -f docker-compose.analytics.yml up -d
 
 # Apply migrations
 bash migrations/test-migrations.sh
 ```
 
-### 2. Configure Environment
+#### 2. Configure Environment
 
 Create `.env` file:
 
@@ -33,7 +51,7 @@ PORT=8080
 RUST_LOG=info,aishield_analytics=debug
 ```
 
-### 3. Run Server
+#### 3. Run Server
 
 ```bash
 cargo run -p aishield-analytics
@@ -241,7 +259,7 @@ cargo run -p aishield-analytics
 
 ## Deployment
 
-### Option 1: Docker (TODO)
+### Option 1: Docker
 
 ```bash
 docker build -t aishield-analytics .

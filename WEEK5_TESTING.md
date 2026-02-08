@@ -4,6 +4,23 @@ Since the dashboard interacts with a real API and Database, here is how to verif
 
 ## Quick Smoke Test (Recommended)
 
+Fastest setup path:
+
+```bash
+./scripts/start-analytics-stack.sh
+```
+
+This starts Docker services, boots the analytics API, and runs the smoke checks.
+
+The same smoke flow is now enforced in CI via:
+`.github/workflows/analytics-smoke.yml`
+
+To stop everything:
+
+```bash
+./scripts/stop-analytics-stack.sh
+```
+
 Run the automated endpoint smoke test first:
 
 ```bash

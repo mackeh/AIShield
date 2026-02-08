@@ -18,28 +18,20 @@ The dashboard will run in FILE MODE, showing data from `.aishield-history.log` f
 
 ## Option 2: API Mode Testing (Full Enterprise Features)
 
-To test advanced features (filters, heatmap, team comparison), you need both services running:
+To test advanced features (filters, heatmap, team comparison), start the API/database stack first:
 
-### Terminal 1: Start Dashboard
+```bash
+./scripts/start-analytics-stack.sh
+```
+
+Then start the dashboard in a second terminal:
+
+### Start Dashboard
 
 ```bash
 cd dashboard
 node server.js
 # Leave running - Dashboard on http://localhost:3000
-```
-
-### Terminal 2: Start Analytics API
-
-```bash
-cd crates/aishield-analytics
-
-# Set environment variables
-export DATABASE_URL="postgres://aishield:aishield_dev_password@localhost:5432/aishield_analytics"
-export AISHIELD_API_KEY="test_key_12345"
-
-# Start API
-cargo run --release
-# Leave running - API on http://localhost:8080
 ```
 
 ### Terminal 3: Generate Test Data
@@ -55,7 +47,7 @@ cargo run --release
 2. Click settings button (⚙️)
 3. Enter:
    - **API URL**: `http://localhost:8080`
-   - **API Key**: `test_key_12345`
+   - **API Key**: `test_key_e2e_12345`
 4. Click "Test Connection" (should show ✅)
 5. Click "Save Settings"
 6. Refresh page
@@ -140,8 +132,9 @@ psql "postgres://aishield:aishield_dev_password@localhost:5432/aishield_analytic
 ## Stop Services
 
 ```bash
-# Press Ctrl+C in each terminal where services are running
-# Or kill processes:
+# Dashboard
 pkill -f "node server.js"
-pkill -f "aishield-analytics"
+
+# API + database stack
+./scripts/stop-analytics-stack.sh
 ```

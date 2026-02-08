@@ -13,10 +13,10 @@ This guide helps you set up the AIShield analytics database locally.
 
 ```bash
 # From repository root
-docker-compose -f docker-compose.analytics.yml up -d
+docker compose -f docker-compose.analytics.yml up -d
 
 # Wait for database to be healthy (~10 seconds)
-docker-compose -f docker-compose.analytics.yml ps
+docker compose -f docker-compose.analytics.yml ps
 ```
 
 This starts:
@@ -120,13 +120,11 @@ psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f migrations/003_create_analytics_view
 
 ✅ **Database is ready!**
 
-Now proceed to Week 2:
+Continue with local stack verification:
 
-1. Build analytics API: `cargo new crates/aishield-analytics`
-2. Implement ingestion endpoint: `POST /api/v1/scans/ingest`
-3. Implement query endpoints: `GET /api/v1/analytics/*`
-
-See `database_migration_plan.md` for full implementation roadmap.
+1. Start full stack and smoke test: `./scripts/start-analytics-stack.sh`
+2. Validate dashboard API mode using `WEEK5_TESTING.md`
+3. Stop services cleanly: `./scripts/stop-analytics-stack.sh`
 
 ---
 
@@ -136,11 +134,11 @@ See `database_migration_plan.md` for full implementation roadmap.
 
 ```bash
 # Check logs
-docker-compose -f docker-compose.analytics.yml logs analytics-db
+docker compose -f docker-compose.analytics.yml logs analytics-db
 
 # Rebuild
-docker-compose -f docker-compose.analytics.yml down -v
-docker-compose -f docker-compose.analytics.yml up -d
+docker compose -f docker-compose.analytics.yml down -v
+docker compose -f docker-compose.analytics.yml up -d
 ```
 
 **TimescaleDB extension not found:**
@@ -151,7 +149,7 @@ docker-compose -f docker-compose.analytics.yml up -d
 **Migrations fail with "relation already exists":**
 
 - This is OK if re-running migrations
-- To reset: `docker-compose down -v` (⚠️ deletes all data)
+- To reset: `docker compose -f docker-compose.analytics.yml down -v` (⚠️ deletes all data)
 
 **Can't connect to database:**
 

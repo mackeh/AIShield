@@ -42,6 +42,9 @@ cargo run -p aishield-cli -- scan . --format json --output aishield.json
 
 # Interactive fix mode
 cargo run -p aishield-cli -- fix . --interactive
+
+# Optional: start full analytics stack (Postgres + API + smoke check)
+./scripts/start-analytics-stack.sh
 ```
 
 **First scan in < 2 minutes** ✨
@@ -291,7 +294,7 @@ Full reference: [docs/cli.md](docs/cli.md)
 
 **Pattern Matching**: Uses regex and string-based detection (not AST-based). Adequate for AI vulnerability patterns with excellent performance.
 
-**Analytics**: Local file-based analytics (`.aishield-history.log`). Enterprise features requiring database (org-wide heatmaps, multi-repo aggregation) planned for Phase 3.
+**Analytics**: File-based analytics works out of the box (`.aishield-history.log`). Optional API mode with PostgreSQL/TimescaleDB is available for org/team/repo dashboards and trend reporting.
 
 **SAST Bridge**: Requires manual installation of external tools (`semgrep`, `bandit`, `eslint`). Enable with `--bridge all`.
 
