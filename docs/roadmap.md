@@ -18,7 +18,7 @@ This page mirrors `project.md` and highlights the current implementation directi
 - [x] Go/Rust/Java rulepacks expanded toward 20-per-language target
 - [x] Interactive fix TUI upgrades (search/filter, badges, preview pane)
 - [ ] ONNX AI-vs-human classifier integration
-- [ ] Full PR annotation + SARIF workflow hardening across all repo contexts
+- [x] Full PR annotation + SARIF workflow hardening across repo contexts
 
 ## Phase 3+: Platform and Ecosystem
 

@@ -18,7 +18,8 @@ cargo run -p aishield-cli -- init --templates github-actions
 2. Installs Rust toolchain
 3. Runs AIShield in SARIF mode
 4. Emits inline PR annotations on pull requests
-5. Uploads `aishield.sarif` to GitHub Code Scanning
+5. Uploads `aishield.sarif` as an artifact from the scan job
+6. Uploads SARIF in a dedicated least-privilege job for trusted contexts
 
 ## Baseline Workflow
 
@@ -32,8 +33,10 @@ on:
 
 permissions:
   contents: read
-  actions: read
-  security-events: write
+
+concurrency:
+  group: aishield-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   AISHIELD_ENABLE_SAST_BRIDGE: ${{ vars.AISHIELD_ENABLE_SAST_BRIDGE || 'true' }}
@@ -42,6 +45,8 @@ env:
 jobs:
   scan:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -69,12 +74,38 @@ jobs:
         run: npm install -g eslint
       - run: cargo run -p aishield-cli -- scan . --format sarif --output aishield.sarif ${AISHIELD_BRIDGE_ARGS}
       - if: github.event_name == 'pull_request'
-        run: cargo run -p aishield-cli -- scan . --format github --dedup normalized --changed-from "${{ github.event.pull_request.base.sha }}" ${AISHIELD_BRIDGE_ARGS}
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          if [ -z "${BASE_SHA}" ]; then
+            BASE_SHA="origin/main"
+          fi
+          cargo run -p aishield-cli -- scan . --format github --dedup normalized --changed-from "${BASE_SHA}" ${AISHIELD_BRIDGE_ARGS}
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aishield-sarif
+          path: aishield.sarif
+          if-no-files-found: error
+          retention-days: 7
+
+  upload-sarif:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    needs: scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: aishield-sarif
+          path: .
       - uses: github/codeql-action/upload-sarif@v4
-        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
         continue-on-error: true
         with:
           sarif_file: aishield.sarif
+          category: aishield
 ```
 
 ## Common Auth/Permissions Failure
@@ -86,9 +117,10 @@ If upload annotations show:
 check:
 
 - repository has **Code scanning alerts** enabled
-- workflow includes `permissions.security-events: write`
+- `upload-sarif` job includes `permissions.security-events: write`
 - pull request comes from trusted context (fork PRs can restrict tokens)
 - SARIF upload is guarded with the same-repo `if:` condition
+- `upload-sarif` job includes `permissions.actions: read` for workflow metadata lookups
 
 ## Bridge Controls
 

@@ -155,7 +155,7 @@ Current implementation includes:
 - infrastructure scanning bootstrap for Terraform, Kubernetes, and Dockerfile misconfig patterns
 - experimental cross-file auth-route heuristics (`--cross-file`)
 - optional SAST bridge for Semgrep/Bandit/ESLint
-- SARIF upload and PR annotation workflows
+- hardened SARIF upload and PR annotation workflows across push/PR contexts
 - VitePress documentation site + GitHub Pages deployment workflow
 
 Roadmap and milestones: `project.md` and `docs/roadmap.md`
