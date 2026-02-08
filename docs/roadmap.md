@@ -25,7 +25,7 @@ This page mirrors `project.md` and highlights the current implementation directi
 - [ ] VS Code extension
 - [ ] Web dashboard and analytics pipeline
 - [ ] Additional language ecosystems (C#, Ruby, PHP, Kotlin, Swift)
-- [ ] Infra/IaC scanning (Terraform, Kubernetes YAML, Dockerfiles)
+- [x] Infra/IaC scanning bootstrap (Terraform, Kubernetes YAML, Dockerfiles)
 
 ## Milestone Notes
 

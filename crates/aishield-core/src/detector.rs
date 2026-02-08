@@ -431,6 +431,21 @@ function good(token, expected) {
             .iter()
             .filter(|finding| finding.id.starts_with("AISHIELD-JAVA-"))
             .count();
+        let terraform_findings = result
+            .findings
+            .iter()
+            .filter(|finding| finding.id.starts_with("AISHIELD-TF-"))
+            .count();
+        let kubernetes_findings = result
+            .findings
+            .iter()
+            .filter(|finding| finding.id.starts_with("AISHIELD-K8S-"))
+            .count();
+        let docker_findings = result
+            .findings
+            .iter()
+            .filter(|finding| finding.id.starts_with("AISHIELD-DOCKER-"))
+            .count();
 
         assert!(
             go_findings >= 15,
@@ -446,6 +461,21 @@ function good(token, expected) {
             java_findings >= 15,
             "expected at least 15 java findings in fixture suite, got {}",
             java_findings
+        );
+        assert!(
+            terraform_findings >= 5,
+            "expected at least 5 terraform findings in fixture suite, got {}",
+            terraform_findings
+        );
+        assert!(
+            kubernetes_findings >= 5,
+            "expected at least 5 kubernetes findings in fixture suite, got {}",
+            kubernetes_findings
+        );
+        assert!(
+            docker_findings >= 5,
+            "expected at least 5 dockerfile findings in fixture suite, got {}",
+            docker_findings
         );
     }
 

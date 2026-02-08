@@ -2,6 +2,8 @@
 
 AIShield is a Rust-first security scanner for AI-assisted codebases. It combines curated rulepacks, AI-likelihood heuristics, risk scoring, and CI-friendly output formats.
 
+Supported scan targets now include application code plus infrastructure config patterns (Terraform/HCL, Kubernetes manifests, and Dockerfiles).
+
 ## Prerequisites
 
 - Rust toolchain (`stable` recommended)

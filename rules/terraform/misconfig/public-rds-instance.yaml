@@ -1,0 +1,14 @@
+id: AISHIELD-TF-MISC-003
+title: Publicly Accessible Database Instance
+severity: high
+confidence_that_ai_generated: 0.76
+languages: [terraform]
+category: misconfig
+ai_tendency: Generated IaC often enables public database access for faster testing.
+pattern:
+  all:
+    - "publicly_accessible"
+    - "true"
+fix:
+  suggestion: Set publicly_accessible to false and use private networking.
+tags: [terraform, database, misconfig]

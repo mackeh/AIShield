@@ -17,7 +17,7 @@ pattern:
 - `id`: stable unique rule identifier
 - `title`: short finding title
 - `severity`: `critical|high|medium|low|info`
-- `languages`: list (currently `python`, `javascript`, `go`, `rust`, and `java` scanner support)
+- `languages`: list (currently `python`, `javascript`, `go`, `rust`, `java`, `terraform`, `kubernetes`, and `dockerfile` scanner support)
 - `pattern`: one or more match conditions
 
 ## Pattern semantics

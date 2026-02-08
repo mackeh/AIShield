@@ -1,0 +1,14 @@
+id: AISHIELD-K8S-MISC-005
+title: Host PID Namespace Enabled
+severity: medium
+confidence_that_ai_generated: 0.69
+languages: [kubernetes]
+category: misconfig
+ai_tendency: AI manifests can enable hostPID while debugging low-level process behavior.
+pattern:
+  all:
+    - "hostpid"
+    - "true"
+fix:
+  suggestion: Disable hostPID to isolate container process visibility.
+tags: [kubernetes, isolation, misconfig]

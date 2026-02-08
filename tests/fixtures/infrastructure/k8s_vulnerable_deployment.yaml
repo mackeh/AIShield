@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: insecure-app
+spec:
+  template:
+    spec:
+      hostNetwork: true
+      hostPID: true
+      automountServiceAccountToken: true
+      containers:
+        - name: app
+          image: insecure/app:latest
+          securityContext:
+            privileged: true
+            runAsUser: 0
+            allowPrivilegeEscalation: true

@@ -1,0 +1,14 @@
+id: AISHIELD-TF-MISC-002
+title: Public S3 ACL Configuration
+severity: high
+confidence_that_ai_generated: 0.78
+languages: [terraform]
+category: misconfig
+ai_tendency: AI code can default bucket ACLs to public-read to simplify examples.
+pattern:
+  all:
+    - "acl"
+    - "public-read"
+fix:
+  suggestion: Use private ACL and enforce least-privilege bucket policies.
+tags: [terraform, storage, misconfig]

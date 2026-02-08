@@ -9,6 +9,7 @@ It finds high-risk patterns that often look plausible in review but are unsafe i
 AI coding assistants increase delivery speed, but they also reproduce insecure examples from public training data. AIShield adds a dedicated guardrail layer for AI-assisted codebases by combining:
 
 - AI-prone vulnerability rulepacks across Python, JavaScript, Go, Rust, and Java
+- infrastructure rulepacks for Terraform/HCL, Kubernetes manifests, and Dockerfiles
 - AI-likelihood scoring and context-aware risk scoring per finding
 - CI-ready outputs (`json`, `sarif`, `github`) with dedup normalization
 - practical remediation workflows (`fix`, targeted location fixes, interactive TUI)
@@ -142,6 +143,7 @@ Current implementation includes:
 - Rust workspace: `aishield-core` + `aishield-cli`
 - 90+ rules across auth/crypto/injection/misconfiguration
 - expanded Go/Rust/Java rulepacks toward phase-2 target depth
+- infrastructure scanning bootstrap for Terraform, Kubernetes, and Dockerfile misconfig patterns
 - optional SAST bridge for Semgrep/Bandit/ESLint
 - SARIF upload and PR annotation workflows
 - VitePress documentation site + GitHub Pages deployment workflow

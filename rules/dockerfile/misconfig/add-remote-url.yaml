@@ -1,0 +1,14 @@
+id: AISHIELD-DOCKER-MISC-004
+title: ADD Remote URL Download
+severity: medium
+confidence_that_ai_generated: 0.70
+languages: [dockerfile]
+category: misconfig
+ai_tendency: Generated Dockerfiles may use ADD for remote downloads without integrity checks.
+pattern:
+  all:
+    - "add"
+    - "http"
+fix:
+  suggestion: Use curl/wget with signature or checksum verification and COPY for local files.
+tags: [dockerfile, supply-chain, misconfig]

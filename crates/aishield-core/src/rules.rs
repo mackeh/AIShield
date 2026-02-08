@@ -507,4 +507,42 @@ pattern:
             java_count
         );
     }
+
+    #[test]
+    fn repository_rulepack_has_infrastructure_bootstrap_coverage() {
+        let rules_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../rules");
+        let ruleset = RuleSet::load_from_dir(&rules_dir).expect("load repository rules");
+
+        let terraform_count = ruleset
+            .rules
+            .iter()
+            .filter(|rule| rule.languages.iter().any(|lang| lang == "terraform"))
+            .count();
+        let kubernetes_count = ruleset
+            .rules
+            .iter()
+            .filter(|rule| rule.languages.iter().any(|lang| lang == "kubernetes"))
+            .count();
+        let dockerfile_count = ruleset
+            .rules
+            .iter()
+            .filter(|rule| rule.languages.iter().any(|lang| lang == "dockerfile"))
+            .count();
+
+        assert!(
+            terraform_count >= 6,
+            "expected at least 6 terraform rules for infrastructure bootstrap, found {}",
+            terraform_count
+        );
+        assert!(
+            kubernetes_count >= 6,
+            "expected at least 6 kubernetes rules for infrastructure bootstrap, found {}",
+            kubernetes_count
+        );
+        assert!(
+            dockerfile_count >= 6,
+            "expected at least 6 dockerfile rules for infrastructure bootstrap, found {}",
+            dockerfile_count
+        );
+    }
 }
