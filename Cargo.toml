@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "crates/aishield-core",
-    "crates/aishield-cli",
+    "crates/aishield-cli", "crates/aishield-analytics",
 ]
 resolver = "2"
 
