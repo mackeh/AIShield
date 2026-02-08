@@ -258,22 +258,21 @@ docker run -p 8080:8080 \
 
 ## Architecture
 
-```
-┌─────────────┐        ┌──────────────────┐        ┌──────────────────┐
-│             │        │                  │        │                  │
-│  CLI/CI     ├───────►│  Analytics API   ├───────►│  PostgreSQL +    │
-│  aishield   │  POST  │  (Axum + sqlx)   │        │  TimescaleDB     │
-│    scan     │        │                  │        │                  │
-│             │        │  - Auth (SHA256) │        │  - Hypertables   │
-└─────────────┘        │  - Validation    │        │  - Materialized  │
-                       │  - Ingestion     │        │    Views         │
-┌─────────────┐        │                  │        │                  │
-│             │        │                  │        │                  │
-│  Dashboard  │◄───────┤  GET /analytics  │◄───────┤                  │
-│  (Next.js)  │        │                  │        │                  │
-│             │        │                  │        │                  │
-└─────────────┘        └──────────────────┘        └──────────────────┘
-```
+![AIShield Analytics Architecture](../../../.gemini/antigravity/brain/2f2ff23a-291b-4271-81e2-5816e0465957/analytics_architecture_1770564533481.png)
+
+**Request Flow**:
+
+1. CLI/CI executes `aishield scan` → POST scan results to `/api/v1/scans/ingest`
+2. API server validates `x-api-key` header (SHA-256 auth)
+3. Handlers parse request → Database queries insert scan + findings
+4. Dashboard requests analytics → GET `/api/v1/analytics/summary`
+5. API aggregates data from PostgreSQL → Returns JSON response
+
+**Components**:
+
+- **Clients**: CLI, CI pipelines, Dashboard
+- **API Server**: Axum web framework with auth middleware
+- **Database**: PostgreSQL + TimescaleDB for time-series optimization
 
 ## Performance
 
