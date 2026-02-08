@@ -7,29 +7,100 @@ on:
 
 permissions:
   contents: read
-  actions: read
-  security-events: write
+
+concurrency:
+  group: aishield-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AISHIELD_ENABLE_SAST_BRIDGE: ${{ vars.AISHIELD_ENABLE_SAST_BRIDGE || 'true' }}
+  AISHIELD_BRIDGE_ENGINES: ${{ vars.AISHIELD_BRIDGE_ENGINES || 'all' }}
 
 jobs:
   scan:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Set bridge args
+        run: |
+          if [ "${AISHIELD_ENABLE_SAST_BRIDGE}" = "true" ]; then
+            echo "AISHIELD_BRIDGE_ARGS=--bridge ${AISHIELD_BRIDGE_ENGINES}" >> "$GITHUB_ENV"
+            echo "Bridge enabled with engines: ${AISHIELD_BRIDGE_ENGINES}"
+          else
+            echo "AISHIELD_BRIDGE_ARGS=" >> "$GITHUB_ENV"
+            echo "Bridge disabled"
+          fi
+
+      - name: Set up Python
+        if: env.AISHIELD_ENABLE_SAST_BRIDGE == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install Semgrep and Bandit
+        if: env.AISHIELD_ENABLE_SAST_BRIDGE == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install semgrep bandit
+
+      - name: Set up Node.js
+        if: env.AISHIELD_ENABLE_SAST_BRIDGE == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install ESLint
+        if: env.AISHIELD_ENABLE_SAST_BRIDGE == 'true'
+        run: npm install -g eslint
+
       - name: Build and scan
-        run: cargo run -p aishield-cli -- scan . --format sarif --output aishield.sarif
+        run: cargo run -p aishield-cli -- scan . --format sarif --output aishield.sarif ${AISHIELD_BRIDGE_ARGS}
 
       - name: PR annotations
         if: github.event_name == 'pull_request'
-        run: cargo run -p aishield-cli -- scan . --format github --dedup normalized
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          if [ -z "${BASE_SHA}" ]; then
+            BASE_SHA="origin/main"
+          fi
+          cargo run -p aishield-cli -- scan . --format github --dedup normalized --changed-from "${BASE_SHA}" ${AISHIELD_BRIDGE_ARGS}
 
-      - name: Upload SARIF
-        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+      - name: Upload SARIF artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aishield-sarif
+          path: aishield.sarif
+          if-no-files-found: error
+          retention-days: 7
+
+  upload-sarif:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    needs: scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    steps:
+      - name: Download SARIF artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: aishield-sarif
+          path: .
+
+      - name: Upload SARIF to code scanning
         continue-on-error: true
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: aishield.sarif
+          category: aishield

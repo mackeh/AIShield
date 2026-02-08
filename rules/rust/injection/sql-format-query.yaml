@@ -1,0 +1,13 @@
+id: AISHIELD-RS-INJ-002
+title: SQL Query Built with format!
+severity: high
+confidence_that_ai_generated: 0.77
+languages: [rust]
+category: injection
+pattern:
+  all:
+    - 'format!("select'
+    - "user_input"
+fix:
+  suggestion: Use parameterized queries and bind variables.
+tags: [injection, sql-injection]

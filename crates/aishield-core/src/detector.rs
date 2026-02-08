@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
+use crate::classifier::{AiClassifierOptions, AiLikelihoodScorer};
 use crate::rules::{Rule, RuleSet};
 use crate::scanner::collect_source_files;
 use crate::scoring::compute_risk_score;
@@ -73,6 +74,16 @@ pub struct AnalysisOptions {
     pub min_ai_confidence: Option<f32>,
     pub categories: Vec<String>,
     pub exclude_paths: Vec<String>,
+    pub cross_file: bool,
+    pub ai_classifier: AiClassifierOptions,
+}
+
+#[derive(Debug, Clone)]
+struct SourceSlice {
+    file: String,
+    language: String,
+    lines: Vec<String>,
+    line_lowers: Vec<String>,
 }
 
 pub struct Analyzer {
@@ -94,6 +105,8 @@ impl Analyzer {
 
         let mut findings = Vec::new();
         let mut dedup = HashSet::new();
+        let mut source_slices = Vec::<SourceSlice>::new();
+        let ai_scorer = AiLikelihoodScorer::from_options(&options.ai_classifier);
 
         for file in &files {
             if is_excluded_path(target, &file.path, &options.exclude_paths) {
@@ -106,11 +119,22 @@ impl Analyzer {
             };
 
             let full_lower = content.to_ascii_lowercase();
-            let lines = content.lines().collect::<Vec<_>>();
+            let lines = content
+                .lines()
+                .map(|line| line.to_string())
+                .collect::<Vec<_>>();
             let line_lowers = lines
                 .iter()
                 .map(|line| line.to_ascii_lowercase())
                 .collect::<Vec<_>>();
+            let relative = relative_path(target, &file.path);
+
+            source_slices.push(SourceSlice {
+                file: relative.clone(),
+                language: file.language.clone(),
+                lines: lines.clone(),
+                line_lowers: line_lowers.clone(),
+            });
 
             for rule in rules.for_language(&file.language) {
                 if !should_include_rule(rule, options) {
@@ -139,28 +163,42 @@ impl Analyzer {
                         continue;
                     }
 
-                    let relative = relative_path(target, &file.path);
                     let dedup_key = format!("{}:{}:{}", rule.id, relative, line_no + 1);
                     if !dedup.insert(dedup_key) {
                         continue;
                     }
 
+                    let ai_confidence = ai_scorer.score(rule, &file.path, line.trim());
                     findings.push(Finding {
                         id: rule.id.clone(),
                         title: rule.title.clone(),
                         severity: rule.severity,
-                        file: relative,
+                        file: relative.clone(),
                         line: line_no + 1,
                         column,
                         snippet: line.trim().to_string(),
-                        ai_confidence: ((rule.confidence_that_ai_generated * 100.0) * 10.0).round()
-                            / 10.0,
-                        risk_score: compute_risk_score(rule, rule.severity, &file.path),
+                        ai_confidence,
+                        risk_score: compute_risk_score(
+                            rule,
+                            rule.severity,
+                            &file.path,
+                            line.trim(),
+                            ai_confidence,
+                        ),
                         category: rule.category.clone(),
                         tags: rule.tags.clone(),
                         ai_tendency: rule.ai_tendency.clone(),
                         fix_suggestion: rule.fix_suggestion.clone(),
                     });
+                }
+            }
+        }
+
+        if options.cross_file {
+            for finding in detect_cross_file_auth_gaps(&source_slices) {
+                let dedup_key = format!("{}:{}:{}", finding.id, finding.file, finding.line);
+                if dedup.insert(dedup_key) {
+                    findings.push(finding);
                 }
             }
         }
@@ -275,6 +313,255 @@ fn build_summary(findings: &[Finding], scanned_files: usize, matched_rules: usiz
         scanned_files,
         matched_rules,
     }
+}
+
+fn detect_cross_file_auth_gaps(sources: &[SourceSlice]) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    for source in sources {
+        match source.language.as_str() {
+            "javascript" => findings.extend(detect_js_sensitive_routes_without_auth(source)),
+            "python" => findings.extend(detect_python_sensitive_routes_without_auth(source)),
+            "java" => findings.extend(detect_java_sensitive_routes_without_auth(source)),
+            _ => {}
+        }
+    }
+    findings
+}
+
+fn detect_js_sensitive_routes_without_auth(source: &SourceSlice) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    let route_markers = [
+        "app.get(",
+        "app.post(",
+        "app.put(",
+        "app.delete(",
+        "router.get(",
+        "router.post(",
+        "router.put(",
+        "router.delete(",
+    ];
+
+    for (idx, line_lower) in source.line_lowers.iter().enumerate() {
+        if !route_markers
+            .iter()
+            .any(|marker| line_lower.contains(marker))
+        {
+            continue;
+        }
+        let route = extract_quoted_segment(&source.lines[idx]).unwrap_or_default();
+        if !route_is_sensitive(&route) {
+            continue;
+        }
+        if line_has_auth_hint(line_lower) {
+            continue;
+        }
+        if has_prior_js_guard(source, idx) {
+            continue;
+        }
+
+        findings.push(Finding {
+            id: "AISHIELD-JS-AUTH-XF-001".to_string(),
+            title: "Potential Unprotected Sensitive Route".to_string(),
+            severity: Severity::High,
+            file: source.file.clone(),
+            line: idx + 1,
+            column: 1,
+            snippet: source.lines[idx].trim().to_string(),
+            ai_confidence: 58.0,
+            risk_score: 70.0,
+            category: Some("auth".to_string()),
+            tags: vec![
+                "auth".to_string(),
+                "cross-file".to_string(),
+                "heuristic".to_string(),
+            ],
+            ai_tendency: Some(
+                "AI route handlers often expose sensitive endpoints before auth middleware is applied."
+                    .to_string(),
+            ),
+            fix_suggestion: Some(
+                "Attach authentication/authorization middleware to this route or apply guarded router groups.".to_string(),
+            ),
+        });
+    }
+
+    findings
+}
+
+fn detect_python_sensitive_routes_without_auth(source: &SourceSlice) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    for (idx, line_lower) in source.line_lowers.iter().enumerate() {
+        let is_route = line_lower.contains("@app.route(")
+            || line_lower.contains("@bp.route(")
+            || line_lower.contains("@api.route(")
+            || line_lower.contains("@app.get(")
+            || line_lower.contains("@app.post(")
+            || line_lower.contains("@router.get(")
+            || line_lower.contains("@router.post(");
+        if !is_route {
+            continue;
+        }
+
+        let route = extract_quoted_segment(&source.lines[idx]).unwrap_or_default();
+        if !route_is_sensitive(&route) {
+            continue;
+        }
+        if has_nearby_python_auth_decorator(source, idx) {
+            continue;
+        }
+
+        findings.push(Finding {
+            id: "AISHIELD-PY-AUTH-XF-001".to_string(),
+            title: "Potential Unprotected Sensitive Route".to_string(),
+            severity: Severity::High,
+            file: source.file.clone(),
+            line: idx + 1,
+            column: 1,
+            snippet: source.lines[idx].trim().to_string(),
+            ai_confidence: 57.0,
+            risk_score: 69.0,
+            category: Some("auth".to_string()),
+            tags: vec![
+                "auth".to_string(),
+                "cross-file".to_string(),
+                "heuristic".to_string(),
+            ],
+            ai_tendency: Some(
+                "Generated backend routes frequently omit login/authorization decorators on admin-like endpoints."
+                    .to_string(),
+            ),
+            fix_suggestion: Some(
+                "Add login/authorization decorators (for example @login_required or @jwt_required())."
+                    .to_string(),
+            ),
+        });
+    }
+
+    findings
+}
+
+fn detect_java_sensitive_routes_without_auth(source: &SourceSlice) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    for (idx, line_lower) in source.line_lowers.iter().enumerate() {
+        let is_route = line_lower.contains("@getmapping(")
+            || line_lower.contains("@postmapping(")
+            || line_lower.contains("@putmapping(")
+            || line_lower.contains("@deletemapping(")
+            || line_lower.contains("@requestmapping(");
+        if !is_route {
+            continue;
+        }
+
+        let route = extract_quoted_segment(&source.lines[idx]).unwrap_or_default();
+        if !route_is_sensitive(&route) {
+            continue;
+        }
+        if has_nearby_java_auth_annotation(source, idx) {
+            continue;
+        }
+
+        findings.push(Finding {
+            id: "AISHIELD-JAVA-AUTH-XF-001".to_string(),
+            title: "Potential Unprotected Sensitive Route".to_string(),
+            severity: Severity::High,
+            file: source.file.clone(),
+            line: idx + 1,
+            column: 1,
+            snippet: source.lines[idx].trim().to_string(),
+            ai_confidence: 56.0,
+            risk_score: 68.5,
+            category: Some("auth".to_string()),
+            tags: vec![
+                "auth".to_string(),
+                "cross-file".to_string(),
+                "heuristic".to_string(),
+            ],
+            ai_tendency: Some(
+                "AI-generated Spring controller snippets may define admin-like routes without authorization annotations."
+                    .to_string(),
+            ),
+            fix_suggestion: Some(
+                "Add method-level authorization (for example @PreAuthorize or @Secured) for sensitive routes."
+                    .to_string(),
+            ),
+        });
+    }
+
+    findings
+}
+
+fn has_prior_js_guard(source: &SourceSlice, route_line: usize) -> bool {
+    source.line_lowers[..=route_line].iter().any(|line| {
+        (line.contains("app.use(") || line.contains("router.use(")) && line_has_auth_hint(line)
+    })
+}
+
+fn has_nearby_python_auth_decorator(source: &SourceSlice, route_line: usize) -> bool {
+    let auth_markers = [
+        "@login_required",
+        "@jwt_required",
+        "@auth_required",
+        "@roles_required",
+        "@permission_required",
+        "@requires_auth",
+    ];
+
+    let start = route_line.saturating_sub(4);
+    let end = (route_line + 3).min(source.line_lowers.len().saturating_sub(1));
+    source.line_lowers[start..=end]
+        .iter()
+        .any(|line| auth_markers.iter().any(|marker| line.contains(marker)))
+}
+
+fn has_nearby_java_auth_annotation(source: &SourceSlice, route_line: usize) -> bool {
+    let auth_markers = [
+        "@preauthorize",
+        "@secured",
+        "@rolesallowed",
+        "@authenticationprincipal",
+    ];
+    let start = route_line.saturating_sub(4);
+    source.line_lowers[start..=route_line]
+        .iter()
+        .any(|line| auth_markers.iter().any(|marker| line.contains(marker)))
+}
+
+fn line_has_auth_hint(line_lower: &str) -> bool {
+    let hints = [
+        "auth",
+        "jwt",
+        "passport",
+        "requireauth",
+        "verifytoken",
+        "loginrequired",
+        "authenticated",
+    ];
+    hints.iter().any(|hint| line_lower.contains(hint))
+}
+
+fn route_is_sensitive(route: &str) -> bool {
+    if route.is_empty() {
+        return false;
+    }
+    let route = route.to_ascii_lowercase();
+    let hints = [
+        "admin", "account", "billing", "payment", "profile", "internal", "private", "manage",
+        "settings", "user",
+    ];
+    hints.iter().any(|hint| route.contains(hint))
+}
+
+fn extract_quoted_segment(line: &str) -> Option<String> {
+    for quote in ['"', '\''] {
+        let start = line.find(quote)?;
+        let remainder = &line[start + 1..];
+        let end = remainder.find(quote)?;
+        let value = remainder[..end].trim();
+        if !value.is_empty() {
+            return Some(value.to_string());
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -404,9 +691,71 @@ function good(token, expected) {
             .expect("scan fixture suite");
 
         assert!(
-            result.summary.total >= 20,
-            "expected at least 20 findings in fixture suite, got {}",
+            result.summary.total >= 60,
+            "expected at least 60 findings in expanded fixture suite, got {}",
             result.summary.total
+        );
+
+        let go_findings = result
+            .findings
+            .iter()
+            .filter(|finding| finding.id.starts_with("AISHIELD-GO-"))
+            .count();
+        let rust_findings = result
+            .findings
+            .iter()
+            .filter(|finding| finding.id.starts_with("AISHIELD-RS-"))
+            .count();
+        let java_findings = result
+            .findings
+            .iter()
+            .filter(|finding| finding.id.starts_with("AISHIELD-JAVA-"))
+            .count();
+        let terraform_findings = result
+            .findings
+            .iter()
+            .filter(|finding| finding.id.starts_with("AISHIELD-TF-"))
+            .count();
+        let kubernetes_findings = result
+            .findings
+            .iter()
+            .filter(|finding| finding.id.starts_with("AISHIELD-K8S-"))
+            .count();
+        let docker_findings = result
+            .findings
+            .iter()
+            .filter(|finding| finding.id.starts_with("AISHIELD-DOCKER-"))
+            .count();
+
+        assert!(
+            go_findings >= 15,
+            "expected at least 15 go findings in fixture suite, got {}",
+            go_findings
+        );
+        assert!(
+            rust_findings >= 15,
+            "expected at least 15 rust findings in fixture suite, got {}",
+            rust_findings
+        );
+        assert!(
+            java_findings >= 15,
+            "expected at least 15 java findings in fixture suite, got {}",
+            java_findings
+        );
+        assert!(
+            terraform_findings >= 5,
+            "expected at least 5 terraform findings in fixture suite, got {}",
+            terraform_findings
+        );
+        assert!(
+            kubernetes_findings >= 5,
+            "expected at least 5 kubernetes findings in fixture suite, got {}",
+            kubernetes_findings
+        );
+        assert!(
+            docker_findings >= 5,
+            "expected at least 5 dockerfile findings in fixture suite, got {}",
+            docker_findings
         );
     }
 
@@ -603,6 +952,79 @@ tags: [auth]
 
         assert_eq!(result.summary.total, 1);
         assert_eq!(result.findings[0].file, "main.py");
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn cross_file_mode_detects_sensitive_routes_only_when_enabled() {
+        let root = temp_path("aishield-core-test-cross-file-enabled");
+        let rules_dir = root.join("rules");
+        let src_dir = root.join("src");
+
+        fs::create_dir_all(&rules_dir).expect("create rules dir");
+        fs::create_dir_all(&src_dir).expect("create src dir");
+        fs::write(
+            src_dir.join("routes.js"),
+            r#"const app = require("express")();
+app.get("/admin/users", listUsers);
+"#,
+        )
+        .expect("write source");
+
+        let rules = RuleSet::load_from_dir(rules_dir.as_path()).expect("load rules");
+        let analyzer = Analyzer::new(rules);
+
+        let no_cross_file = analyzer
+            .analyze_path(src_dir.as_path(), &AnalysisOptions::default())
+            .expect("scan default");
+        assert_eq!(no_cross_file.summary.total, 0);
+
+        let result = analyzer
+            .analyze_path(
+                src_dir.as_path(),
+                &AnalysisOptions {
+                    cross_file: true,
+                    ..AnalysisOptions::default()
+                },
+            )
+            .expect("scan cross-file");
+        assert_eq!(result.summary.total, 1);
+        assert_eq!(result.findings[0].id, "AISHIELD-JS-AUTH-XF-001");
+        assert_eq!(result.findings[0].file, "routes.js");
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn cross_file_mode_skips_js_route_with_auth_hint() {
+        let root = temp_path("aishield-core-test-cross-file-auth-hint");
+        let rules_dir = root.join("rules");
+        let src_dir = root.join("src");
+
+        fs::create_dir_all(&rules_dir).expect("create rules dir");
+        fs::create_dir_all(&src_dir).expect("create src dir");
+        fs::write(
+            src_dir.join("routes.js"),
+            r#"const app = require("express")();
+app.get("/admin/users", requireAuth, listUsers);
+"#,
+        )
+        .expect("write source");
+
+        let rules = RuleSet::load_from_dir(rules_dir.as_path()).expect("load rules");
+        let analyzer = Analyzer::new(rules);
+        let result = analyzer
+            .analyze_path(
+                src_dir.as_path(),
+                &AnalysisOptions {
+                    cross_file: true,
+                    ..AnalysisOptions::default()
+                },
+            )
+            .expect("scan cross-file");
+
+        assert_eq!(result.summary.total, 0);
 
         let _ = fs::remove_dir_all(root);
     }

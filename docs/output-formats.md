@@ -7,6 +7,8 @@ AIShield supports four scan output formats:
 - `sarif`: GitHub Code Scanning compatible format
 - `github`: GitHub Actions annotation commands for inline PR feedback
 
+Scan output can optionally include findings from external bridge engines (`semgrep`, `bandit`, `eslint`) when enabled via `--bridge`.
+
 ## Table
 
 Default format.
@@ -85,6 +87,12 @@ This format emits GitHub Actions workflow commands:
 
 Use it in CI job logs to populate inline pull-request annotations.
 
+For low-noise PR checks, combine with:
+
+```bash
+--changed-from <base-ref-or-sha>
+```
+
 ## Dedup Behavior
 
 Use scan flag:
@@ -104,3 +112,19 @@ Defaults:
 - `json`/`sarif`/`github`: `normalized`
 
 `summary.original_total` and `summary.deduped_total` (JSON) and run properties (SARIF) expose what changed.
+
+## Baseline Comparison
+
+Use `--baseline <report>` to suppress findings that already exist in a previous AIShield report.
+
+Supported baseline inputs:
+
+- AIShield JSON (`--format json`)
+- SARIF (`--format sarif`)
+
+Example:
+
+```bash
+# only emit newly introduced findings compared to baseline
+cargo run -p aishield-cli -- scan . --format sarif --baseline previous.sarif --output aishield-new.sarif
+```

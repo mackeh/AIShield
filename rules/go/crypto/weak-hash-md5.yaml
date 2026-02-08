@@ -1,0 +1,12 @@
+id: AISHIELD-GO-CRYPTO-001
+title: Weak Hash Algorithm (MD5)
+severity: high
+confidence_that_ai_generated: 0.81
+languages: [go]
+category: crypto
+pattern:
+  any:
+    - "md5.sum("
+fix:
+  suggestion: Use a modern hash (for integrity) or password hashing like argon2/bcrypt for secrets.
+tags: [crypto, weak-hash]

@@ -1,0 +1,13 @@
+id: AISHIELD-RS-MISC-002
+title: Wildcard CORS Header
+severity: medium
+confidence_that_ai_generated: 0.69
+languages: [rust]
+category: misconfig
+pattern:
+  all:
+    - "access-control-allow-origin"
+    - "*"
+fix:
+  suggestion: Restrict CORS origins to known trusted domains.
+tags: [misconfig, cors]

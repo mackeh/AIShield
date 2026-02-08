@@ -1,0 +1,32 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "AIShield: test",
+      "type": "shell",
+      "command": "cargo test",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "AIShield: scan workspace",
+      "type": "shell",
+      "command": "cargo run -p aishield-cli -- scan .",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "AIShield: build docs",
+      "type": "shell",
+      "command": "npm run docs:build",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "AIShield: docs dev server",
+      "type": "shell",
+      "command": "npm run docs:dev",
+      "problemMatcher": []
+    }
+  ]
+}

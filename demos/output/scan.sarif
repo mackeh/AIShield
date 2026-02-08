@@ -1,0 +1,2302 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "AIShield",
+          "version": "0.1.1",
+          "informationUri": "https://github.com/mackeh/AIShield",
+          "rules": [
+            {
+              "id": "AISHIELD-GO-AUTH-001",
+              "name": "AISHIELD-GO-AUTH-001",
+              "shortDescription": { "text": "Timing-Unsafe Token Comparison" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-GO-AUTH-002",
+              "name": "AISHIELD-GO-AUTH-002",
+              "shortDescription": { "text": "Timing-Unsafe API Key Comparison" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-GO-AUTH-003",
+              "name": "AISHIELD-GO-AUTH-003",
+              "shortDescription": { "text": "Timing-Unsafe Password Comparison" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-GO-AUTH-004",
+              "name": "AISHIELD-GO-AUTH-004",
+              "shortDescription": { "text": "Insecure Case-Normalized Token Comparison" },
+              "defaultConfiguration": { "level": "warning" }
+            },
+            {
+              "id": "AISHIELD-GO-AUTH-005",
+              "name": "AISHIELD-GO-AUTH-005",
+              "shortDescription": { "text": "Hardcoded Bearer Token Assembly" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-GO-CRYPTO-001",
+              "name": "AISHIELD-GO-CRYPTO-001",
+              "shortDescription": { "text": "Weak Hash Algorithm (MD5)" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-GO-CRYPTO-002",
+              "name": "AISHIELD-GO-CRYPTO-002",
+              "shortDescription": { "text": "Predictable Random Token Generation" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-GO-CRYPTO-003",
+              "name": "AISHIELD-GO-CRYPTO-003",
+              "shortDescription": { "text": "Weak Hash Algorithm (SHA1)" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-GO-CRYPTO-004",
+              "name": "AISHIELD-GO-CRYPTO-004",
+              "shortDescription": { "text": "Weak Cipher (DES)" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-GO-CRYPTO-005",
+              "name": "AISHIELD-GO-CRYPTO-005",
+              "shortDescription": { "text": "Weak RSA Key Size" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-GO-INJ-001",
+              "name": "AISHIELD-GO-INJ-001",
+              "shortDescription": { "text": "Potential Command Injection via exec.Command(\"sh\", \"-c\")" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-GO-INJ-002",
+              "name": "AISHIELD-GO-INJ-002",
+              "shortDescription": { "text": "SQL Query Built with fmt.Sprintf" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-GO-INJ-003",
+              "name": "AISHIELD-GO-INJ-003",
+              "shortDescription": { "text": "SQL Query Built with String Concatenation" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-GO-INJ-004",
+              "name": "AISHIELD-GO-INJ-004",
+              "shortDescription": { "text": "Potential Path Traversal in File Read" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-GO-MISC-001",
+              "name": "AISHIELD-GO-MISC-001",
+              "shortDescription": { "text": "TLS Verification Disabled" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-GO-MISC-002",
+              "name": "AISHIELD-GO-MISC-002",
+              "shortDescription": { "text": "Wildcard CORS Header" },
+              "defaultConfiguration": { "level": "warning" }
+            },
+            {
+              "id": "AISHIELD-GO-MISC-003",
+              "name": "AISHIELD-GO-MISC-003",
+              "shortDescription": { "text": "Sensitive Request Logged in Debug Output" },
+              "defaultConfiguration": { "level": "warning" }
+            },
+            {
+              "id": "AISHIELD-GO-MISC-004",
+              "name": "AISHIELD-GO-MISC-004",
+              "shortDescription": { "text": "Service Listening on All Interfaces" },
+              "defaultConfiguration": { "level": "warning" }
+            },
+            {
+              "id": "AISHIELD-GO-MISC-005",
+              "name": "AISHIELD-GO-MISC-005",
+              "shortDescription": { "text": "Debug Flag Enabled" },
+              "defaultConfiguration": { "level": "note" }
+            },
+            {
+              "id": "AISHIELD-JAVA-AUTH-001",
+              "name": "AISHIELD-JAVA-AUTH-001",
+              "shortDescription": { "text": "Timing-Unsafe Secret Comparison" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-JAVA-AUTH-002",
+              "name": "AISHIELD-JAVA-AUTH-002",
+              "shortDescription": { "text": "Timing-Unsafe API Key Comparison" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-JAVA-AUTH-003",
+              "name": "AISHIELD-JAVA-AUTH-003",
+              "shortDescription": { "text": "Timing-Unsafe Password Comparison" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-JAVA-AUTH-004",
+              "name": "AISHIELD-JAVA-AUTH-004",
+              "shortDescription": { "text": "Insecure Case-Normalized Token Comparison" },
+              "defaultConfiguration": { "level": "warning" }
+            },
+            {
+              "id": "AISHIELD-JAVA-AUTH-005",
+              "name": "AISHIELD-JAVA-AUTH-005",
+              "shortDescription": { "text": "Hardcoded Bearer Authorization Header" },
+              "defaultConfiguration": { "level": "warning" }
+            },
+            {
+              "id": "AISHIELD-JAVA-CRYPTO-001",
+              "name": "AISHIELD-JAVA-CRYPTO-001",
+              "shortDescription": { "text": "Weak Hash Algorithm (MD5)" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-JAVA-CRYPTO-002",
+              "name": "AISHIELD-JAVA-CRYPTO-002",
+              "shortDescription": { "text": "Predictable Random Token Generation" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-JAVA-CRYPTO-003",
+              "name": "AISHIELD-JAVA-CRYPTO-003",
+              "shortDescription": { "text": "Weak Hash Algorithm (SHA1)" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-JAVA-CRYPTO-004",
+              "name": "AISHIELD-JAVA-CRYPTO-004",
+              "shortDescription": { "text": "Weak Cipher Mode (DES/ECB)" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-JAVA-INJ-001",
+              "name": "AISHIELD-JAVA-INJ-001",
+              "shortDescription": { "text": "Potential Command Injection via Runtime.exec" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-JAVA-INJ-002",
+              "name": "AISHIELD-JAVA-INJ-002",
+              "shortDescription": { "text": "SQL Query Built with String Concatenation" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-JAVA-INJ-004",
+              "name": "AISHIELD-JAVA-INJ-004",
+              "shortDescription": { "text": "Script Engine Eval of User Input" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-JAVA-INJ-005",
+              "name": "AISHIELD-JAVA-INJ-005",
+              "shortDescription": { "text": "Open Redirect from User Input" },
+              "defaultConfiguration": { "level": "warning" }
+            },
+            {
+              "id": "AISHIELD-JAVA-MISC-001",
+              "name": "AISHIELD-JAVA-MISC-001",
+              "shortDescription": { "text": "Wildcard CORS Configuration" },
+              "defaultConfiguration": { "level": "warning" }
+            },
+            {
+              "id": "AISHIELD-JAVA-MISC-002",
+              "name": "AISHIELD-JAVA-MISC-002",
+              "shortDescription": { "text": "Debug Flag Enabled" },
+              "defaultConfiguration": { "level": "note" }
+            },
+            {
+              "id": "AISHIELD-JAVA-MISC-003",
+              "name": "AISHIELD-JAVA-MISC-003",
+              "shortDescription": { "text": "Hostname Verification Disabled" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-JAVA-MISC-004",
+              "name": "AISHIELD-JAVA-MISC-004",
+              "shortDescription": { "text": "Service Bound to All Interfaces" },
+              "defaultConfiguration": { "level": "warning" }
+            },
+            {
+              "id": "AISHIELD-JAVA-MISC-005",
+              "name": "AISHIELD-JAVA-MISC-005",
+              "shortDescription": { "text": "Sensitive Auth Header Logging" },
+              "defaultConfiguration": { "level": "warning" }
+            },
+            {
+              "id": "AISHIELD-JS-AUTH-001",
+              "name": "AISHIELD-JS-AUTH-001",
+              "shortDescription": { "text": "Timing-Unsafe Token Comparison" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-JS-AUTH-002",
+              "name": "AISHIELD-JS-AUTH-002",
+              "shortDescription": { "text": "JWT Verification Weakening Option" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-JS-CRYPTO-001",
+              "name": "AISHIELD-JS-CRYPTO-001",
+              "shortDescription": { "text": "Weak Hash Algorithm (MD5/SHA1)" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-JS-CRYPTO-002",
+              "name": "AISHIELD-JS-CRYPTO-002",
+              "shortDescription": { "text": "Deprecated createCipher Usage" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-JS-CRYPTO-003",
+              "name": "AISHIELD-JS-CRYPTO-003",
+              "shortDescription": { "text": "Predictable Random Token Generation" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-JS-INJ-001",
+              "name": "AISHIELD-JS-INJ-001",
+              "shortDescription": { "text": "SQL Query Built with Template String" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-JS-INJ-002",
+              "name": "AISHIELD-JS-INJ-002",
+              "shortDescription": { "text": "Dynamic Code Execution with eval" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-JS-INJ-003",
+              "name": "AISHIELD-JS-INJ-003",
+              "shortDescription": { "text": "Potential Command Injection via exec" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-JS-INJ-004",
+              "name": "AISHIELD-JS-INJ-004",
+              "shortDescription": { "text": "Unsanitized innerHTML Assignment" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-JS-INJ-005",
+              "name": "AISHIELD-JS-INJ-005",
+              "shortDescription": { "text": "Potential Path Traversal via fs.readFile" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-JS-INJ-006",
+              "name": "AISHIELD-JS-INJ-006",
+              "shortDescription": { "text": "Open Redirect from User Input" },
+              "defaultConfiguration": { "level": "warning" }
+            },
+            {
+              "id": "AISHIELD-JS-INJ-007",
+              "name": "AISHIELD-JS-INJ-007",
+              "shortDescription": { "text": "NoSQL Injection via $where" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-JS-MISC-002",
+              "name": "AISHIELD-JS-MISC-002",
+              "shortDescription": { "text": "Debug Logging in Production Path" },
+              "defaultConfiguration": { "level": "note" }
+            },
+            {
+              "id": "AISHIELD-PY-AUTH-001",
+              "name": "AISHIELD-PY-AUTH-001",
+              "shortDescription": { "text": "Timing-Unsafe Secret Comparison" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-PY-AUTH-002",
+              "name": "AISHIELD-PY-AUTH-002",
+              "shortDescription": { "text": "JWT Signature Verification Disabled" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-PY-CRYPTO-001",
+              "name": "AISHIELD-PY-CRYPTO-001",
+              "shortDescription": { "text": "AI-Suggested Weak Hash Algorithm" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-PY-CRYPTO-003",
+              "name": "AISHIELD-PY-CRYPTO-003",
+              "shortDescription": { "text": "Password Stored with Reversible Encoding" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-PY-CRYPTO-004",
+              "name": "AISHIELD-PY-CRYPTO-004",
+              "shortDescription": { "text": "Predictable Random Token Generation" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-PY-CRYPTO-005",
+              "name": "AISHIELD-PY-CRYPTO-005",
+              "shortDescription": { "text": "ECB Mode Encryption" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-PY-CRYPTO-006",
+              "name": "AISHIELD-PY-CRYPTO-006",
+              "shortDescription": { "text": "TLS Verification Disabled" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-PY-INJ-002",
+              "name": "AISHIELD-PY-INJ-002",
+              "shortDescription": { "text": "Potential Command Injection via os.system" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-PY-INJ-003",
+              "name": "AISHIELD-PY-INJ-003",
+              "shortDescription": { "text": "subprocess with shell=True" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-PY-INJ-004",
+              "name": "AISHIELD-PY-INJ-004",
+              "shortDescription": { "text": "Dynamic Code Execution with eval/exec" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-PY-INJ-005",
+              "name": "AISHIELD-PY-INJ-005",
+              "shortDescription": { "text": "Potential Path Traversal in File Access" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-PY-MISC-001",
+              "name": "AISHIELD-PY-MISC-001",
+              "shortDescription": { "text": "Debug Mode Enabled" },
+              "defaultConfiguration": { "level": "warning" }
+            },
+            {
+              "id": "AISHIELD-RS-AUTH-001",
+              "name": "AISHIELD-RS-AUTH-001",
+              "shortDescription": { "text": "Timing-Unsafe Token Comparison" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-RS-AUTH-002",
+              "name": "AISHIELD-RS-AUTH-002",
+              "shortDescription": { "text": "Timing-Unsafe API Key Comparison" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-RS-AUTH-003",
+              "name": "AISHIELD-RS-AUTH-003",
+              "shortDescription": { "text": "Timing-Unsafe Password Comparison" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-RS-AUTH-004",
+              "name": "AISHIELD-RS-AUTH-004",
+              "shortDescription": { "text": "Insecure Case-Normalized Token Comparison" },
+              "defaultConfiguration": { "level": "warning" }
+            },
+            {
+              "id": "AISHIELD-RS-AUTH-005",
+              "name": "AISHIELD-RS-AUTH-005",
+              "shortDescription": { "text": "Hardcoded Bearer Header Construction" },
+              "defaultConfiguration": { "level": "warning" }
+            },
+            {
+              "id": "AISHIELD-RS-CRYPTO-001",
+              "name": "AISHIELD-RS-CRYPTO-001",
+              "shortDescription": { "text": "Weak Hash Algorithm (MD5)" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-RS-CRYPTO-002",
+              "name": "AISHIELD-RS-CRYPTO-002",
+              "shortDescription": { "text": "Hardcoded Secret in Source" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-RS-CRYPTO-003",
+              "name": "AISHIELD-RS-CRYPTO-003",
+              "shortDescription": { "text": "Weak Hash Algorithm (SHA1)" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-RS-CRYPTO-004",
+              "name": "AISHIELD-RS-CRYPTO-004",
+              "shortDescription": { "text": "Weak Cipher Usage (DES)" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-RS-CRYPTO-005",
+              "name": "AISHIELD-RS-CRYPTO-005",
+              "shortDescription": { "text": "Weak RSA Key Size" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-RS-INJ-001",
+              "name": "AISHIELD-RS-INJ-001",
+              "shortDescription": { "text": "Potential Command Injection via shell execution" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-RS-INJ-002",
+              "name": "AISHIELD-RS-INJ-002",
+              "shortDescription": { "text": "SQL Query Built with format!" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-RS-INJ-003",
+              "name": "AISHIELD-RS-INJ-003",
+              "shortDescription": { "text": "SQL Query Built with String Concatenation" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-RS-INJ-004",
+              "name": "AISHIELD-RS-INJ-004",
+              "shortDescription": { "text": "Potential Path Traversal in File Reads" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-RS-INJ-005",
+              "name": "AISHIELD-RS-INJ-005",
+              "shortDescription": { "text": "Template Injection via render_str" },
+              "defaultConfiguration": { "level": "warning" }
+            },
+            {
+              "id": "AISHIELD-RS-MISC-001",
+              "name": "AISHIELD-RS-MISC-001",
+              "shortDescription": { "text": "TLS Certificate Verification Disabled" },
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "AISHIELD-RS-MISC-002",
+              "name": "AISHIELD-RS-MISC-002",
+              "shortDescription": { "text": "Wildcard CORS Header" },
+              "defaultConfiguration": { "level": "warning" }
+            },
+            {
+              "id": "AISHIELD-RS-MISC-003",
+              "name": "AISHIELD-RS-MISC-003",
+              "shortDescription": { "text": "Sensitive Request Debug Logging" },
+              "defaultConfiguration": { "level": "warning" }
+            },
+            {
+              "id": "AISHIELD-RS-MISC-004",
+              "name": "AISHIELD-RS-MISC-004",
+              "shortDescription": { "text": "Service Bound to All Interfaces" },
+              "defaultConfiguration": { "level": "warning" }
+            },
+            {
+              "id": "AISHIELD-RS-MISC-005",
+              "name": "AISHIELD-RS-MISC-005",
+              "shortDescription": { "text": "Debug Flag Enabled in Runtime Path" },
+              "defaultConfiguration": { "level": "note" }
+            }
+          ]
+        }
+      },
+      "properties": {
+        "dedupMode": "normalized",
+        "originalTotal": 96,
+        "dedupedTotal": 94
+      },
+      "results": [
+        {
+          "ruleId": "AISHIELD-PY-INJ-004",
+          "level": "error",
+          "message": { "text": "Dynamic Code Execution with eval/exec (AI confidence 76.0%, risk 78.6)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "python_vulnerable_suite.py" },
+                "region": { "startLine": 38, "startColumn": 15 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 76.0,
+            "riskScore": 78.6,
+            "category": "injection",
+            "tags": ["injection", "code-execution"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-PY-CRYPTO-003",
+          "level": "error",
+          "message": { "text": "Password Stored with Reversible Encoding (AI confidence 81.0%, risk 78.3)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "python_vulnerable_suite.py" },
+                "region": { "startLine": 26, "startColumn": 15 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 81.0,
+            "riskScore": 78.3,
+            "category": "auth",
+            "tags": ["auth", "crypto", "passwords"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-PY-CRYPTO-003",
+          "level": "error",
+          "message": { "text": "Password Stored with Reversible Encoding (AI confidence 81.0%, risk 78.3)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "vulnerable.py" },
+                "region": { "startLine": 6, "startColumn": 14 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 81.0,
+            "riskScore": 78.3,
+            "category": "auth",
+            "tags": ["auth", "crypto", "passwords"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JS-INJ-002",
+          "level": "error",
+          "message": { "text": "Dynamic Code Execution with eval (AI confidence 74.0%, risk 78.0)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "javascript_vulnerable_suite.js" },
+                "region": { "startLine": 28, "startColumn": 3 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 74.0,
+            "riskScore": 78.0,
+            "category": "injection",
+            "tags": ["injection", "code-execution"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JAVA-INJ-004",
+          "level": "error",
+          "message": { "text": "Script Engine Eval of User Input (AI confidence 73.0%, risk 77.7)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "java_vulnerable_suite.java" },
+                "region": { "startLine": 54, "startColumn": 9 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 73.0,
+            "riskScore": 77.7,
+            "category": "injection",
+            "tags": ["injection", "code-execution"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-PY-AUTH-002",
+          "level": "error",
+          "message": { "text": "JWT Signature Verification Disabled (AI confidence 76.0%, risk 74.8)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "python_vulnerable_suite.py" },
+                "region": { "startLine": 29, "startColumn": 15 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 76.0,
+            "riskScore": 74.8,
+            "category": "auth",
+            "tags": ["auth", "jwt"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JAVA-INJ-001",
+          "level": "error",
+          "message": { "text": "Potential Command Injection via Runtime.exec (AI confidence 76.0%, risk 72.6)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "java_vulnerable_suite.java" },
+                "region": { "startLine": 12, "startColumn": 9 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 76.0,
+            "riskScore": 72.6,
+            "category": "injection",
+            "tags": ["injection", "command-injection"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JAVA-INJ-001",
+          "level": "error",
+          "message": { "text": "Potential Command Injection via Runtime.exec (AI confidence 76.0%, risk 72.6)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "java_vulnerable_suite.java" },
+                "region": { "startLine": 15, "startColumn": 9 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 76.0,
+            "riskScore": 72.6,
+            "category": "injection",
+            "tags": ["injection", "command-injection"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-PY-INJ-003",
+          "level": "error",
+          "message": { "text": "subprocess with shell=True (AI confidence 76.0%, risk 72.6)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "python_vulnerable_suite.py" },
+                "region": { "startLine": 37, "startColumn": 5 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 76.0,
+            "riskScore": 72.6,
+            "category": "injection",
+            "tags": ["injection", "command"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JS-AUTH-002",
+          "level": "error",
+          "message": { "text": "JWT Verification Weakening Option (AI confidence 81.0%, risk 72.3)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "javascript_vulnerable_suite.js" },
+                "region": { "startLine": 20, "startColumn": 19 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 81.0,
+            "riskScore": 72.3,
+            "category": "auth",
+            "tags": ["auth", "jwt"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-PY-INJ-002",
+          "level": "error",
+          "message": { "text": "Potential Command Injection via os.system (AI confidence 73.0%, risk 71.7)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "python_vulnerable_suite.py" },
+                "region": { "startLine": 36, "startColumn": 5 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 73.0,
+            "riskScore": 71.7,
+            "category": "injection",
+            "tags": ["injection", "command"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-PY-AUTH-001",
+          "level": "error",
+          "message": { "text": "Timing-Unsafe Secret Comparison (AI confidence 77.0%, risk 71.1)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "python_vulnerable_suite.py" },
+                "region": { "startLine": 16, "startColumn": 8 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 77.0,
+            "riskScore": 71.1,
+            "category": "auth",
+            "tags": ["auth", "timing-attack"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-PY-AUTH-001",
+          "level": "error",
+          "message": { "text": "Timing-Unsafe Secret Comparison (AI confidence 77.0%, risk 71.1)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "vulnerable.py" },
+                "region": { "startLine": 7, "startColumn": 8 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 77.0,
+            "riskScore": 71.1,
+            "category": "auth",
+            "tags": ["auth", "timing-attack"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JS-CRYPTO-003",
+          "level": "error",
+          "message": { "text": "Predictable Random Token Generation (AI confidence 72.0%, risk 70.6)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "javascript_vulnerable_suite.js" },
+                "region": { "startLine": 19, "startColumn": 9 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 72.0,
+            "riskScore": 70.6,
+            "category": "crypto",
+            "tags": ["crypto", "randomness", "auth"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JS-INJ-003",
+          "level": "error",
+          "message": { "text": "Potential Command Injection via exec (AI confidence 69.0%, risk 70.5)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "javascript_vulnerable_suite.js" },
+                "region": { "startLine": 29, "startColumn": 3 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 69.0,
+            "riskScore": 70.5,
+            "category": "injection",
+            "tags": ["injection", "command"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-PY-CRYPTO-001",
+          "level": "error",
+          "message": { "text": "AI-Suggested Weak Hash Algorithm (AI confidence 74.0%, risk 70.0)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "python_vulnerable_suite.py" },
+                "region": { "startLine": 24, "startColumn": 14 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 74.0,
+            "riskScore": 70.0,
+            "category": "crypto",
+            "tags": ["crypto", "owasp-top10"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-PY-CRYPTO-001",
+          "level": "error",
+          "message": { "text": "AI-Suggested Weak Hash Algorithm (AI confidence 74.0%, risk 70.0)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "python_vulnerable_suite.py" },
+                "region": { "startLine": 25, "startColumn": 14 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 74.0,
+            "riskScore": 70.0,
+            "category": "crypto",
+            "tags": ["crypto", "owasp-top10"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-PY-CRYPTO-001",
+          "level": "error",
+          "message": { "text": "AI-Suggested Weak Hash Algorithm (AI confidence 74.0%, risk 70.0)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "vulnerable.py" },
+                "region": { "startLine": 5, "startColumn": 14 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 74.0,
+            "riskScore": 70.0,
+            "category": "crypto",
+            "tags": ["crypto", "owasp-top10"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JS-AUTH-001",
+          "level": "error",
+          "message": { "text": "Timing-Unsafe Token Comparison (AI confidence 73.0%, risk 69.9)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "javascript_vulnerable_suite.js" },
+                "region": { "startLine": 10, "startColumn": 7 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 73.0,
+            "riskScore": 69.9,
+            "category": "auth",
+            "tags": ["auth", "timing-attack"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JS-AUTH-001",
+          "level": "error",
+          "message": { "text": "Timing-Unsafe Token Comparison (AI confidence 73.0%, risk 69.9)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "vulnerable.js" },
+                "region": { "startLine": 2, "startColumn": 7 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 73.0,
+            "riskScore": 69.9,
+            "category": "auth",
+            "tags": ["auth", "timing-attack"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JS-INJ-007",
+          "level": "error",
+          "message": { "text": "NoSQL Injection via $where (AI confidence 65.0%, risk 69.3)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "javascript_vulnerable_suite.js" },
+                "region": { "startLine": 32, "startColumn": 21 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 65.0,
+            "riskScore": 69.3,
+            "category": "injection",
+            "tags": ["injection", "nosql"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-RS-INJ-003",
+          "level": "error",
+          "message": { "text": "SQL Query Built with String Concatenation (AI confidence 68.0%, risk 69.2)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "rust_vulnerable_suite.rs" },
+                "region": { "startLine": 19, "startColumn": 27 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 68.0,
+            "riskScore": 69.2,
+            "category": "injection",
+            "tags": ["injection", "sql-injection"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-PY-AUTH-001",
+          "level": "error",
+          "message": { "text": "Timing-Unsafe Secret Comparison (AI confidence 77.0%, risk 69.1)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "python_vulnerable_suite.py" },
+                "region": { "startLine": 18, "startColumn": 8 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 77.0,
+            "riskScore": 69.1,
+            "category": "auth",
+            "tags": ["auth", "timing-attack"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-PY-CRYPTO-004",
+          "level": "error",
+          "message": { "text": "Predictable Random Token Generation (AI confidence 71.0%, risk 68.9)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "python_vulnerable_suite.py" },
+                "region": { "startLine": 27, "startColumn": 5 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 71.0,
+            "riskScore": 68.9,
+            "category": "crypto",
+            "tags": ["crypto", "randomness", "auth"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-GO-AUTH-001",
+          "level": "error",
+          "message": { "text": "Timing-Unsafe Token Comparison (AI confidence 69.0%, risk 68.7)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "go_vulnerable_suite.go" },
+                "region": { "startLine": 41, "startColumn": 5 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 69.0,
+            "riskScore": 68.7,
+            "category": "auth",
+            "tags": ["auth", "timing-attack"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JS-INJ-004",
+          "level": "error",
+          "message": { "text": "Unsanitized innerHTML Assignment (AI confidence 63.0%, risk 68.7)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "javascript_vulnerable_suite.js" },
+                "region": { "startLine": 27, "startColumn": 17 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 63.0,
+            "riskScore": 68.7,
+            "category": "injection",
+            "tags": ["xss", "injection"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JS-INJ-004",
+          "level": "error",
+          "message": { "text": "Unsanitized innerHTML Assignment (AI confidence 63.0%, risk 68.7)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "vulnerable.js" },
+                "region": { "startLine": 6, "startColumn": 17 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 63.0,
+            "riskScore": 68.7,
+            "category": "injection",
+            "tags": ["xss", "injection"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-GO-INJ-003",
+          "level": "error",
+          "message": { "text": "SQL Query Built with String Concatenation (AI confidence 66.0%, risk 68.6)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "go_vulnerable_suite.go" },
+                "region": { "startLine": 29, "startColumn": 13 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 66.0,
+            "riskScore": 68.6,
+            "category": "injection",
+            "tags": ["injection", "sql-injection"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JS-INJ-001",
+          "level": "error",
+          "message": { "text": "SQL Query Built with Template String (AI confidence 66.0%, risk 68.6)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "javascript_vulnerable_suite.js" },
+                "region": { "startLine": 25, "startColumn": 6 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 66.0,
+            "riskScore": 68.6,
+            "category": "injection",
+            "tags": ["injection", "sql"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-RS-INJ-002",
+          "level": "error",
+          "message": { "text": "SQL Query Built with format! (AI confidence 66.0%, risk 68.6)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "rust_vulnerable_suite.rs" },
+                "region": { "startLine": 18, "startColumn": 17 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 66.0,
+            "riskScore": 68.6,
+            "category": "injection",
+            "tags": ["injection", "sql-injection"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-PY-CRYPTO-006",
+          "level": "error",
+          "message": { "text": "TLS Verification Disabled (AI confidence 72.0%, risk 68.4)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "python_vulnerable_suite.py" },
+                "region": { "startLine": 31, "startColumn": 16 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 72.0,
+            "riskScore": 68.4,
+            "category": "crypto",
+            "tags": ["crypto", "tls", "misconfig"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-RS-AUTH-001",
+          "level": "error",
+          "message": { "text": "Timing-Unsafe Token Comparison (AI confidence 68.0%, risk 68.4)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "rust_vulnerable_suite.rs" },
+                "region": { "startLine": 26, "startColumn": 8 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 68.0,
+            "riskScore": 68.4,
+            "category": "auth",
+            "tags": ["auth", "timing-attack"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JAVA-INJ-002",
+          "level": "error",
+          "message": { "text": "SQL Query Built with String Concatenation (AI confidence 65.0%, risk 68.3)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "java_vulnerable_suite.java" },
+                "region": { "startLine": 24, "startColumn": 25 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 65.0,
+            "riskScore": 68.3,
+            "category": "injection",
+            "tags": ["injection", "sql-injection"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JS-CRYPTO-001",
+          "level": "error",
+          "message": { "text": "Weak Hash Algorithm (MD5/SHA1) (AI confidence 73.0%, risk 68.3)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "javascript_vulnerable_suite.js" },
+                "region": { "startLine": 16, "startColumn": 23 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 73.0,
+            "riskScore": 68.3,
+            "category": "crypto",
+            "tags": ["crypto", "hashing"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JS-CRYPTO-001",
+          "level": "error",
+          "message": { "text": "Weak Hash Algorithm (MD5/SHA1) (AI confidence 73.0%, risk 68.3)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "javascript_vulnerable_suite.js" },
+                "region": { "startLine": 17, "startColumn": 25 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 73.0,
+            "riskScore": 68.3,
+            "category": "crypto",
+            "tags": ["crypto", "hashing"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-GO-INJ-002",
+          "level": "error",
+          "message": { "text": "SQL Query Built with fmt.Sprintf (AI confidence 64.0%, risk 68.0)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "go_vulnerable_suite.go" },
+                "region": { "startLine": 28, "startColumn": 11 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 64.0,
+            "riskScore": 68.0,
+            "category": "injection",
+            "tags": ["injection", "sql-injection"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JS-AUTH-001",
+          "level": "error",
+          "message": { "text": "Timing-Unsafe Token Comparison (AI confidence 73.0%, risk 67.9)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "javascript_vulnerable_suite.js" },
+                "region": { "startLine": 11, "startColumn": 7 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 73.0,
+            "riskScore": 67.9,
+            "category": "auth",
+            "tags": ["auth", "timing-attack"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-GO-INJ-001",
+          "level": "error",
+          "message": { "text": "Potential Command Injection via exec.Command(\"sh\", \"-c\") (AI confidence 68.0%, risk 67.8)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "go_vulnerable_suite.go" },
+                "region": { "startLine": 25, "startColumn": 9 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 68.0,
+            "riskScore": 67.8,
+            "category": "injection",
+            "tags": ["injection", "command-injection"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-GO-AUTH-003",
+          "level": "error",
+          "message": { "text": "Timing-Unsafe Password Comparison (AI confidence 66.0%, risk 67.8)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "go_vulnerable_suite.go" },
+                "region": { "startLine": 47, "startColumn": 5 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 66.0,
+            "riskScore": 67.8,
+            "category": "auth",
+            "tags": ["auth", "timing-attack"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JAVA-AUTH-001",
+          "level": "error",
+          "message": { "text": "Timing-Unsafe Secret Comparison (AI confidence 66.0%, risk 67.8)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "java_vulnerable_suite.java" },
+                "region": { "startLine": 27, "startColumn": 13 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 66.0,
+            "riskScore": 67.8,
+            "category": "auth",
+            "tags": ["auth", "timing-attack"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-RS-INJ-001",
+          "level": "error",
+          "message": { "text": "Potential Command Injection via shell execution (AI confidence 68.0%, risk 67.8)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "rust_vulnerable_suite.rs" },
+                "region": { "startLine": 12, "startColumn": 15 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 68.0,
+            "riskScore": 67.8,
+            "category": "injection",
+            "tags": ["injection", "command-injection"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-RS-AUTH-003",
+          "level": "error",
+          "message": { "text": "Timing-Unsafe Password Comparison (AI confidence 65.0%, risk 67.5)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "rust_vulnerable_suite.rs" },
+                "region": { "startLine": 38, "startColumn": 8 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 65.0,
+            "riskScore": 67.5,
+            "category": "auth",
+            "tags": ["auth", "timing-attack"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-GO-CRYPTO-001",
+          "level": "error",
+          "message": { "text": "Weak Hash Algorithm (MD5) (AI confidence 70.0%, risk 67.4)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "go_vulnerable_suite.go" },
+                "region": { "startLine": 20, "startColumn": 6 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 70.0,
+            "riskScore": 67.4,
+            "category": "crypto",
+            "tags": ["crypto", "weak-hash"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JAVA-AUTH-003",
+          "level": "error",
+          "message": { "text": "Timing-Unsafe Password Comparison (AI confidence 64.0%, risk 67.2)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "java_vulnerable_suite.java" },
+                "region": { "startLine": 39, "startColumn": 13 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 64.0,
+            "riskScore": 67.2,
+            "category": "auth",
+            "tags": ["auth", "timing-attack"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-RS-CRYPTO-001",
+          "level": "error",
+          "message": { "text": "Weak Hash Algorithm (MD5) (AI confidence 69.0%, risk 67.1)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "rust_vulnerable_suite.rs" },
+                "region": { "startLine": 4, "startColumn": 18 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 69.0,
+            "riskScore": 67.1,
+            "category": "crypto",
+            "tags": ["crypto", "weak-hash"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-GO-AUTH-005",
+          "level": "error",
+          "message": { "text": "Hardcoded Bearer Token Assembly (AI confidence 63.0%, risk 66.9)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "go_vulnerable_suite.go" },
+                "region": { "startLine": 54, "startColumn": 2 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 63.0,
+            "riskScore": 66.9,
+            "category": "auth",
+            "tags": ["auth", "secrets"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-GO-CRYPTO-003",
+          "level": "error",
+          "message": { "text": "Weak Hash Algorithm (SHA1) (AI confidence 68.0%, risk 66.8)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "go_vulnerable_suite.go" },
+                "region": { "startLine": 21, "startColumn": 6 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 68.0,
+            "riskScore": 66.8,
+            "category": "crypto",
+            "tags": ["crypto", "weak-hash"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JS-INJ-005",
+          "level": "error",
+          "message": { "text": "Potential Path Traversal via fs.readFile (AI confidence 64.0%, risk 66.6)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "javascript_vulnerable_suite.js" },
+                "region": { "startLine": 30, "startColumn": 3 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 64.0,
+            "riskScore": 66.6,
+            "category": "injection",
+            "tags": ["injection", "path-traversal"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-RS-CRYPTO-003",
+          "level": "error",
+          "message": { "text": "Weak Hash Algorithm (SHA1) (AI confidence 67.0%, risk 66.5)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "rust_vulnerable_suite.rs" },
+                "region": { "startLine": 6, "startColumn": 19 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 67.0,
+            "riskScore": 66.5,
+            "category": "crypto",
+            "tags": ["crypto", "weak-hash"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-PY-INJ-005",
+          "level": "error",
+          "message": { "text": "Potential Path Traversal in File Access (AI confidence 63.0%, risk 66.3)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "python_vulnerable_suite.py" },
+                "region": { "startLine": 39, "startColumn": 17 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 63.0,
+            "riskScore": 66.3,
+            "category": "injection",
+            "tags": ["injection", "path-traversal"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-GO-AUTH-002",
+          "level": "error",
+          "message": { "text": "Timing-Unsafe API Key Comparison (AI confidence 67.0%, risk 66.1)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "go_vulnerable_suite.go" },
+                "region": { "startLine": 44, "startColumn": 5 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 67.0,
+            "riskScore": 66.1,
+            "category": "auth",
+            "tags": ["auth", "timing-attack"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-GO-INJ-004",
+          "level": "error",
+          "message": { "text": "Potential Path Traversal in File Read (AI confidence 62.0%, risk 66.0)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "go_vulnerable_suite.go" },
+                "region": { "startLine": 33, "startColumn": 9 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 62.0,
+            "riskScore": 66.0,
+            "category": "injection",
+            "tags": ["injection", "path-traversal"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-RS-AUTH-002",
+          "level": "error",
+          "message": { "text": "Timing-Unsafe API Key Comparison (AI confidence 66.0%, risk 65.8)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "rust_vulnerable_suite.rs" },
+                "region": { "startLine": 32, "startColumn": 8 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 66.0,
+            "riskScore": 65.8,
+            "category": "auth",
+            "tags": ["auth", "timing-attack"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JAVA-AUTH-002",
+          "level": "error",
+          "message": { "text": "Timing-Unsafe API Key Comparison (AI confidence 65.0%, risk 65.5)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "java_vulnerable_suite.java" },
+                "region": { "startLine": 33, "startColumn": 13 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 65.0,
+            "riskScore": 65.5,
+            "category": "auth",
+            "tags": ["auth", "timing-attack"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-RS-INJ-004",
+          "level": "error",
+          "message": { "text": "Potential Path Traversal in File Reads (AI confidence 60.0%, risk 65.4)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "rust_vulnerable_suite.rs" },
+                "region": { "startLine": 23, "startColumn": 22 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 60.0,
+            "riskScore": 65.4,
+            "category": "injection",
+            "tags": ["injection", "path-traversal"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-RS-CRYPTO-002",
+          "level": "error",
+          "message": { "text": "Hardcoded Secret in Source (AI confidence 62.0%, risk 65.0)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "rust_vulnerable_suite.rs" },
+                "region": { "startLine": 30, "startColumn": 5 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 62.0,
+            "riskScore": 65.0,
+            "category": "crypto",
+            "tags": ["crypto", "secrets"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JS-CRYPTO-002",
+          "level": "error",
+          "message": { "text": "Deprecated createCipher Usage (AI confidence 68.0%, risk 64.8)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "javascript_vulnerable_suite.js" },
+                "region": { "startLine": 18, "startColumn": 18 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 68.0,
+            "riskScore": 64.8,
+            "category": "crypto",
+            "tags": ["crypto", "encryption"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-PY-CRYPTO-005",
+          "level": "error",
+          "message": { "text": "ECB Mode Encryption (AI confidence 67.0%, risk 64.5)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "python_vulnerable_suite.py" },
+                "region": { "startLine": 30, "startColumn": 14 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 67.0,
+            "riskScore": 64.5,
+            "category": "crypto",
+            "tags": ["crypto", "encryption"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-GO-CRYPTO-002",
+          "level": "error",
+          "message": { "text": "Predictable Random Token Generation (AI confidence 65.0%, risk 63.9)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "go_vulnerable_suite.go" },
+                "region": { "startLine": 57, "startColumn": 11 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 65.0,
+            "riskScore": 63.9,
+            "category": "crypto",
+            "tags": ["crypto", "randomness"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JAVA-CRYPTO-001",
+          "level": "error",
+          "message": { "text": "Weak Hash Algorithm (MD5) (AI confidence 64.0%, risk 63.6)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "java_vulnerable_suite.java" },
+                "region": { "startLine": 17, "startColumn": 9 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 64.0,
+            "riskScore": 63.6,
+            "category": "crypto",
+            "tags": ["crypto", "weak-hash"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JAVA-CRYPTO-002",
+          "level": "error",
+          "message": { "text": "Predictable Random Token Generation (AI confidence 64.0%, risk 63.6)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "java_vulnerable_suite.java" },
+                "region": { "startLine": 50, "startColumn": 20 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 64.0,
+            "riskScore": 63.6,
+            "category": "crypto",
+            "tags": ["crypto", "randomness"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-GO-CRYPTO-004",
+          "level": "error",
+          "message": { "text": "Weak Cipher (DES) (AI confidence 62.0%, risk 63.0)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "go_vulnerable_suite.go" },
+                "region": { "startLine": 22, "startColumn": 9 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 62.0,
+            "riskScore": 63.0,
+            "category": "crypto",
+            "tags": ["crypto", "weak-cipher"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-GO-CRYPTO-005",
+          "level": "error",
+          "message": { "text": "Weak RSA Key Size (AI confidence 61.0%, risk 62.7)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "go_vulnerable_suite.go" },
+                "region": { "startLine": 23, "startColumn": 9 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 61.0,
+            "riskScore": 62.7,
+            "category": "crypto",
+            "tags": ["crypto", "key-management"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JAVA-CRYPTO-003",
+          "level": "error",
+          "message": { "text": "Weak Hash Algorithm (SHA1) (AI confidence 61.0%, risk 62.7)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "java_vulnerable_suite.java" },
+                "region": { "startLine": 18, "startColumn": 9 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 61.0,
+            "riskScore": 62.7,
+            "category": "crypto",
+            "tags": ["crypto", "weak-hash"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-RS-CRYPTO-004",
+          "level": "error",
+          "message": { "text": "Weak Cipher Usage (DES) (AI confidence 60.0%, risk 62.4)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "rust_vulnerable_suite.rs" },
+                "region": { "startLine": 7, "startColumn": 24 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 60.0,
+            "riskScore": 62.4,
+            "category": "crypto",
+            "tags": ["crypto", "weak-cipher"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JAVA-CRYPTO-004",
+          "level": "error",
+          "message": { "text": "Weak Cipher Mode (DES/ECB) (AI confidence 59.0%, risk 62.1)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "java_vulnerable_suite.java" },
+                "region": { "startLine": 19, "startColumn": 9 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 59.0,
+            "riskScore": 62.1,
+            "category": "crypto",
+            "tags": ["crypto", "weak-cipher"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-RS-CRYPTO-005",
+          "level": "error",
+          "message": { "text": "Weak RSA Key Size (AI confidence 59.0%, risk 62.1)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "rust_vulnerable_suite.rs" },
+                "region": { "startLine": 10, "startColumn": 26 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 59.0,
+            "riskScore": 62.1,
+            "category": "crypto",
+            "tags": ["crypto", "key-management"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-GO-MISC-001",
+          "level": "error",
+          "message": { "text": "TLS Verification Disabled (AI confidence 64.0%, risk 60.4)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "go_vulnerable_suite.go" },
+                "region": { "startLine": 60, "startColumn": 27 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 64.0,
+            "riskScore": 60.4,
+            "category": "misconfig",
+            "tags": ["misconfig", "tls"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-RS-MISC-001",
+          "level": "error",
+          "message": { "text": "TLS Certificate Verification Disabled (AI confidence 63.0%, risk 60.1)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "rust_vulnerable_suite.rs" },
+                "region": { "startLine": 50, "startColumn": 10 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 63.0,
+            "riskScore": 60.1,
+            "category": "misconfig",
+            "tags": ["misconfig", "tls"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JAVA-MISC-003",
+          "level": "error",
+          "message": { "text": "Hostname Verification Disabled (AI confidence 60.0%, risk 59.2)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "java_vulnerable_suite.java" },
+                "region": { "startLine": 60, "startColumn": 14 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 60.0,
+            "riskScore": 59.2,
+            "category": "misconfig",
+            "tags": ["misconfig", "tls"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-GO-AUTH-004",
+          "level": "warning",
+          "message": { "text": "Insecure Case-Normalized Token Comparison (AI confidence 62.0%, risk 57.6)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "go_vulnerable_suite.go" },
+                "region": { "startLine": 50, "startColumn": 5 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 62.0,
+            "riskScore": 57.6,
+            "category": "auth",
+            "tags": ["auth", "token"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JAVA-AUTH-005",
+          "level": "warning",
+          "message": { "text": "Hardcoded Bearer Authorization Header (AI confidence 59.0%, risk 56.7)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "java_vulnerable_suite.java" },
+                "region": { "startLine": 47, "startColumn": 16 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 59.0,
+            "riskScore": 56.7,
+            "category": "auth",
+            "tags": ["auth", "secrets"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-RS-AUTH-005",
+          "level": "warning",
+          "message": { "text": "Hardcoded Bearer Header Construction (AI confidence 59.0%, risk 56.7)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "rust_vulnerable_suite.rs" },
+                "region": { "startLine": 46, "startColumn": 9 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 59.0,
+            "riskScore": 56.7,
+            "category": "auth",
+            "tags": ["auth", "secrets"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JS-INJ-006",
+          "level": "warning",
+          "message": { "text": "Open Redirect from User Input (AI confidence 60.0%, risk 56.4)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "javascript_vulnerable_suite.js" },
+                "region": { "startLine": 31, "startColumn": 3 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 60.0,
+            "riskScore": 56.4,
+            "category": "injection",
+            "tags": ["injection", "redirect"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-RS-AUTH-004",
+          "level": "warning",
+          "message": { "text": "Insecure Case-Normalized Token Comparison (AI confidence 57.0%, risk 56.1)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "rust_vulnerable_suite.rs" },
+                "region": { "startLine": 42, "startColumn": 8 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 57.0,
+            "riskScore": 56.1,
+            "category": "auth",
+            "tags": ["auth", "token"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JAVA-AUTH-004",
+          "level": "warning",
+          "message": { "text": "Insecure Case-Normalized Token Comparison (AI confidence 56.0%, risk 55.8)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "java_vulnerable_suite.java" },
+                "region": { "startLine": 43, "startColumn": 13 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 56.0,
+            "riskScore": 55.8,
+            "category": "auth",
+            "tags": ["auth", "token"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-RS-INJ-005",
+          "level": "warning",
+          "message": { "text": "Template Injection via render_str (AI confidence 56.0%, risk 55.2)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "rust_vulnerable_suite.rs" },
+                "region": { "startLine": 24, "startColumn": 18 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 56.0,
+            "riskScore": 55.2,
+            "category": "injection",
+            "tags": ["injection", "template-injection"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JAVA-INJ-005",
+          "level": "warning",
+          "message": { "text": "Open Redirect from User Input (AI confidence 54.0%, risk 54.6)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "java_vulnerable_suite.java" },
+                "region": { "startLine": 55, "startColumn": 18 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 54.0,
+            "riskScore": 54.6,
+            "category": "injection",
+            "tags": ["injection", "open-redirect"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-PY-MISC-001",
+          "level": "warning",
+          "message": { "text": "Debug Mode Enabled (AI confidence 67.0%, risk 52.3)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "python_vulnerable_suite.py" },
+                "region": { "startLine": 48, "startColumn": 29 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 67.0,
+            "riskScore": 52.3,
+            "category": "misconfig",
+            "tags": ["misconfig", "prod-hardening"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-PY-MISC-001",
+          "level": "warning",
+          "message": { "text": "Debug Mode Enabled (AI confidence 58.0%, risk 49.6)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "python_vulnerable_suite.py" },
+                "region": { "startLine": 46, "startColumn": 5 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 58.0,
+            "riskScore": 49.6,
+            "category": "misconfig",
+            "tags": ["misconfig", "prod-hardening"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-GO-MISC-004",
+          "level": "warning",
+          "message": { "text": "Service Listening on All Interfaces (AI confidence 57.0%, risk 49.3)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "go_vulnerable_suite.go" },
+                "region": { "startLine": 64, "startColumn": 6 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 57.0,
+            "riskScore": 49.3,
+            "category": "misconfig",
+            "tags": ["misconfig", "network"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JAVA-MISC-005",
+          "level": "warning",
+          "message": { "text": "Sensitive Auth Header Logging (AI confidence 50.0%, risk 49.2)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "java_vulnerable_suite.java" },
+                "region": { "startLine": 62, "startColumn": 9 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 50.0,
+            "riskScore": 49.2,
+            "category": "misconfig",
+            "tags": ["misconfig", "logging"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-GO-MISC-002",
+          "level": "warning",
+          "message": { "text": "Wildcard CORS Header (AI confidence 56.0%, risk 49.0)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "go_vulnerable_suite.go" },
+                "region": { "startLine": 62, "startColumn": 18 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 56.0,
+            "riskScore": 49.0,
+            "category": "misconfig",
+            "tags": ["misconfig", "cors"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JAVA-MISC-001",
+          "level": "warning",
+          "message": { "text": "Wildcard CORS Configuration (AI confidence 56.0%, risk 49.0)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "java_vulnerable_suite.java" },
+                "region": { "startLine": 58, "startColumn": 21 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 56.0,
+            "riskScore": 49.0,
+            "category": "misconfig",
+            "tags": ["misconfig", "cors"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-RS-MISC-004",
+          "level": "warning",
+          "message": { "text": "Service Bound to All Interfaces (AI confidence 56.0%, risk 49.0)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "rust_vulnerable_suite.rs" },
+                "region": { "startLine": 57, "startColumn": 12 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 56.0,
+            "riskScore": 49.0,
+            "category": "misconfig",
+            "tags": ["misconfig", "network"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-GO-MISC-003",
+          "level": "warning",
+          "message": { "text": "Sensitive Request Logged in Debug Output (AI confidence 55.0%, risk 48.7)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "go_vulnerable_suite.go" },
+                "region": { "startLine": 63, "startColumn": 2 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 55.0,
+            "riskScore": 48.7,
+            "category": "misconfig",
+            "tags": ["misconfig", "logging"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JAVA-MISC-004",
+          "level": "warning",
+          "message": { "text": "Service Bound to All Interfaces (AI confidence 55.0%, risk 48.7)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "java_vulnerable_suite.java" },
+                "region": { "startLine": 61, "startColumn": 16 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 55.0,
+            "riskScore": 48.7,
+            "category": "misconfig",
+            "tags": ["misconfig", "network"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-RS-MISC-002",
+          "level": "warning",
+          "message": { "text": "Wildcard CORS Header (AI confidence 55.0%, risk 48.7)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "rust_vulnerable_suite.rs" },
+                "region": { "startLine": 55, "startColumn": 30 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 55.0,
+            "riskScore": 48.7,
+            "category": "misconfig",
+            "tags": ["misconfig", "cors"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-RS-MISC-003",
+          "level": "warning",
+          "message": { "text": "Sensitive Request Debug Logging (AI confidence 54.0%, risk 48.4)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "rust_vulnerable_suite.rs" },
+                "region": { "startLine": 56, "startColumn": 5 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 54.0,
+            "riskScore": 48.4,
+            "category": "misconfig",
+            "tags": ["misconfig", "logging"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JS-MISC-002",
+          "level": "note",
+          "message": { "text": "Debug Logging in Production Path (AI confidence 55.0%, risk 39.7)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "javascript_vulnerable_suite.js" },
+                "region": { "startLine": 37, "startColumn": 3 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 55.0,
+            "riskScore": 39.7,
+            "category": "misconfig",
+            "tags": ["misconfig", "logging"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JS-MISC-002",
+          "level": "note",
+          "message": { "text": "Debug Logging in Production Path (AI confidence 55.0%, risk 39.7)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "javascript_vulnerable_suite.js" },
+                "region": { "startLine": 38, "startColumn": 22 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 55.0,
+            "riskScore": 39.7,
+            "category": "misconfig",
+            "tags": ["misconfig", "logging"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-JAVA-MISC-002",
+          "level": "note",
+          "message": { "text": "Debug Flag Enabled (AI confidence 53.0%, risk 39.1)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "java_vulnerable_suite.java" },
+                "region": { "startLine": 59, "startColumn": 9 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 53.0,
+            "riskScore": 39.1,
+            "category": "misconfig",
+            "tags": ["misconfig", "debug"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-GO-MISC-005",
+          "level": "note",
+          "message": { "text": "Debug Flag Enabled (AI confidence 50.0%, risk 38.2)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "go_vulnerable_suite.go" },
+                "region": { "startLine": 65, "startColumn": 2 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 50.0,
+            "riskScore": 38.2,
+            "category": "misconfig",
+            "tags": ["misconfig", "debug"]
+          }
+        },
+        {
+          "ruleId": "AISHIELD-RS-MISC-005",
+          "level": "note",
+          "message": { "text": "Debug Flag Enabled in Runtime Path (AI confidence 50.0%, risk 38.2)" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "rust_vulnerable_suite.rs" },
+                "region": { "startLine": 59, "startColumn": 5 }
+              }
+            }
+          ],
+          "properties": {
+            "aiConfidence": 50.0,
+            "riskScore": 38.2,
+            "category": "misconfig",
+            "tags": ["misconfig", "debug"]
+          }
+        }
+      ]
+    }
+  ]
+}

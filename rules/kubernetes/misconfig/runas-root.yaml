@@ -1,0 +1,14 @@
+id: AISHIELD-K8S-MISC-002
+title: Container Runs as Root UID
+severity: high
+confidence_that_ai_generated: 0.76
+languages: [kubernetes]
+category: misconfig
+ai_tendency: Generated securityContext blocks may set runAsUser to 0 for convenience.
+pattern:
+  all:
+    - "runasuser"
+    - "0"
+fix:
+  suggestion: Use a non-root UID and set runAsNonRoot: true.
+tags: [kubernetes, hardening, privilege]

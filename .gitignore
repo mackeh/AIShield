@@ -1,3 +1,6 @@
 /target
 Cargo.lock
 .aishield-history.log
+node_modules/
+docs/.vitepress/cache/
+docs/.vitepress/dist/

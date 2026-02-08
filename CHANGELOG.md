@@ -10,6 +10,24 @@ The format is based on Keep a Changelog and follows semantic versioning.
 
 - `github` scan output format for GitHub Actions inline PR annotations
 - CI workflow step to emit AIShield PR annotations alongside SARIF upload
+- `scan --changed-from <ref>` to scope scans/annotations to changed files
+- Optional SAST bridge (`--bridge`) for Semgrep/Bandit/ESLint with parallel execution
+- Bridge findings normalized into unified AIShield result schema with dedup
+- CI workflow optionally installs bridge tools (enabled by default, toggle via repo vars)
+- SARIF/GitHub annotation rendering now clamps line/column to valid 1-based values
+- Added initial Go/Rust/Java language scanning support with starter rulepacks and fixtures
+- Added `bench` command for repeatable scan-time benchmarking with table/JSON output
+- Added `fix --interactive` groundwork for prompt-driven autofix selection (`yes/no/all/quit`)
+- Added `fix <path:line[:col]>` targeting to focus remediation on a specific finding location
+- Expanded safe autofix replacements for additional JavaScript/Java crypto and debug patterns
+- Expanded safe autofix coverage to priority Python/JavaScript/Go/Java rules (toward top-20 remediation target)
+- Upgraded `fix --interactive` to a keyboard-driven TUI MVP using ratatui
+- Added TUI search/filter mode, severity badges, and preview diff pane for interactive fixes
+- Upgraded risk scoring with context/exploitability heuristics (sensitive path boosts, sink signals, fixture/test dampening)
+- Expanded Go/Rust/Java rulepacks to 20 rules each with corresponding fixture coverage
+- Strengthened tests to enforce phase-2 rule depth and per-language fixture detection coverage
+- Expanded Go/Rust/Java vulnerable fixtures to exercise new auth/crypto/injection/misconfig rules
+- Added heuristic AI-likelihood classifier in core (path/snippet signals) and wired risk scoring to dynamic AI confidence
 
 ## [0.1.1] - 2026-02-07
 

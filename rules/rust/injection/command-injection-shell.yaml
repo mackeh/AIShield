@@ -1,0 +1,12 @@
+id: AISHIELD-RS-INJ-001
+title: Potential Command Injection via shell execution
+severity: high
+confidence_that_ai_generated: 0.82
+languages: [rust]
+category: injection
+pattern:
+  any:
+    - 'command::new("sh")'
+fix:
+  suggestion: Avoid shell execution for user input; pass validated arguments directly.
+tags: [injection, command-injection]

@@ -1,0 +1,14 @@
+id: AISHIELD-DOCKER-MISC-001
+title: Unpinned Base Image Tag
+severity: medium
+confidence_that_ai_generated: 0.75
+languages: [dockerfile]
+category: misconfig
+ai_tendency: AI assistants frequently use :latest images in generated Dockerfiles.
+pattern:
+  all:
+    - "from"
+    - ":latest"
+fix:
+  suggestion: Pin image tags (or digests) to predictable, reviewed versions.
+tags: [dockerfile, supply-chain, misconfig]

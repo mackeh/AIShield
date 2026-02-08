@@ -1,0 +1,13 @@
+id: AISHIELD-GO-INJ-003
+title: SQL Query Built with String Concatenation
+severity: high
+confidence_that_ai_generated: 0.80
+languages: [go]
+category: injection
+pattern:
+  all:
+    - "select * from users where name ="
+    - "+ userinput"
+fix:
+  suggestion: Use parameterized queries with placeholders and bound parameters.
+tags: [injection, sql-injection]

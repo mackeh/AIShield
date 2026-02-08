@@ -1,0 +1,14 @@
+id: AISHIELD-TF-MISC-004
+title: IAM Policy Wildcard Action
+severity: high
+confidence_that_ai_generated: 0.79
+languages: [terraform]
+category: misconfig
+ai_tendency: AI-generated IAM policies may include Action '*' to avoid permission errors.
+pattern:
+  all:
+    - '"action"'
+    - '"*"'
+fix:
+  suggestion: Scope IAM actions to only required service operations.
+tags: [terraform, iam, misconfig]

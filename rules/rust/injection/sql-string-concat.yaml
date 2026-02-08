@@ -1,0 +1,13 @@
+id: AISHIELD-RS-INJ-003
+title: SQL Query Built with String Concatenation
+severity: high
+confidence_that_ai_generated: 0.79
+languages: [rust]
+category: injection
+pattern:
+  all:
+    - "select * from users where name ="
+    - "{}"
+fix:
+  suggestion: Use parameterized queries via bind arguments.
+tags: [injection, sql-injection]

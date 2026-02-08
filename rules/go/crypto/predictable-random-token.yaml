@@ -1,0 +1,14 @@
+id: AISHIELD-GO-CRYPTO-002
+title: Predictable Random Token Generation
+severity: high
+confidence_that_ai_generated: 0.79
+languages: [go]
+category: crypto
+pattern:
+  any:
+    - "rand.intn("
+  not:
+    - "crypto/rand"
+fix:
+  suggestion: Use crypto/rand for security-sensitive token generation.
+tags: [crypto, randomness]

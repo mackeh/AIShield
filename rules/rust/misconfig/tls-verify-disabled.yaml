@@ -1,0 +1,12 @@
+id: AISHIELD-RS-MISC-001
+title: TLS Certificate Verification Disabled
+severity: high
+confidence_that_ai_generated: 0.77
+languages: [rust]
+category: misconfig
+pattern:
+  any:
+    - "danger_accept_invalid_certs(true)"
+fix:
+  suggestion: Keep TLS certificate verification enabled.
+tags: [misconfig, tls]

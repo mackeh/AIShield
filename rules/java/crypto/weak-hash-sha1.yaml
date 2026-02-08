@@ -1,0 +1,12 @@
+id: AISHIELD-JAVA-CRYPTO-003
+title: Weak Hash Algorithm (SHA1)
+severity: high
+confidence_that_ai_generated: 0.79
+languages: [java]
+category: crypto
+pattern:
+  any:
+    - 'messagedigest.getinstance("sha1")'
+fix:
+  suggestion: Use SHA-256+ for integrity and modern password hashing for credential storage.
+tags: [crypto, weak-hash]

@@ -1,0 +1,14 @@
+id: AISHIELD-K8S-MISC-006
+title: Unpinned Container Image Tag
+severity: medium
+confidence_that_ai_generated: 0.72
+languages: [kubernetes]
+category: misconfig
+ai_tendency: AI-generated deployment specs commonly use :latest image tags.
+pattern:
+  all:
+    - "image:"
+    - ":latest"
+fix:
+  suggestion: Pin image versions or digests for deterministic deployments.
+tags: [kubernetes, supply-chain, misconfig]

@@ -1,0 +1,12 @@
+id: AISHIELD-RS-AUTH-001
+title: Timing-Unsafe Token Comparison
+severity: high
+confidence_that_ai_generated: 0.79
+languages: [rust]
+category: auth
+pattern:
+  any:
+    - "token == "
+fix:
+  suggestion: Use constant-time comparison helpers for secret tokens.
+tags: [auth, timing-attack]

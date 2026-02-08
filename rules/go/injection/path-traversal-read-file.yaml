@@ -1,0 +1,13 @@
+id: AISHIELD-GO-INJ-004
+title: Potential Path Traversal in File Read
+severity: high
+confidence_that_ai_generated: 0.76
+languages: [go]
+category: injection
+pattern:
+  all:
+    - "os.readfile("
+    - "+ userinput"
+fix:
+  suggestion: Normalize and validate user-controlled paths against an allowlisted base path.
+tags: [injection, path-traversal]

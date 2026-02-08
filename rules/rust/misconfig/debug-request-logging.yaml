@@ -1,0 +1,13 @@
+id: AISHIELD-RS-MISC-003
+title: Sensitive Request Debug Logging
+severity: medium
+confidence_that_ai_generated: 0.68
+languages: [rust]
+category: misconfig
+pattern:
+  all:
+    - "println!"
+    - "request.headers"
+fix:
+  suggestion: Redact or avoid logging auth headers and other sensitive request metadata.
+tags: [misconfig, logging]

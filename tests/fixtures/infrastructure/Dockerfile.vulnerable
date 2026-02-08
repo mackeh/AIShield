@@ -1,0 +1,6 @@
+FROM python:latest
+USER root
+RUN apt-get update && apt-get upgrade -y
+RUN curl -fsSL https://example.com/install.sh | sh
+ADD https://example.com/app.tar.gz /tmp/app.tar.gz
+EXPOSE 22

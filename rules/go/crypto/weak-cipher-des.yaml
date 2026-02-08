@@ -1,0 +1,12 @@
+id: AISHIELD-GO-CRYPTO-004
+title: Weak Cipher (DES)
+severity: high
+confidence_that_ai_generated: 0.76
+languages: [go]
+category: crypto
+pattern:
+  any:
+    - "des.newcipher("
+fix:
+  suggestion: Use AES-GCM or ChaCha20-Poly1305 for modern authenticated encryption.
+tags: [crypto, weak-cipher]

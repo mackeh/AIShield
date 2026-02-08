@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability disclosure
+    url: https://github.com/mackeh/AIShield/security/policy
+    about: Report vulnerabilities privately per the security policy.
+  - name: Documentation site
+    url: https://mackeh.github.io/AIShield/
+    about: Read onboarding, integrations, and reference docs.

@@ -1,0 +1,14 @@
+id: AISHIELD-K8S-MISC-003
+title: Privilege Escalation Allowed
+severity: high
+confidence_that_ai_generated: 0.75
+languages: [kubernetes]
+category: misconfig
+ai_tendency: AI-generated manifests often keep allowPrivilegeEscalation true by default.
+pattern:
+  all:
+    - "allowprivilegeescalation"
+    - "true"
+fix:
+  suggestion: Set allowPrivilegeEscalation to false.
+tags: [kubernetes, hardening]

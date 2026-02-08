@@ -1,0 +1,13 @@
+id: AISHIELD-JAVA-INJ-004
+title: Script Engine Eval of User Input
+severity: critical
+confidence_that_ai_generated: 0.80
+languages: [java]
+category: injection
+pattern:
+  all:
+    - "engine.eval("
+    - "userinput"
+fix:
+  suggestion: Do not evaluate untrusted user-controlled script input.
+tags: [injection, code-execution]

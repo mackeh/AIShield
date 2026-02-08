@@ -1,0 +1,13 @@
+id: AISHIELD-GO-MISC-003
+title: Sensitive Request Logged in Debug Output
+severity: medium
+confidence_that_ai_generated: 0.69
+languages: [go]
+category: misconfig
+pattern:
+  all:
+    - "log.printf("
+    - "req.header"
+fix:
+  suggestion: Avoid logging raw auth headers or redact sensitive values.
+tags: [misconfig, logging]

@@ -1,0 +1,13 @@
+id: AISHIELD-JAVA-AUTH-005
+title: Hardcoded Bearer Authorization Header
+severity: medium
+confidence_that_ai_generated: 0.70
+languages: [java]
+category: auth
+pattern:
+  all:
+    - 'authorization = "bearer'
+    - "+ token"
+fix:
+  suggestion: Generate auth headers from runtime credentials and rotation-safe secret stores.
+tags: [auth, secrets]

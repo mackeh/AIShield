@@ -1,0 +1,14 @@
+id: AISHIELD-TF-MISC-001
+title: Security Group Open to the World
+severity: high
+confidence_that_ai_generated: 0.80
+languages: [terraform]
+category: misconfig
+ai_tendency: AI-generated infrastructure snippets often expose services to 0.0.0.0/0 for quick connectivity.
+pattern:
+  all:
+    - "cidr_blocks"
+    - "0.0.0.0/0"
+fix:
+  suggestion: Restrict CIDR ranges to known trusted addresses.
+tags: [terraform, network, misconfig]

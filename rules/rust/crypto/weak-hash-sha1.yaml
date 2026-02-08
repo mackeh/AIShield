@@ -1,0 +1,12 @@
+id: AISHIELD-RS-CRYPTO-003
+title: Weak Hash Algorithm (SHA1)
+severity: high
+confidence_that_ai_generated: 0.78
+languages: [rust]
+category: crypto
+pattern:
+  any:
+    - "sha1::"
+fix:
+  suggestion: Use stronger hash primitives for integrity and password-safe algorithms for credentials.
+tags: [crypto, weak-hash]

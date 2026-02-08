@@ -1,0 +1,12 @@
+id: AISHIELD-GO-MISC-001
+title: TLS Verification Disabled
+severity: high
+confidence_that_ai_generated: 0.78
+languages: [go]
+category: misconfig
+pattern:
+  any:
+    - "insecureskipverify: true"
+fix:
+  suggestion: Keep certificate verification enabled and use a proper trust store.
+tags: [misconfig, tls]
