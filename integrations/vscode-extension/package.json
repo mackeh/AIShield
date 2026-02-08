@@ -20,6 +20,8 @@
     "onCommand:aishield.refreshFindings",
     "onCommand:aishield.applyFixForFinding",
     "onCommand:aishield.openFinding",
+    "onCommand:aishield.showTelemetrySummary",
+    "onCommand:aishield.resetTelemetry",
     "onView:aishield.findings",
     "onStartupFinished"
   ],
@@ -49,6 +51,14 @@
       {
         "command": "aishield.openFinding",
         "title": "AIShield: Open Finding"
+      },
+      {
+        "command": "aishield.showTelemetrySummary",
+        "title": "AIShield: Show Telemetry Summary"
+      },
+      {
+        "command": "aishield.resetTelemetry",
+        "title": "AIShield: Reset Telemetry Summary"
       }
     ],
     "views": {
@@ -75,6 +85,11 @@
           "command": "aishield.clearDiagnostics",
           "when": "view == aishield.findings",
           "group": "navigation@2"
+        },
+        {
+          "command": "aishield.showTelemetrySummary",
+          "when": "view == aishield.findings",
+          "group": "navigation@3"
         }
       ]
     },
@@ -116,10 +131,61 @@
           "default": "",
           "description": "Path to ONNX model file used when useOnnx=true."
         },
+        "aishield.onnxManifestPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to ONNX model manifest (takes precedence over onnxModelPath)."
+        },
+        "aishield.aiCalibration": {
+          "type": "string",
+          "default": "balanced",
+          "enum": [
+            "conservative",
+            "balanced",
+            "aggressive"
+          ],
+          "description": "AI classifier calibration profile passed to AIShield CLI."
+        },
         "aishield.scanOnSave": {
           "type": "boolean",
           "default": false,
           "description": "Run AIShield scan on file save."
+        },
+        "aishield.scanDebounceMs": {
+          "type": "number",
+          "default": 350,
+          "minimum": 0,
+          "maximum": 5000,
+          "description": "Debounce window (ms) for automatic scans (save/AI paste)."
+        },
+        "aishield.maxDiagnostics": {
+          "type": "number",
+          "default": 600,
+          "minimum": 50,
+          "maximum": 5000,
+          "description": "Maximum number of findings published as diagnostics per scan."
+        },
+        "aishield.statusBarEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show AIShield scan status in the VS Code status bar."
+        },
+        "aishield.telemetryEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Collect local extension telemetry counters (no network transmission)."
+        },
+        "aishield.telemetrySampleRate": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Sampling rate for local telemetry events (0.0 to 1.0)."
+        },
+        "aishield.performanceHints": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show tuning hints based on local scan latency telemetry."
         },
         "aishield.aiPasteDetection": {
           "type": "boolean",

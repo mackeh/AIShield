@@ -36,6 +36,7 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - Reached Kotlin/Swift phase-2 depth milestone (20 rules each) with updated rule-depth gates
 - Added ONNX model manifest support (`--onnx-manifest`) and calibration profiles (`--ai-calibration`)
 - Tuned classifier blending to use configurable calibration settings from profile/manifest
+- Polished VS Code extension for GA: status bar UX, debounced auto-scan controls, diagnostics cap, and local telemetry summaries
 
 ## [0.1.1] - 2026-02-07
 

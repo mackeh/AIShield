@@ -14,9 +14,12 @@ It provides:
 - Hover detail cards with severity, risk, confidence, and snippet context
 - Quick-fix code actions that invoke `aishield fix <file:line:col> --write`
 - Explorer panel: **AIShield Findings**
-- Beta AI Security Lens line highlighting for medium/high/critical findings
+- GA AI Security Lens line highlighting for medium/high/critical findings
 - AI paste-detection heuristics with scan prompt/auto-scan options
 - Optional scan-on-save behavior
+- Status bar scan state and result summaries
+- Local telemetry summary command with p50/p95 scan latency signal
+- Telemetry-informed performance hints for debounce/auto-scan tuning
 
 ## Run Extension Locally
 
@@ -35,7 +38,15 @@ Then open `integrations/vscode-extension` in VS Code and launch extension host w
 - `aishield.minSeverity` (`critical|high|medium|low|info`)
 - `aishield.useOnnx`
 - `aishield.onnxModelPath`
+- `aishield.onnxManifestPath`
+- `aishield.aiCalibration`
 - `aishield.scanOnSave`
+- `aishield.scanDebounceMs`
+- `aishield.maxDiagnostics`
+- `aishield.statusBarEnabled`
+- `aishield.telemetryEnabled`
+- `aishield.telemetrySampleRate`
+- `aishield.performanceHints`
 - `aishield.aiPasteDetection`
 - `aishield.aiPasteMinLines`
 - `aishield.aiPasteHeuristicThreshold`

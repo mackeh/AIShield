@@ -46,6 +46,8 @@ Current extension UX includes:
 - AIShield Findings explorer view
 - AI paste-detection heuristics with optional auto-scan
 - optional security-lens line highlighting
+- status bar scan summaries
+- local telemetry summary + latency-based tuning hints
 
 ## GitHub Actions
 

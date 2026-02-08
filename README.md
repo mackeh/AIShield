@@ -199,8 +199,8 @@ Current implementation includes:
 - ONNX model manifest distribution + calibration profile tuning (`--onnx-manifest`, `--ai-calibration`)
 - optional SAST bridge for Semgrep/Bandit/ESLint
 - VS Code extension bootstrap in `integrations/vscode-extension`
-- VS Code advanced UX beta: hover cards, quick-fix actions, findings panel, security lens
-- VS Code AI paste-detection bootstrap with scan prompt/auto-scan controls
+- VS Code advanced UX GA: hover cards, quick-fix actions, findings panel, security lens, status bar summaries
+- VS Code local telemetry/tuning controls: scan debounce, diagnostics cap, latency summary, performance hints
 - local web dashboard and analytics ingestion bootstrap in `dashboard/`
 - C#/Ruby/PHP language ecosystem bootstrap with dedicated rules and fixtures
 - Kotlin/Swift rulepacks expanded to 20 rules each with broader auth/crypto/injection/misconfig coverage

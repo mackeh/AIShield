@@ -27,7 +27,7 @@ This page mirrors `project.md` and highlights the current implementation directi
 - [x] VS Code extension bootstrap (scan commands + diagnostics)
 - [x] Advanced VS Code UX beta (hover cards, quick fixes, findings panel, security lens)
 - [x] AI paste-detection bootstrap in VS Code extension
-- [ ] Advanced VS Code UX GA polish and telemetry-informed tuning
+- [x] Advanced VS Code UX GA polish and telemetry-informed tuning
 - [x] Web dashboard and analytics pipeline bootstrap
 - [x] Alerting bootstrap via scan webhooks
 - [x] Experimental cross-file auth-route heuristics (`--cross-file`)
@@ -45,3 +45,4 @@ Near-term focus is reliability and signal quality:
 - harden release and security workflows
 - Kotlin/Swift now at 20 rules each with expanded fixture coverage and regression gates
 - ONNX model manifest + calibration profile support now wired in CLI/config/docs
+- VS Code extension GA polish landed (status bar UX, scan tuning controls, local telemetry summaries)
