@@ -32,6 +32,7 @@ aishield scan <path> \
   [--fail-on-findings] \
   [--staged|--changed-from REF] \
   [--output FILE] \
+  [--baseline FILE] \
   [--history-file FILE] \
   [--no-history] \
   [--config FILE] \
@@ -53,6 +54,7 @@ Options:
 - `--staged`: scan only staged files under target path
 - `--changed-from REF`: scan only files changed from a git ref (for example PR base SHA)
 - `--output FILE`: write report to file instead of stdout
+- `--baseline FILE`: suppress findings already present in an existing AIShield JSON/SARIF report
 - `--history-file FILE`: override history log file
 - `--no-history`: disable history append for this run
 - `--config FILE`: config file path (default `.aishield.yml`)
@@ -75,6 +77,9 @@ cargo run -p aishield-cli -- scan . --format json --output aishield.json
 
 # SARIF for GitHub code scanning
 cargo run -p aishield-cli -- scan . --format sarif --output aishield.sarif
+
+# baseline compare: show only newly introduced findings
+cargo run -p aishield-cli -- scan . --format sarif --baseline previous.sarif --output aishield-new.sarif
 
 # inline GitHub Actions annotations
 cargo run -p aishield-cli -- scan . --format github

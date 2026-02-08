@@ -62,6 +62,9 @@ cargo run -p aishield-cli -- scan . --format json --dedup normalized --output ai
 # SARIF for GitHub Code Scanning
 cargo run -p aishield-cli -- scan . --format sarif --dedup normalized --output aishield.sarif
 
+# compare against a baseline report and show only new findings
+cargo run -p aishield-cli -- scan . --format sarif --baseline baseline.sarif --output aishield-new.sarif
+
 # GitHub PR annotations
 cargo run -p aishield-cli -- scan . --format github --dedup normalized
 

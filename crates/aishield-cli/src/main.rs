@@ -74,6 +74,7 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     let mut severity_override = None;
     let mut fail_on_findings_flag = false;
     let mut output_path = None;
+    let mut baseline_path = None::<PathBuf>;
     let mut history_file_override = None;
     let mut no_history_flag = false;
     let mut staged_only = false;
@@ -138,6 +139,12 @@ fn run_scan(args: &[String]) -> Result<(), String> {
                 i += 1;
                 output_path = Some(PathBuf::from(
                     args.get(i).ok_or("--output requires a value")?,
+                ));
+            }
+            "--baseline" => {
+                i += 1;
+                baseline_path = Some(PathBuf::from(
+                    args.get(i).ok_or("--baseline requires a value")?,
                 ));
             }
             "--history-file" => {
@@ -245,6 +252,19 @@ fn run_scan(args: &[String]) -> Result<(), String> {
             .filter(|f| threshold.includes(f.severity))
             .collect::<Vec<_>>();
         result.summary = recompute_summary(&result);
+    }
+
+    if let Some(path) = baseline_path.as_deref() {
+        let baseline_keys = load_baseline_keys(path)?;
+        let (filtered, suppressed) = filter_findings_against_baseline(&result, &baseline_keys);
+        result = filtered;
+        if suppressed > 0 {
+            eprintln!(
+                "info: baseline filtered {} finding(s) from {}",
+                suppressed,
+                path.display()
+            );
+        }
     }
 
     if record_history {
@@ -3111,7 +3131,7 @@ fn render_stats_json(aggregate: &StatsAggregate, days: u64, history_file: &Path)
 fn print_help() {
     println!("AIShield CLI (foundation)\n");
     println!("Usage:");
-    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
+    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--baseline FILE] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
     println!("  aishield fix <path[:line[:col]]> [--rules-dir DIR] [--write|--interactive] [--dry-run] [--config FILE] [--no-config]");
     println!("  aishield bench <path> [--rules-dir DIR] [--iterations N] [--warmup N] [--format table|json] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--config FILE] [--no-config]");
     println!("  aishield init [--output PATH] [--templates config,github-actions,gitlab-ci,bitbucket-pipelines,circleci,jenkins,vscode,pre-commit|all] [--force]");
@@ -3273,6 +3293,143 @@ fn normalize_snippet(snippet: &str) -> String {
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+fn baseline_key_for_finding(finding: &Finding) -> String {
+    let category = finding.category.as_deref().unwrap_or("uncategorized");
+    format!(
+        "{}:{}:{}",
+        finding.file.to_ascii_lowercase(),
+        finding.line,
+        category.to_ascii_lowercase()
+    )
+}
+
+fn filter_findings_against_baseline(
+    result: &ScanResult,
+    baseline_keys: &HashSet<String>,
+) -> (ScanResult, usize) {
+    if baseline_keys.is_empty() {
+        return (result.clone(), 0);
+    }
+
+    let original_total = result.findings.len();
+    let findings = result
+        .findings
+        .iter()
+        .filter(|finding| !baseline_keys.contains(&baseline_key_for_finding(finding)))
+        .cloned()
+        .collect::<Vec<_>>();
+    let suppressed = original_total.saturating_sub(findings.len());
+
+    (
+        ScanResult {
+            summary: summarize_findings(
+                &findings,
+                result.summary.scanned_files,
+                result.summary.matched_rules,
+            ),
+            findings,
+        },
+        suppressed,
+    )
+}
+
+fn load_baseline_keys(path: &Path) -> Result<HashSet<String>, String> {
+    let payload = fs::read_to_string(path)
+        .map_err(|err| format!("failed to read baseline {}: {err}", path.display()))?;
+    let value: Value = serde_json::from_str(&payload)
+        .map_err(|err| format!("invalid baseline JSON {}: {err}", path.display()))?;
+
+    let mut keys = HashSet::new();
+    if try_collect_baseline_keys_from_aishield_json(&value, &mut keys) {
+        return Ok(keys);
+    }
+    if try_collect_baseline_keys_from_sarif(&value, &mut keys) {
+        return Ok(keys);
+    }
+
+    Err(format!(
+        "unsupported baseline format in {} (expected AIShield json with `findings` or SARIF with `runs[].results`)",
+        path.display()
+    ))
+}
+
+fn try_collect_baseline_keys_from_aishield_json(value: &Value, out: &mut HashSet<String>) -> bool {
+    let Some(findings) = value.get("findings").and_then(Value::as_array) else {
+        return false;
+    };
+
+    for finding in findings {
+        let file = finding
+            .get("file")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let line = finding.get("line").and_then(Value::as_u64).unwrap_or(1) as usize;
+        let category = finding
+            .get("category")
+            .and_then(Value::as_str)
+            .unwrap_or("uncategorized");
+
+        out.insert(format!(
+            "{}:{}:{}",
+            file.to_ascii_lowercase(),
+            line,
+            category.to_ascii_lowercase()
+        ));
+    }
+
+    true
+}
+
+fn try_collect_baseline_keys_from_sarif(value: &Value, out: &mut HashSet<String>) -> bool {
+    let Some(runs) = value.get("runs").and_then(Value::as_array) else {
+        return false;
+    };
+
+    let mut saw_result = false;
+    for run in runs {
+        let results = run
+            .get("results")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+
+        for result in results {
+            saw_result = true;
+            let file = result
+                .get("locations")
+                .and_then(Value::as_array)
+                .and_then(|locations| locations.first())
+                .and_then(|location| location.get("physicalLocation"))
+                .and_then(|physical| physical.get("artifactLocation"))
+                .and_then(|artifact| artifact.get("uri"))
+                .and_then(Value::as_str)
+                .unwrap_or("unknown");
+            let line = result
+                .get("locations")
+                .and_then(Value::as_array)
+                .and_then(|locations| locations.first())
+                .and_then(|location| location.get("physicalLocation"))
+                .and_then(|physical| physical.get("region"))
+                .and_then(|region| region.get("startLine"))
+                .and_then(Value::as_u64)
+                .unwrap_or(1) as usize;
+            let category = result
+                .get("properties")
+                .and_then(|props| props.get("category"))
+                .and_then(Value::as_str)
+                .unwrap_or("uncategorized");
+            out.insert(format!(
+                "{}:{}:{}",
+                file.to_ascii_lowercase(),
+                line,
+                category.to_ascii_lowercase()
+            ));
+        }
+    }
+
+    saw_result
 }
 
 fn render_table(result: &ScanResult) -> String {
@@ -4049,15 +4206,17 @@ impl SeverityThreshold {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::{
         apply_replacements, autofix_replacements, count_replacements, dedup_machine_output,
         empty_summary, escape_github_annotation_message, escape_github_annotation_property,
-        filtered_candidate_indices, init_template_writes, normalize_snippet, parse_fix_target_spec,
-        parse_init_templates, percentile, render_github_annotations, render_sarif,
-        resolve_selected_indices, DedupMode, Finding, InitTemplate, OutputSummary, ScanResult,
-        Severity,
+        filter_findings_against_baseline, filtered_candidate_indices, init_template_writes,
+        load_baseline_keys, normalize_snippet, parse_fix_target_spec, parse_init_templates,
+        percentile, render_github_annotations, render_sarif, resolve_selected_indices, DedupMode,
+        Finding, InitTemplate, OutputSummary, ScanResult, Severity,
     };
 
     fn finding(
@@ -4159,6 +4318,98 @@ mod tests {
         let deduped = dedup_machine_output(&raw, DedupMode::None);
 
         assert_eq!(deduped.findings.len(), raw.findings.len());
+    }
+
+    #[test]
+    fn baseline_filter_removes_existing_findings() {
+        let raw = result(vec![
+            finding(
+                "AISHIELD-PY-AUTH-001",
+                Severity::High,
+                "src/app.py",
+                10,
+                "if token == provided:",
+                80.0,
+            ),
+            finding(
+                "AISHIELD-PY-AUTH-002",
+                Severity::High,
+                "src/app.py",
+                11,
+                "jwt.decode(token, options={\"verify_signature\": False})",
+                79.0,
+            ),
+        ]);
+
+        let mut baseline = std::collections::HashSet::new();
+        baseline.insert("src/app.py:10:auth".to_string());
+
+        let (filtered, suppressed) = filter_findings_against_baseline(&raw, &baseline);
+        assert_eq!(suppressed, 1);
+        assert_eq!(filtered.findings.len(), 1);
+        assert_eq!(filtered.findings[0].id, "AISHIELD-PY-AUTH-002");
+    }
+
+    #[test]
+    fn load_baseline_keys_supports_aishield_json() {
+        let path = temp_path("aishield-baseline-json").with_extension("json");
+        fs::write(
+            &path,
+            r#"{
+  "summary": {"total": 1},
+  "findings": [
+    {
+      "id": "AISHIELD-PY-AUTH-001",
+      "file": "src/app.py",
+      "line": 10,
+      "category": "auth",
+      "snippet": "if token == provided:"
+    }
+  ]
+}"#,
+        )
+        .expect("write baseline file");
+
+        let keys = load_baseline_keys(&path).expect("load baseline keys");
+        assert!(keys.contains("src/app.py:10:auth"));
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn load_baseline_keys_supports_sarif() {
+        let path = temp_path("aishield-baseline-sarif").with_extension("sarif");
+        fs::write(
+            &path,
+            r#"{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "results": [
+        {
+          "ruleId": "AISHIELD-PY-AUTH-001",
+          "message": {"text": "Timing-Unsafe Secret Comparison"},
+          "properties": {"category": "auth"},
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {"uri": "src/app.py"},
+                "region": {"startLine": 10}
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}"#,
+        )
+        .expect("write sarif baseline");
+
+        let keys = load_baseline_keys(&path).expect("load sarif baseline keys");
+        assert!(keys.contains("src/app.py:10:auth"));
+
+        let _ = fs::remove_file(path);
     }
 
     #[test]
@@ -4457,5 +4708,13 @@ mod tests {
             filtered_candidate_indices(&candidates, "missing"),
             Vec::<usize>::new()
         );
+    }
+
+    fn temp_path(prefix: &str) -> PathBuf {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        std::env::temp_dir().join(format!("{prefix}-{stamp}"))
     }
 }

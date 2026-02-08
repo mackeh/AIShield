@@ -111,6 +111,9 @@ cargo run -p aishield-cli -- scan . --format sarif --dedup normalized --output a
 # PR-only annotations scoped to changed files
 cargo run -p aishield-cli -- scan . --format github --dedup normalized --changed-from "$BASE_SHA"
 
+# compare against prior SARIF baseline (new findings only)
+cargo run -p aishield-cli -- scan . --format sarif --dedup normalized --baseline previous.sarif --output aishield-new.sarif
+
 # include external bridges (if tools are installed in runner)
 cargo run -p aishield-cli -- scan . --format sarif --bridge semgrep,bandit,eslint --output aishield.sarif
 ```
