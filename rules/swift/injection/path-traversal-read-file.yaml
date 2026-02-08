@@ -1,0 +1,13 @@
+id: AISHIELD-SW-INJ-003
+title: Potential Path Traversal in File Read
+severity: high
+confidence_that_ai_generated: 0.75
+languages: [swift]
+category: injection
+pattern:
+  all:
+    - "string(contentsoffile:"
+    - "+ userinput"
+fix:
+  suggestion: Normalize and validate file paths from user input before file access.
+tags: [injection, path-traversal]

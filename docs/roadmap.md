@@ -43,3 +43,4 @@ Near-term focus is reliability and signal quality:
 - reduce duplicate/noisy findings in CI
 - improve remediation coverage and fix confidence
 - harden release and security workflows
+- continue Kotlin/Swift rulepack depth expansion (now 12+ rules each)

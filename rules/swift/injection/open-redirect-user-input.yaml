@@ -1,0 +1,13 @@
+id: AISHIELD-SW-INJ-004
+title: Open Redirect or External Open from User Input
+severity: high
+confidence_that_ai_generated: 0.74
+languages: [swift]
+category: injection
+pattern:
+  all:
+    - "url(string: userinput"
+    - ".open("
+fix:
+  suggestion: Restrict external URL opens to trusted schemes/domains.
+tags: [injection, open-redirect]

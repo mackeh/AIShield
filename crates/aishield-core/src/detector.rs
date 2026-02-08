@@ -691,8 +691,8 @@ function good(token, expected) {
             .expect("scan fixture suite");
 
         assert!(
-            result.summary.total >= 95,
-            "expected at least 95 findings in expanded fixture suite, got {}",
+            result.summary.total >= 110,
+            "expected at least 110 findings in expanded fixture suite, got {}",
             result.summary.total
         );
 
@@ -783,13 +783,13 @@ function good(token, expected) {
             php_findings
         );
         assert!(
-            kotlin_findings >= 5,
-            "expected at least 5 kotlin findings in fixture suite, got {}",
+            kotlin_findings >= 10,
+            "expected at least 10 kotlin findings in fixture suite, got {}",
             kotlin_findings
         );
         assert!(
-            swift_findings >= 5,
-            "expected at least 5 swift findings in fixture suite, got {}",
+            swift_findings >= 10,
+            "expected at least 10 swift findings in fixture suite, got {}",
             swift_findings
         );
         assert!(

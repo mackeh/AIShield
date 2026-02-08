@@ -6,7 +6,7 @@ languages: [kotlin]
 category: crypto
 pattern:
   any:
-    - "messagedigest.getinstance(\"md5\")"
+    - 'messagedigest.getinstance("md5")'
 fix:
   suggestion: Replace MD5 with SHA-256 for integrity checks or Argon2/bcrypt for passwords.
 tags: [crypto, weak-hash]

@@ -31,6 +31,8 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - Added web dashboard + analytics pipeline bootstrap (`dashboard/`) with trend KPIs and top-rule/target views
 - Added report ingestion utility for AIShield JSON/SARIF artifacts (`dashboard/scripts/ingest-report.js`)
 - Added dashboard sample-history generator and Node tests for analytics/history parsing logic
+- Expanded Kotlin/Swift rulepacks with additional auth/crypto/injection/misconfig detections and fixture coverage
+- Strengthened regression assertions for Kotlin/Swift fixture findings and minimum repository rule depth
 
 ## [0.1.1] - 2026-02-07
 

@@ -1,0 +1,12 @@
+id: AISHIELD-SW-MISC-002
+title: ATS Arbitrary Loads Enabled
+severity: medium
+confidence_that_ai_generated: 0.71
+languages: [swift]
+category: misconfig
+pattern:
+  any:
+    - "nsallowsarbitraryloads"
+fix:
+  suggestion: Keep ATS protections enabled and scope exceptions narrowly.
+tags: [misconfig, tls]

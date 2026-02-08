@@ -490,6 +490,16 @@ pattern:
             .iter()
             .filter(|rule| rule.languages.iter().any(|lang| lang == "java"))
             .count();
+        let kotlin_count = ruleset
+            .rules
+            .iter()
+            .filter(|rule| rule.languages.iter().any(|lang| lang == "kotlin"))
+            .count();
+        let swift_count = ruleset
+            .rules
+            .iter()
+            .filter(|rule| rule.languages.iter().any(|lang| lang == "swift"))
+            .count();
 
         assert!(
             go_count >= 20,
@@ -505,6 +515,16 @@ pattern:
             java_count >= 20,
             "expected at least 20 java rules for phase-2 depth, found {}",
             java_count
+        );
+        assert!(
+            kotlin_count >= 12,
+            "expected at least 12 kotlin rules as progress toward 20-per-language depth, found {}",
+            kotlin_count
+        );
+        assert!(
+            swift_count >= 12,
+            "expected at least 12 swift rules as progress toward 20-per-language depth, found {}",
+            swift_count
         );
     }
 
