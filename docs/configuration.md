@@ -15,6 +15,7 @@ bridge_engines: []
 rules: [auth]
 exclude_paths: [vendor/, node_modules/, dist/]
 ai_only: false
+cross_file: false
 min_ai_confidence: 0.70
 severity_threshold: medium
 fail_on_findings: false
@@ -34,6 +35,7 @@ notify_min_severity: high
 - `rules`: category filters list, same behavior as `--rules`
 - `exclude_paths`: list of path fragments to skip
 - `ai_only`: if `true`, include only AI-likelihood-filtered rules
+- `cross_file`: if `true`, enables experimental cross-file auth-route heuristics
 - `min_ai_confidence`: threshold for AI likelihood (`0.0..1.0`)
 - `severity_threshold`: minimum severity shown
 - `fail_on_findings`: if `true`, scan exits with code `2` when findings exist

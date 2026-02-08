@@ -71,6 +71,7 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     let mut categories_override = None;
     let mut exclude_paths_override = None;
     let mut ai_only_flag = false;
+    let mut cross_file_flag = false;
     let mut min_ai_confidence_override = None;
     let mut severity_override = None;
     let mut fail_on_findings_flag = false;
@@ -123,6 +124,7 @@ fn run_scan(args: &[String]) -> Result<(), String> {
                 exclude_paths_override = Some(parse_list_like(raw));
             }
             "--ai-only" => ai_only_flag = true,
+            "--cross-file" => cross_file_flag = true,
             "--min-ai-confidence" => {
                 i += 1;
                 let raw = args.get(i).ok_or("--min-ai-confidence requires a value")?;
@@ -209,6 +211,7 @@ fn run_scan(args: &[String]) -> Result<(), String> {
         exclude_paths.extend(extra);
     }
     let ai_only = ai_only_flag || config.ai_only;
+    let cross_file = cross_file_flag || config.cross_file;
     let min_ai_confidence = min_ai_confidence_override.or(config.min_ai_confidence);
     let severity_threshold = severity_override.or(config.severity_threshold);
     let fail_on_findings = fail_on_findings_flag || config.fail_on_findings;
@@ -240,6 +243,7 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     let analyzer = Analyzer::new(ruleset);
     let options = AnalysisOptions {
         ai_only,
+        cross_file,
         min_ai_confidence,
         categories,
         exclude_paths,
@@ -867,6 +871,7 @@ fn run_bench(args: &[String]) -> Result<(), String> {
     let mut categories_override = None;
     let mut exclude_paths_override = None;
     let mut ai_only_flag = false;
+    let mut cross_file_flag = false;
     let mut min_ai_confidence_override = None;
     let mut iterations = 5usize;
     let mut warmup = 1usize;
@@ -900,6 +905,7 @@ fn run_bench(args: &[String]) -> Result<(), String> {
                 exclude_paths_override = Some(parse_list_like(raw));
             }
             "--ai-only" => ai_only_flag = true,
+            "--cross-file" => cross_file_flag = true,
             "--min-ai-confidence" => {
                 i += 1;
                 let raw = args.get(i).ok_or("--min-ai-confidence requires a value")?;
@@ -953,6 +959,7 @@ fn run_bench(args: &[String]) -> Result<(), String> {
         exclude_paths.extend(extra);
     }
     let ai_only = ai_only_flag || config.ai_only;
+    let cross_file = cross_file_flag || config.cross_file;
     let min_ai_confidence = min_ai_confidence_override.or(config.min_ai_confidence);
 
     let ruleset = RuleSet::load_from_dir(&rules_dir)
@@ -964,6 +971,7 @@ fn run_bench(args: &[String]) -> Result<(), String> {
     let analyzer = Analyzer::new(ruleset);
     let options = AnalysisOptions {
         ai_only,
+        cross_file,
         min_ai_confidence,
         categories,
         exclude_paths,
@@ -2067,7 +2075,7 @@ fn init_template_writes(
 }
 
 fn init_config_template() -> String {
-    "version: 1\nrules_dir: rules\nformat: table\ndedup_mode: normalized\nbridge_engines: []\nrules: []\nexclude_paths: []\nai_only: false\nmin_ai_confidence: 0.70\nseverity_threshold: medium\nfail_on_findings: false\nhistory_file: .aishield-history.log\nrecord_history: true\nnotify_webhook_url: \"\"\nnotify_min_severity: high\n".to_string()
+    "version: 1\nrules_dir: rules\nformat: table\ndedup_mode: normalized\nbridge_engines: []\nrules: []\nexclude_paths: []\nai_only: false\ncross_file: false\nmin_ai_confidence: 0.70\nseverity_threshold: medium\nfail_on_findings: false\nhistory_file: .aishield-history.log\nrecord_history: true\nnotify_webhook_url: \"\"\nnotify_min_severity: high\n".to_string()
 }
 
 fn init_github_actions_template() -> String {
@@ -3251,9 +3259,9 @@ fn render_stats_json(aggregate: &StatsAggregate, days: u64, history_file: &Path)
 fn print_help() {
     println!("AIShield CLI (foundation)\n");
     println!("Usage:");
-    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--baseline FILE] [--notify-webhook URL] [--notify-min-severity LEVEL] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
+    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--cross-file] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--baseline FILE] [--notify-webhook URL] [--notify-min-severity LEVEL] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
     println!("  aishield fix <path[:line[:col]]> [--rules-dir DIR] [--write|--interactive] [--dry-run] [--config FILE] [--no-config]");
-    println!("  aishield bench <path> [--rules-dir DIR] [--iterations N] [--warmup N] [--format table|json] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--config FILE] [--no-config]");
+    println!("  aishield bench <path> [--rules-dir DIR] [--iterations N] [--warmup N] [--format table|json] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--cross-file] [--min-ai-confidence N] [--config FILE] [--no-config]");
     println!("  aishield init [--output PATH] [--templates config,github-actions,gitlab-ci,bitbucket-pipelines,circleci,jenkins,vscode,pre-commit|all] [--force]");
     println!("  aishield create-rule --id ID --title TITLE --language LANG --category CAT [--severity LEVEL] [--pattern-any P] [--pattern-all P] [--pattern-not P] [--tags t1,t2] [--suggestion TEXT] [--out-dir DIR] [--force]");
     println!("  aishield stats [--last Nd] [--history-file FILE] [--format table|json] [--config FILE] [--no-config]");
@@ -4087,6 +4095,7 @@ struct AppConfig {
     rules: Vec<String>,
     exclude_paths: Vec<String>,
     ai_only: bool,
+    cross_file: bool,
     min_ai_confidence: Option<f32>,
     severity_threshold: Option<SeverityThreshold>,
     fail_on_findings: bool,
@@ -4106,6 +4115,7 @@ impl Default for AppConfig {
             rules: Vec::new(),
             exclude_paths: Vec::new(),
             ai_only: false,
+            cross_file: false,
             min_ai_confidence: None,
             severity_threshold: None,
             fail_on_findings: false,
@@ -4153,6 +4163,7 @@ impl AppConfig {
                 "rules" => config.rules = parse_list_like(value),
                 "exclude_paths" => config.exclude_paths = parse_list_like(value),
                 "ai_only" => config.ai_only = parse_bool(value)?,
+                "cross_file" => config.cross_file = parse_bool(value)?,
                 "min_ai_confidence" => {
                     config.min_ai_confidence = Some(
                         value
@@ -4731,6 +4742,27 @@ mod tests {
         assert!(paths.contains(&"bitbucket-pipelines.yml".to_string()));
         assert!(paths.contains(&".circleci/config.yml".to_string()));
         assert!(paths.contains(&"Jenkinsfile".to_string()));
+    }
+
+    #[test]
+    fn init_config_template_sets_cross_file_disabled_by_default() {
+        let template = super::init_config_template();
+        assert!(template.contains("cross_file: false"));
+    }
+
+    #[test]
+    fn app_config_parser_supports_cross_file_flag() {
+        let config = super::AppConfig::parse(
+            r#"
+version: 1
+rules_dir: rules
+format: table
+cross_file: true
+"#,
+        )
+        .expect("parse config");
+
+        assert!(config.cross_file);
     }
 
     #[test]

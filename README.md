@@ -65,6 +65,9 @@ cargo run -p aishield-cli -- scan . --format sarif --dedup normalized --output a
 # compare against a baseline report and show only new findings
 cargo run -p aishield-cli -- scan . --format sarif --baseline baseline.sarif --output aishield-new.sarif
 
+# enable experimental cross-file auth-route heuristics
+cargo run -p aishield-cli -- scan . --cross-file
+
 # send webhook alert for high+ findings
 cargo run -p aishield-cli -- scan . --notify-webhook https://hooks.example/security --notify-min-severity high
 
@@ -150,6 +153,7 @@ Current implementation includes:
 - 90+ rules across auth/crypto/injection/misconfiguration
 - expanded Go/Rust/Java rulepacks toward phase-2 target depth
 - infrastructure scanning bootstrap for Terraform, Kubernetes, and Dockerfile misconfig patterns
+- experimental cross-file auth-route heuristics (`--cross-file`)
 - optional SAST bridge for Semgrep/Bandit/ESLint
 - SARIF upload and PR annotation workflows
 - VitePress documentation site + GitHub Pages deployment workflow

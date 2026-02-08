@@ -27,6 +27,7 @@ aishield scan <path> \
   [--rules c1,c2] \
   [--exclude p1,p2] \
   [--ai-only] \
+  [--cross-file] \
   [--min-ai-confidence N] \
   [--severity LEVEL] \
   [--fail-on-findings] \
@@ -50,6 +51,7 @@ Options:
 - `--rules`: comma-separated category filters (`auth,crypto,injection,...`)
 - `--exclude`: comma-separated path fragments to skip
 - `--ai-only`: only run rules at/above AI-confidence threshold
+- `--cross-file`: enable experimental cross-file auth-route heuristics
 - `--min-ai-confidence N`: threshold for `--ai-only` in `0.0..1.0`
 - `--severity LEVEL`: minimum severity gate (`critical|high|medium|low|info`)
 - `--fail-on-findings`: return exit code `2` when findings exist
@@ -84,6 +86,9 @@ cargo run -p aishield-cli -- scan . --format sarif --output aishield.sarif
 
 # baseline compare: show only newly introduced findings
 cargo run -p aishield-cli -- scan . --format sarif --baseline previous.sarif --output aishield-new.sarif
+
+# enable experimental cross-file route auth checks
+cargo run -p aishield-cli -- scan . --cross-file
 
 # send alerts to webhook for high+ findings
 cargo run -p aishield-cli -- scan . --notify-webhook https://hooks.example/security --notify-min-severity high
@@ -152,6 +157,7 @@ aishield bench <path> \
   [--rules c1,c2] \
   [--exclude p1,p2] \
   [--ai-only] \
+  [--cross-file] \
   [--min-ai-confidence N] \
   [--config FILE] \
   [--no-config]
