@@ -24,6 +24,7 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
     Terminal,
 };
+use reqwest::blocking::Client;
 use serde_json::Value;
 
 fn main() {
@@ -75,6 +76,8 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     let mut fail_on_findings_flag = false;
     let mut output_path = None;
     let mut baseline_path = None::<PathBuf>;
+    let mut notify_webhook_override = None::<String>;
+    let mut notify_severity_override = None::<SeverityThreshold>;
     let mut history_file_override = None;
     let mut no_history_flag = false;
     let mut staged_only = false;
@@ -147,6 +150,21 @@ fn run_scan(args: &[String]) -> Result<(), String> {
                     args.get(i).ok_or("--baseline requires a value")?,
                 ));
             }
+            "--notify-webhook" => {
+                i += 1;
+                notify_webhook_override = Some(
+                    args.get(i)
+                        .ok_or("--notify-webhook requires a value")?
+                        .to_string(),
+                );
+            }
+            "--notify-min-severity" => {
+                i += 1;
+                notify_severity_override = Some(SeverityThreshold::parse(
+                    args.get(i)
+                        .ok_or("--notify-min-severity requires a value")?,
+                )?);
+            }
             "--history-file" => {
                 i += 1;
                 history_file_override = Some(PathBuf::from(
@@ -200,6 +218,16 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     } else {
         config.record_history
     };
+    let notify_webhook_url = notify_webhook_override
+        .or_else(|| {
+            env::var("AISHIELD_NOTIFY_WEBHOOK")
+                .ok()
+                .filter(|value| !value.trim().is_empty())
+        })
+        .or_else(|| config.notify_webhook_url.clone());
+    let notify_min_severity = notify_severity_override
+        .or(config.notify_min_severity)
+        .unwrap_or(SeverityThreshold::High);
 
     let ruleset = RuleSet::load_from_dir(&rules_dir)
         .map_err(|err| format!("failed to load rules from {}: {err}", rules_dir.display()))?;
@@ -270,6 +298,14 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     if record_history {
         if let Err(err) = append_history(&history_file, &target, &result) {
             eprintln!("warning: failed to append scan history: {err}");
+        }
+    }
+
+    if let Some(webhook_url) = notify_webhook_url {
+        if let Err(err) =
+            maybe_send_webhook_notification(&webhook_url, notify_min_severity, &target, &result)
+        {
+            eprintln!("warning: failed to send webhook notification: {err}");
         }
     }
 
@@ -2031,7 +2067,7 @@ fn init_template_writes(
 }
 
 fn init_config_template() -> String {
-    "version: 1\nrules_dir: rules\nformat: table\ndedup_mode: normalized\nbridge_engines: []\nrules: []\nexclude_paths: []\nai_only: false\nmin_ai_confidence: 0.70\nseverity_threshold: medium\nfail_on_findings: false\nhistory_file: .aishield-history.log\nrecord_history: true\n".to_string()
+    "version: 1\nrules_dir: rules\nformat: table\ndedup_mode: normalized\nbridge_engines: []\nrules: []\nexclude_paths: []\nai_only: false\nmin_ai_confidence: 0.70\nseverity_threshold: medium\nfail_on_findings: false\nhistory_file: .aishield-history.log\nrecord_history: true\nnotify_webhook_url: \"\"\nnotify_min_severity: high\n".to_string()
 }
 
 fn init_github_actions_template() -> String {
@@ -3027,6 +3063,90 @@ fn most_frequent_rule_id(result: &ScanResult) -> Option<String> {
         .map(|entry| entry.0)
 }
 
+fn maybe_send_webhook_notification(
+    webhook_url: &str,
+    min_severity: SeverityThreshold,
+    target: &Path,
+    result: &ScanResult,
+) -> Result<(), String> {
+    let matching_findings = result
+        .findings
+        .iter()
+        .filter(|finding| min_severity.includes(finding.severity))
+        .cloned()
+        .collect::<Vec<_>>();
+
+    if matching_findings.is_empty() {
+        eprintln!(
+            "info: webhook notification skipped (no findings at/above {}).",
+            min_severity.as_str()
+        );
+        return Ok(());
+    }
+
+    let payload = build_webhook_payload(target, min_severity, result, &matching_findings);
+    send_webhook_notification(webhook_url, &payload)
+}
+
+fn build_webhook_payload(
+    target: &Path,
+    min_severity: SeverityThreshold,
+    result: &ScanResult,
+    matching_findings: &[Finding],
+) -> Value {
+    let top_findings = matching_findings
+        .iter()
+        .take(20)
+        .map(|finding| {
+            serde_json::json!({
+                "id": finding.id,
+                "title": finding.title,
+                "severity": finding.severity.as_str(),
+                "file": finding.file,
+                "line": finding.line,
+                "column": finding.column,
+                "risk_score": finding.risk_score,
+                "ai_confidence": finding.ai_confidence,
+                "category": finding.category,
+            })
+        })
+        .collect::<Vec<_>>();
+
+    serde_json::json!({
+        "event": "aishield.scan.completed",
+        "timestamp": current_epoch_seconds(),
+        "target": target.display().to_string(),
+        "notify_min_severity": min_severity.as_str(),
+        "summary": {
+            "total_findings": result.summary.total,
+            "critical": result.summary.by_severity.get("critical").copied().unwrap_or(0),
+            "high": result.summary.by_severity.get("high").copied().unwrap_or(0),
+            "medium": result.summary.by_severity.get("medium").copied().unwrap_or(0),
+            "low": result.summary.by_severity.get("low").copied().unwrap_or(0),
+            "info": result.summary.by_severity.get("info").copied().unwrap_or(0),
+            "scanned_files": result.summary.scanned_files,
+            "matched_rules": result.summary.matched_rules,
+            "alert_findings": matching_findings.len(),
+        },
+        "top_findings": top_findings,
+    })
+}
+
+fn send_webhook_notification(webhook_url: &str, payload: &Value) -> Result<(), String> {
+    let client = Client::new();
+    let response = client
+        .post(webhook_url)
+        .json(payload)
+        .send()
+        .map_err(|err| format!("request error: {err}"))?;
+
+    if !response.status().is_success() {
+        return Err(format!("webhook returned HTTP {}", response.status()));
+    }
+
+    Ok(())
+}
+
 fn parse_last_days(raw: &str) -> Result<u64, String> {
     let normalized = raw.trim().to_ascii_lowercase();
     let number = if let Some(days) = normalized.strip_suffix('d') {
@@ -3131,7 +3251,7 @@ fn render_stats_json(aggregate: &StatsAggregate, days: u64, history_file: &Path)
 fn print_help() {
     println!("AIShield CLI (foundation)\n");
     println!("Usage:");
-    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--baseline FILE] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
+    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--baseline FILE] [--notify-webhook URL] [--notify-min-severity LEVEL] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
     println!("  aishield fix <path[:line[:col]]> [--rules-dir DIR] [--write|--interactive] [--dry-run] [--config FILE] [--no-config]");
     println!("  aishield bench <path> [--rules-dir DIR] [--iterations N] [--warmup N] [--format table|json] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--config FILE] [--no-config]");
     println!("  aishield init [--output PATH] [--templates config,github-actions,gitlab-ci,bitbucket-pipelines,circleci,jenkins,vscode,pre-commit|all] [--force]");
@@ -3972,6 +4092,8 @@ struct AppConfig {
     fail_on_findings: bool,
     history_file: PathBuf,
     record_history: bool,
+    notify_webhook_url: Option<String>,
+    notify_min_severity: Option<SeverityThreshold>,
 }
 
 impl Default for AppConfig {
@@ -3989,6 +4111,8 @@ impl Default for AppConfig {
             fail_on_findings: false,
             history_file: PathBuf::from(".aishield-history.log"),
             record_history: true,
+            notify_webhook_url: None,
+            notify_min_severity: None,
         }
     }
 }
@@ -4042,6 +4166,15 @@ impl AppConfig {
                 "fail_on_findings" => config.fail_on_findings = parse_bool(value)?,
                 "history_file" => config.history_file = PathBuf::from(strip_quotes(value)),
                 "record_history" => config.record_history = parse_bool(value)?,
+                "notify_webhook_url" => {
+                    let parsed = strip_quotes(value);
+                    if !parsed.trim().is_empty() {
+                        config.notify_webhook_url = Some(parsed);
+                    }
+                }
+                "notify_min_severity" => {
+                    config.notify_min_severity = Some(SeverityThreshold::parse(value)?)
+                }
                 _ => {}
             }
         }
@@ -4206,17 +4339,20 @@ impl SeverityThreshold {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::Value;
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::{
-        apply_replacements, autofix_replacements, count_replacements, dedup_machine_output,
-        empty_summary, escape_github_annotation_message, escape_github_annotation_property,
-        filter_findings_against_baseline, filtered_candidate_indices, init_template_writes,
-        load_baseline_keys, normalize_snippet, parse_fix_target_spec, parse_init_templates,
-        percentile, render_github_annotations, render_sarif, resolve_selected_indices, DedupMode,
-        Finding, InitTemplate, OutputSummary, ScanResult, Severity,
+        apply_replacements, autofix_replacements, build_webhook_payload, count_replacements,
+        dedup_machine_output, empty_summary, escape_github_annotation_message,
+        escape_github_annotation_property, filter_findings_against_baseline,
+        filtered_candidate_indices, init_template_writes, load_baseline_keys,
+        maybe_send_webhook_notification, normalize_snippet, parse_fix_target_spec,
+        parse_init_templates, percentile, render_github_annotations, render_sarif,
+        resolve_selected_indices, DedupMode, Finding, InitTemplate, OutputSummary, ScanResult,
+        Severity, SeverityThreshold,
     };
 
     fn finding(
@@ -4410,6 +4546,62 @@ mod tests {
         assert!(keys.contains("src/app.py:10:auth"));
 
         let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn webhook_payload_includes_alert_summary_fields() {
+        let scan = result(vec![finding(
+            "AISHIELD-PY-AUTH-001",
+            Severity::High,
+            "src/app.py",
+            10,
+            "if token == provided:",
+            88.0,
+        )]);
+
+        let payload = build_webhook_payload(
+            Path::new("."),
+            SeverityThreshold::High,
+            &scan,
+            &scan.findings,
+        );
+
+        assert_eq!(
+            payload.get("event").and_then(Value::as_str),
+            Some("aishield.scan.completed")
+        );
+        assert_eq!(
+            payload
+                .get("summary")
+                .and_then(|s| s.get("alert_findings"))
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            payload.get("notify_min_severity").and_then(Value::as_str),
+            Some("high")
+        );
+    }
+
+    #[test]
+    fn webhook_notification_skips_when_no_matching_severity() {
+        let scan = result(vec![finding(
+            "AISHIELD-PY-MISC-001",
+            Severity::Low,
+            "src/app.py",
+            10,
+            "debug = true",
+            40.0,
+        )]);
+
+        let outcome = maybe_send_webhook_notification(
+            "http://127.0.0.1:9",
+            SeverityThreshold::High,
+            Path::new("."),
+            &scan,
+        );
+
+        assert!(outcome.is_ok());
     }
 
     #[test]

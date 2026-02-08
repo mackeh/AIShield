@@ -109,6 +109,21 @@ cargo run -p aishield-cli -- hook install --severity high
 
 This defaults to staged-file scanning for fast developer feedback.
 
+## Webhooks (Alerting Bootstrap)
+
+Send alert payloads to webhook endpoints (Slack-compatible relays, internal alert routers, etc.):
+
+```bash
+cargo run -p aishield-cli -- scan . \
+  --notify-webhook https://hooks.example/security \
+  --notify-min-severity high
+```
+
+Config and env support:
+
+- `.aishield.yml`: `notify_webhook_url`, `notify_min_severity`
+- environment override: `AISHIELD_NOTIFY_WEBHOOK`
+
 ## Local Automation
 
 Useful local commands:

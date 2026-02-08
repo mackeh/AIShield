@@ -65,6 +65,9 @@ cargo run -p aishield-cli -- scan . --format sarif --dedup normalized --output a
 # compare against a baseline report and show only new findings
 cargo run -p aishield-cli -- scan . --format sarif --baseline baseline.sarif --output aishield-new.sarif
 
+# send webhook alert for high+ findings
+cargo run -p aishield-cli -- scan . --notify-webhook https://hooks.example/security --notify-min-severity high
+
 # GitHub PR annotations
 cargo run -p aishield-cli -- scan . --format github --dedup normalized
 

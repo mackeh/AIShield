@@ -33,6 +33,8 @@ aishield scan <path> \
   [--staged|--changed-from REF] \
   [--output FILE] \
   [--baseline FILE] \
+  [--notify-webhook URL] \
+  [--notify-min-severity LEVEL] \
   [--history-file FILE] \
   [--no-history] \
   [--config FILE] \
@@ -55,6 +57,8 @@ Options:
 - `--changed-from REF`: scan only files changed from a git ref (for example PR base SHA)
 - `--output FILE`: write report to file instead of stdout
 - `--baseline FILE`: suppress findings already present in an existing AIShield JSON/SARIF report
+- `--notify-webhook URL`: send scan alert payload to webhook endpoint
+- `--notify-min-severity LEVEL`: minimum severity that triggers webhook notification (default `high`)
 - `--history-file FILE`: override history log file
 - `--no-history`: disable history append for this run
 - `--config FILE`: config file path (default `.aishield.yml`)
@@ -80,6 +84,9 @@ cargo run -p aishield-cli -- scan . --format sarif --output aishield.sarif
 
 # baseline compare: show only newly introduced findings
 cargo run -p aishield-cli -- scan . --format sarif --baseline previous.sarif --output aishield-new.sarif
+
+# send alerts to webhook for high+ findings
+cargo run -p aishield-cli -- scan . --notify-webhook https://hooks.example/security --notify-min-severity high
 
 # inline GitHub Actions annotations
 cargo run -p aishield-cli -- scan . --format github

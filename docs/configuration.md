@@ -20,6 +20,8 @@ severity_threshold: medium
 fail_on_findings: false
 history_file: .aishield-history.log
 record_history: true
+notify_webhook_url: ""
+notify_min_severity: high
 ```
 
 ## Keys
@@ -37,6 +39,8 @@ record_history: true
 - `fail_on_findings`: if `true`, scan exits with code `2` when findings exist
 - `history_file`: path for stats/history log
 - `record_history`: if `false`, disables history append
+- `notify_webhook_url`: optional webhook endpoint for scan alerts
+- `notify_min_severity`: minimum severity that triggers webhook notifications (`critical|high|medium|low|info`)
 
 ## Precedence
 

@@ -114,6 +114,9 @@ cargo run -p aishield-cli -- scan . --format github --dedup normalized --changed
 # compare against prior SARIF baseline (new findings only)
 cargo run -p aishield-cli -- scan . --format sarif --dedup normalized --baseline previous.sarif --output aishield-new.sarif
 
+# webhook alerting for high+ findings
+cargo run -p aishield-cli -- scan . --notify-webhook "$SECURITY_WEBHOOK_URL" --notify-min-severity high
+
 # include external bridges (if tools are installed in runner)
 cargo run -p aishield-cli -- scan . --format sarif --bridge semgrep,bandit,eslint --output aishield.sarif
 ```
