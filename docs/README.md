@@ -21,6 +21,8 @@ npm run docs:build
 - `getting-started.md`: quick start and local docs development
 - `architecture.md`: project and runtime architecture
 - `roadmap.md`: roadmap snapshot and current progress
+- `integrations.md`: VS Code, GitHub Actions, GitLab CI, and hook integrations
+- `contributing.md`: contributor onboarding and templates
 - `cli.md`: CLI reference
 - `configuration.md`: `.aishield.yml` keys and precedence
 - `output-formats.md`: table/json/sarif/github outputs + dedup behavior

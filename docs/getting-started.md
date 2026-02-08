@@ -54,3 +54,8 @@ Build docs for production:
 ```bash
 npm run docs:build
 ```
+
+## Next Steps
+
+- Contributor onboarding: `CONTRIBUTING.md` and `/contributing`
+- Ecosystem setup guides: `/integrations`

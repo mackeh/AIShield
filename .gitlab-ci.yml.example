@@ -1,0 +1,42 @@
+stages:
+  - scan
+
+variables:
+  CARGO_TERM_COLOR: always
+
+scan:aishield:
+  stage: scan
+  image: rust:1.84
+  before_script:
+    - apt-get update && apt-get install -y python3 python3-pip nodejs npm
+    - cargo --version
+    - python3 --version
+    - node --version || true
+  script:
+    - cargo build --workspace
+    - cargo run -p aishield-cli -- scan . --format sarif --dedup normalized --output aishield.sarif
+  artifacts:
+    when: always
+    paths:
+      - aishield.sarif
+    expire_in: 1 week
+
+# Optional bridge tooling for Semgrep/Bandit/ESLint findings
+scan:aishield-bridge:
+  stage: scan
+  image: rust:1.84
+  rules:
+    - if: '$AISHIELD_ENABLE_BRIDGE == "true"'
+  before_script:
+    - apt-get update && apt-get install -y python3 python3-pip nodejs npm
+    - python3 -m pip install --upgrade pip
+    - pip3 install semgrep bandit
+    - npm install -g eslint
+  script:
+    - cargo build --workspace
+    - cargo run -p aishield-cli -- scan . --format sarif --dedup normalized --bridge all --output aishield.sarif
+  artifacts:
+    when: always
+    paths:
+      - aishield.sarif
+    expire_in: 1 week

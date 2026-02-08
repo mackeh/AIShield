@@ -126,6 +126,8 @@ gh run list --workflow docs.yml --limit 5
 gh run watch <RUN_ID> --exit-status
 ```
 
+For GitLab adoption patterns, see `docs/integrations.md` and `.gitlab-ci.yml.example`.
+
 ## Docs Site Deployment (GitHub Pages)
 
 The docs workflow builds and publishes `docs/.vitepress/dist` using GitHub Pages Actions.

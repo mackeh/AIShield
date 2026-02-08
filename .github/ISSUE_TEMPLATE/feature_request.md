@@ -1,20 +1,36 @@
 ---
 name: Feature request
-about: Suggest an idea for this project
-title: ''
-labels: ''
-assignees: ''
-
+about: Propose a scanner, rule engine, CLI, docs, or integration enhancement
+labels: [enhancement]
 ---
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+## Problem Statement
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+What user/developer problem does this solve?
 
-**Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
+## Proposed Solution
 
-**Additional context**
-Add any other context or screenshots about the feature request here.
+Describe the desired behavior and user experience.
+
+## Scope
+
+Which areas are affected?
+
+- [ ] Rule packs
+- [ ] Core scanner
+- [ ] CLI/TUI
+- [ ] Output formats (`json`/`sarif`/`github`)
+- [ ] CI integration (GitHub/GitLab)
+- [ ] Docs/tooling
+
+## Alternatives Considered
+
+What alternatives did you evaluate?
+
+## Acceptance Criteria
+
+Provide concrete success criteria.
+
+## Additional Context
+
+Links, examples, or references.

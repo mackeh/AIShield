@@ -67,6 +67,8 @@ Docs are deployed automatically to GitHub Pages from `.github/workflows/docs.yml
 - `docs/getting-started.md`: install, scan, and fix workflows
 - `docs/architecture.md`: scanner, CLI, CI, and rules architecture
 - `docs/roadmap.md`: roadmap snapshot and implementation status
+- `docs/integrations.md`: VS Code, GitHub Actions, and GitLab CI integration patterns
+- `docs/contributing.md`: contributor onboarding and contribution flow
 - `docs/cli.md`: command reference and options
 - `docs/configuration.md`: `.aishield.yml` keys, defaults, and precedence
 - `docs/output-formats.md`: table/json/sarif/github output behavior
@@ -75,6 +77,16 @@ Docs are deployed automatically to GitHub Pages from `.github/workflows/docs.yml
 - `docs/rules-authoring.md`: custom rule authoring guide
 - `CHANGELOG.md`: curated release history
 - `SECURITY.md`: vulnerability reporting policy and support window
+
+## Contributor Onboarding
+
+Contributors can start with:
+
+- `CONTRIBUTING.md` for local setup and PR expectations
+- `.github/ISSUE_TEMPLATE/` for bug/feature report templates
+- `.github/PULL_REQUEST_TEMPLATE.md` for standardized PR metadata
+- `.vscode/` task and extension recommendations
+- `.gitlab-ci.yml.example` for GitLab CI adoption
 
 ## Quick start
 

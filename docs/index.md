@@ -27,4 +27,6 @@ features:
     details: Use `aishield fix` in write, dry-run, or interactive TUI mode with search/filter, severity badges, and preview diff panes.
   - title: Multi-engine bridge
     details: Optionally enrich findings with Semgrep, Bandit, and ESLint while preserving a unified result model.
+  - title: Contributor-ready workflows
+    details: Includes onboarding docs, issue/PR templates, VS Code tasks, and CI examples for GitHub Actions and GitLab CI.
 ---

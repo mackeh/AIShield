@@ -27,6 +27,7 @@ export default defineConfig({
     nav: [
       { text: "Guide", link: "/getting-started" },
       { text: "CLI", link: "/cli" },
+      { text: "Integrations", link: "/integrations" },
       { text: "Configuration", link: "/configuration" },
       { text: "CI/CD", link: "/ci-github-actions" },
       { text: "Roadmap", link: "/roadmap" },
@@ -52,6 +53,7 @@ export default defineConfig({
       {
         text: "Operations",
         items: [
+          { text: "Integrations", link: "/integrations" },
           { text: "GitHub Actions", link: "/ci-github-actions" },
           { text: "Releasing", link: "/releasing" },
           { text: "Security Policy", link: "https://github.com/mackeh/AIShield/blob/main/SECURITY.md" },
@@ -59,7 +61,10 @@ export default defineConfig({
       },
       {
         text: "Extending AIShield",
-        items: [{ text: "Rules Authoring", link: "/rules-authoring" }],
+        items: [
+          { text: "Contributing", link: "/contributing" },
+          { text: "Rules Authoring", link: "/rules-authoring" },
+        ],
       },
     ],
     socialLinks: [
