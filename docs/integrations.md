@@ -2,6 +2,12 @@
 
 AIShield is built to plug into common developer workflows.
 
+You can scaffold these integrations quickly:
+
+```bash
+cargo run -p aishield-cli -- init --templates all
+```
+
 ## VS Code
 
 AIShield ships workspace recommendations and task shortcuts:
@@ -42,6 +48,12 @@ cargo run -p aishield-cli -- scan . --format sarif --bridge all --dedup normaliz
 
 Use `.gitlab-ci.yml.example` as a starting point.
 
+Or generate `.gitlab-ci.yml` directly with:
+
+```bash
+cargo run -p aishield-cli -- init --templates gitlab-ci
+```
+
 Quick-start snippet:
 
 ```yaml
@@ -56,6 +68,36 @@ scan:aishield:
   artifacts:
     paths: [aishield.sarif]
 ```
+
+## Bitbucket Pipelines
+
+Generate a baseline Bitbucket pipeline:
+
+```bash
+cargo run -p aishield-cli -- init --templates bitbucket-pipelines
+```
+
+This writes `bitbucket-pipelines.yml` with PR/main scan jobs and scan artifact publishing.
+
+## CircleCI
+
+Generate CircleCI config:
+
+```bash
+cargo run -p aishield-cli -- init --templates circleci
+```
+
+This writes `.circleci/config.yml` with a scan workflow and SARIF artifact storage.
+
+## Jenkins
+
+Generate a Jenkins declarative pipeline:
+
+```bash
+cargo run -p aishield-cli -- init --templates jenkins
+```
+
+This writes `Jenkinsfile` with build + scan stages and SARIF artifact archiving.
 
 ## Pre-commit Hooks
 

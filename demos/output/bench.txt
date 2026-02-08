@@ -1,0 +1,13 @@
+AIShield benchmark
+Target: tests/fixtures
+Iterations: 3 (warmup 1)
+Bridge engines: none
+Mean:   12.24 ms
+Median: 12.25 ms
+P95:    12.29 ms
+Min:    12.19 ms
+Max:    12.29 ms
+Stddev: 0.04 ms
+Throughput: 81.67 scans/sec
+Result snapshot: findings=96 scanned_files=7 matched_rules=92
+Phase-2 speed target (<2s mean): PASS

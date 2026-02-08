@@ -6,6 +6,12 @@ Release automation is defined at `.github/workflows/release.yml` and runs on ver
 
 Documentation deployment is defined at `.github/workflows/docs.yml` and publishes the VitePress site to GitHub Pages.
 
+You can scaffold a baseline scan workflow in a new project with:
+
+```bash
+cargo run -p aishield-cli -- init --templates github-actions
+```
+
 ## What It Does
 
 1. Checks out repository code

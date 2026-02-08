@@ -163,10 +163,32 @@ cargo run -p aishield-cli -- bench . --bridge all --format json
 
 ## `init`
 
-Generate starter config.
+Generate starter files for configuration and ecosystem integrations.
 
 ```bash
-aishield init [--output PATH]
+aishield init \
+  [--output PATH] \
+  [--templates config,github-actions,gitlab-ci,bitbucket-pipelines,circleci,jenkins,vscode,pre-commit|all] \
+  [--force]
+```
+
+Options:
+
+- `--output PATH`: override config file path (used when `config` template is selected)
+- `--templates`: choose which templates to scaffold (default `config`)
+- `--force`: overwrite existing target files
+
+Examples:
+
+```bash
+# create only .aishield.yml
+cargo run -p aishield-cli -- init
+
+# scaffold config + GitHub Actions + pre-commit
+cargo run -p aishield-cli -- init --templates config,github-actions,pre-commit
+
+# scaffold all templates and overwrite existing files
+cargo run -p aishield-cli -- init --templates all --force
 ```
 
 ## `create-rule`

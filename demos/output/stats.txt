@@ -1,0 +1,10 @@
+AIShield stats for last 30 day(s) from .aishield-history.log
+Scans: 42
+Findings: 1118
+Severity totals: critical=93 high=791 medium=176 low=58 info=0
+AI-generated (estimated): 725 of 1118 findings
+Top patterns:
+  1. AISHIELD-PY-CRYPTO-001 (17)
+  2. AISHIELD-PY-AUTH-001 (2)
+  3. AISHIELD-RS-AUTH-001 (1)
+  4. AISHIELD-RS-CRYPTO-001 (1)

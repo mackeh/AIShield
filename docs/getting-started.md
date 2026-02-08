@@ -17,6 +17,16 @@ AIShield is a Rust-first security scanner for AI-assisted codebases. It combines
 cargo run -p aishield-cli -- scan .
 ```
 
+## Bootstrap Project Integrations
+
+```bash
+# config only
+cargo run -p aishield-cli -- init
+
+# config + GitHub/GitLab/Bitbucket/CircleCI/Jenkins + VS Code + pre-commit
+cargo run -p aishield-cli -- init --templates all
+```
+
 ## CI-Friendly Scan
 
 ```bash

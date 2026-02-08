@@ -8,6 +8,7 @@ This page mirrors `project.md` and highlights the current implementation directi
 - [x] YAML rule engine + foundational detection coverage
 - [x] Multi-format output (`table`, `json`, `sarif`, `github`)
 - [x] CLI commands for scan/fix/init/hook/stats/bench
+- [x] `init` scaffolding templates for GitHub Actions, GitLab CI, VS Code, and pre-commit
 - [x] Documentation site (VitePress)
 
 ## Phase 2: Intelligence

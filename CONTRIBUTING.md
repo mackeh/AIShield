@@ -27,6 +27,8 @@ git clone https://github.com/mackeh/AIShield.git
 cd AIShield
 cargo build
 npm install
+# optional: scaffold local integration files
+cargo run -p aishield-cli -- init --templates all
 ```
 
 ## Development Workflow
@@ -72,7 +74,7 @@ cargo run -p aishield-cli -- scan . --format github --dedup normalized
 
 - Docs site: `npm run docs:dev`
 - GitHub Actions docs: `docs/ci-github-actions.md`
-- GitLab CI template: `.gitlab-ci.yml.example`
+- CI templates/examples: `.gitlab-ci.yml.example` and `aishield init --templates <target>`
 - VS Code recommendations/tasks: `.vscode/`
 
 ## Pull Request Expectations

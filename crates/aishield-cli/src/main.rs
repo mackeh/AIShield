@@ -1874,8 +1874,428 @@ fn print_suggested_remediations(result: &ScanResult) {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum InitTemplate {
+    Config,
+    GithubActions,
+    GitlabCi,
+    BitbucketPipelines,
+    CircleCi,
+    Jenkins,
+    VsCode,
+    PreCommit,
+}
+
+impl InitTemplate {
+    fn parse(raw: &str) -> Result<Self, String> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "config" => Ok(Self::Config),
+            "github-actions" | "github" => Ok(Self::GithubActions),
+            "gitlab-ci" | "gitlab" => Ok(Self::GitlabCi),
+            "bitbucket-pipelines" | "bitbucket" => Ok(Self::BitbucketPipelines),
+            "circleci" | "circle-ci" => Ok(Self::CircleCi),
+            "jenkins" | "jenkinsfile" => Ok(Self::Jenkins),
+            "vscode" => Ok(Self::VsCode),
+            "pre-commit" | "precommit" => Ok(Self::PreCommit),
+            _ => Err(format!(
+                "unknown init template `{raw}` (supported: config, github-actions, gitlab-ci, bitbucket-pipelines, circleci, jenkins, vscode, pre-commit, all)"
+            )),
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Config => "config",
+            Self::GithubActions => "github-actions",
+            Self::GitlabCi => "gitlab-ci",
+            Self::BitbucketPipelines => "bitbucket-pipelines",
+            Self::CircleCi => "circleci",
+            Self::Jenkins => "jenkins",
+            Self::VsCode => "vscode",
+            Self::PreCommit => "pre-commit",
+        }
+    }
+}
+
+fn parse_init_templates(raw: &str) -> Result<Vec<InitTemplate>, String> {
+    let normalized = raw.trim().to_ascii_lowercase();
+    if normalized.is_empty() {
+        return Err("--templates requires at least one template".to_string());
+    }
+
+    if normalized == "all" {
+        return Ok(vec![
+            InitTemplate::Config,
+            InitTemplate::GithubActions,
+            InitTemplate::GitlabCi,
+            InitTemplate::BitbucketPipelines,
+            InitTemplate::CircleCi,
+            InitTemplate::Jenkins,
+            InitTemplate::VsCode,
+            InitTemplate::PreCommit,
+        ]);
+    }
+
+    let entries = parse_list_like(raw);
+    if entries.is_empty() {
+        return Err("--templates requires at least one template".to_string());
+    }
+
+    let mut templates = Vec::new();
+    for entry in entries {
+        if entry == "all" {
+            return Ok(vec![
+                InitTemplate::Config,
+                InitTemplate::GithubActions,
+                InitTemplate::GitlabCi,
+                InitTemplate::BitbucketPipelines,
+                InitTemplate::CircleCi,
+                InitTemplate::Jenkins,
+                InitTemplate::VsCode,
+                InitTemplate::PreCommit,
+            ]);
+        }
+        let template = InitTemplate::parse(&entry)?;
+        if !templates.contains(&template) {
+            templates.push(template);
+        }
+    }
+    Ok(templates)
+}
+
+fn init_template_writes(
+    templates: &[InitTemplate],
+    config_output: &Path,
+) -> Vec<(PathBuf, String)> {
+    let mut writes = Vec::<(PathBuf, String)>::new();
+    for template in templates {
+        match template {
+            InitTemplate::Config => {
+                writes.push((config_output.to_path_buf(), init_config_template()))
+            }
+            InitTemplate::GithubActions => writes.push((
+                PathBuf::from(".github/workflows/aishield.yml"),
+                init_github_actions_template(),
+            )),
+            InitTemplate::GitlabCi => {
+                writes.push((PathBuf::from(".gitlab-ci.yml"), init_gitlab_ci_template()))
+            }
+            InitTemplate::BitbucketPipelines => writes.push((
+                PathBuf::from("bitbucket-pipelines.yml"),
+                init_bitbucket_pipelines_template(),
+            )),
+            InitTemplate::CircleCi => writes.push((
+                PathBuf::from(".circleci/config.yml"),
+                init_circleci_template(),
+            )),
+            InitTemplate::Jenkins => {
+                writes.push((PathBuf::from("Jenkinsfile"), init_jenkinsfile_template()))
+            }
+            InitTemplate::VsCode => {
+                writes.push((
+                    PathBuf::from(".vscode/extensions.json"),
+                    init_vscode_extensions_template(),
+                ));
+                writes.push((
+                    PathBuf::from(".vscode/tasks.json"),
+                    init_vscode_tasks_template(),
+                ));
+            }
+            InitTemplate::PreCommit => writes.push((
+                PathBuf::from(".pre-commit-config.yaml"),
+                init_precommit_template(),
+            )),
+        }
+    }
+    writes
+}
+
+fn init_config_template() -> String {
+    "version: 1\nrules_dir: rules\nformat: table\ndedup_mode: normalized\nbridge_engines: []\nrules: []\nexclude_paths: []\nai_only: false\nmin_ai_confidence: 0.70\nseverity_threshold: medium\nfail_on_findings: false\nhistory_file: .aishield-history.log\nrecord_history: true\n".to_string()
+}
+
+fn init_github_actions_template() -> String {
+    r#"name: AIShield Security Scan
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+
+env:
+  AISHIELD_ENABLE_SAST_BRIDGE: ${{ vars.AISHIELD_ENABLE_SAST_BRIDGE || 'true' }}
+  AISHIELD_BRIDGE_ENGINES: ${{ vars.AISHIELD_BRIDGE_ENGINES || 'all' }}
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set bridge args
+        run: |
+          if [ "${AISHIELD_ENABLE_SAST_BRIDGE}" = "true" ]; then
+            echo "AISHIELD_BRIDGE_ARGS=--bridge ${AISHIELD_BRIDGE_ENGINES}" >> "$GITHUB_ENV"
+          else
+            echo "AISHIELD_BRIDGE_ARGS=" >> "$GITHUB_ENV"
+          fi
+
+      - name: Set up Python
+        if: env.AISHIELD_ENABLE_SAST_BRIDGE == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install Semgrep and Bandit
+        if: env.AISHIELD_ENABLE_SAST_BRIDGE == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install semgrep bandit
+
+      - name: Set up Node.js
+        if: env.AISHIELD_ENABLE_SAST_BRIDGE == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install ESLint
+        if: env.AISHIELD_ENABLE_SAST_BRIDGE == 'true'
+        run: npm install -g eslint
+
+      - name: Build and scan
+        run: cargo run -p aishield-cli -- scan . --format sarif --dedup normalized --output aishield.sarif ${AISHIELD_BRIDGE_ARGS}
+
+      - name: PR annotations
+        if: github.event_name == 'pull_request'
+        run: cargo run -p aishield-cli -- scan . --format github --dedup normalized --changed-from "${{ github.event.pull_request.base.sha }}" ${AISHIELD_BRIDGE_ARGS}
+
+      - name: Upload SARIF
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: aishield.sarif
+"#
+    .to_string()
+}
+
+fn init_gitlab_ci_template() -> String {
+    r#"stages:
+  - scan
+
+variables:
+  CARGO_TERM_COLOR: always
+
+scan:aishield:
+  stage: scan
+  image: rust:1.84
+  before_script:
+    - apt-get update && apt-get install -y python3 python3-pip nodejs npm
+  script:
+    - cargo build --workspace
+    - cargo run -p aishield-cli -- scan . --format sarif --dedup normalized --output aishield.sarif
+  artifacts:
+    when: always
+    paths:
+      - aishield.sarif
+    expire_in: 1 week
+
+# Optional bridge run:
+#   set CI variable AISHIELD_ENABLE_BRIDGE=true
+scan:aishield-bridge:
+  stage: scan
+  image: rust:1.84
+  rules:
+    - if: '$AISHIELD_ENABLE_BRIDGE == "true"'
+  before_script:
+    - apt-get update && apt-get install -y python3 python3-pip nodejs npm
+    - python3 -m pip install --upgrade pip
+    - pip3 install semgrep bandit
+    - npm install -g eslint
+  script:
+    - cargo build --workspace
+    - cargo run -p aishield-cli -- scan . --format sarif --dedup normalized --bridge all --output aishield.sarif
+  artifacts:
+    when: always
+    paths:
+      - aishield.sarif
+    expire_in: 1 week
+"#
+    .to_string()
+}
+
+fn init_bitbucket_pipelines_template() -> String {
+    r#"image: rust:1.84
+
+pipelines:
+  pull-requests:
+    '**':
+      - step:
+          name: AIShield scan
+          caches:
+            - cargo
+          script:
+            - apt-get update && apt-get install -y python3 python3-pip nodejs npm
+            - cargo build --workspace
+            - cargo run -p aishield-cli -- scan . --format json --dedup normalized --output aishield.json
+          artifacts:
+            - aishield.json
+  branches:
+    main:
+      - step:
+          name: AIShield SARIF
+          caches:
+            - cargo
+          script:
+            - apt-get update && apt-get install -y python3 python3-pip nodejs npm
+            - cargo build --workspace
+            - cargo run -p aishield-cli -- scan . --format sarif --dedup normalized --output aishield.sarif
+          artifacts:
+            - aishield.sarif
+"#
+    .to_string()
+}
+
+fn init_circleci_template() -> String {
+    r#"version: 2.1
+
+jobs:
+  scan:
+    docker:
+      - image: cimg/rust:1.84
+    steps:
+      - checkout
+      - run:
+          name: Install bridge dependencies
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y python3 python3-pip nodejs npm
+      - run:
+          name: Build workspace
+          command: cargo build --workspace
+      - run:
+          name: AIShield scan (SARIF)
+          command: cargo run -p aishield-cli -- scan . --format sarif --dedup normalized --output aishield.sarif
+      - store_artifacts:
+          path: aishield.sarif
+
+workflows:
+  security:
+    jobs:
+      - scan
+"#
+    .to_string()
+}
+
+fn init_jenkinsfile_template() -> String {
+    r#"pipeline {
+  agent any
+
+  stages {
+    stage('Setup') {
+      steps {
+        sh 'rustc --version || true'
+        sh 'cargo --version'
+      }
+    }
+
+    stage('Scan') {
+      steps {
+        sh 'cargo build --workspace'
+        sh 'cargo run -p aishield-cli -- scan . --format sarif --dedup normalized --output aishield.sarif'
+      }
+    }
+  }
+
+  post {
+    always {
+      archiveArtifacts artifacts: 'aishield.sarif', allowEmptyArchive: true
+    }
+  }
+}
+"#
+    .to_string()
+}
+
+fn init_vscode_extensions_template() -> String {
+    r#"{
+  "recommendations": [
+    "rust-lang.rust-analyzer",
+    "tamasfe.even-better-toml",
+    "redhat.vscode-yaml",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode"
+  ]
+}
+"#
+    .to_string()
+}
+
+fn init_vscode_tasks_template() -> String {
+    r#"{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "AIShield: test",
+      "type": "shell",
+      "command": "cargo test",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "AIShield: scan workspace",
+      "type": "shell",
+      "command": "cargo run -p aishield-cli -- scan .",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "AIShield: build docs",
+      "type": "shell",
+      "command": "npm run docs:build",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "AIShield: docs dev server",
+      "type": "shell",
+      "command": "npm run docs:dev",
+      "problemMatcher": []
+    }
+  ]
+}
+"#
+    .to_string()
+}
+
+fn init_precommit_template() -> String {
+    r#"repos:
+  - repo: local
+    hooks:
+      - id: aishield-scan
+        name: aishield scan (staged, high+)
+        entry: cargo run -p aishield-cli -- scan . --staged --severity high --fail-on-findings
+        language: system
+        pass_filenames: false
+"#
+    .to_string()
+}
+
 fn run_init(args: &[String]) -> Result<(), String> {
     let mut output = PathBuf::from(".aishield.yml");
+    let mut templates = vec![InitTemplate::Config];
+    let mut force = false;
 
     let mut i = 0;
     while i < args.len() {
@@ -1884,21 +2304,61 @@ fn run_init(args: &[String]) -> Result<(), String> {
                 i += 1;
                 output = PathBuf::from(args.get(i).ok_or("--output requires a value")?);
             }
+            "--templates" => {
+                i += 1;
+                templates =
+                    parse_init_templates(args.get(i).ok_or("--templates requires a value")?)?;
+            }
+            "--force" => force = true,
             other => return Err(format!("unknown init option `{other}`")),
         }
         i += 1;
     }
 
-    if output.exists() {
-        return Err(format!("{} already exists", output.display()));
+    if output != PathBuf::from(".aishield.yml") && !templates.contains(&InitTemplate::Config) {
+        return Err("--output requires templates to include `config`".to_string());
     }
 
-    let config = "version: 1\nrules_dir: rules\nformat: table\ndedup_mode: normalized\nbridge_engines: []\nrules: []\nexclude_paths: []\nai_only: false\nmin_ai_confidence: 0.70\nseverity_threshold: medium\nfail_on_findings: false\nhistory_file: .aishield-history.log\nrecord_history: true\n";
+    let writes = init_template_writes(&templates, &output);
+    for (path, _) in &writes {
+        if path.exists() && !force {
+            return Err(format!(
+                "{} already exists (use --force to overwrite)",
+                path.display()
+            ));
+        }
+    }
 
-    let mut file = File::create(&output).map_err(|err| err.to_string())?;
-    file.write_all(config.as_bytes())
-        .map_err(|err| err.to_string())?;
-    println!("Created {}", output.display());
+    for (path, content) in writes {
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() {
+                fs::create_dir_all(parent).map_err(|err| {
+                    format!("failed to create directory {}: {err}", parent.display())
+                })?;
+            }
+        }
+        let existed = path.exists();
+        let mut file = File::create(&path)
+            .map_err(|err| format!("failed to create {}: {err}", path.display()))?;
+        file.write_all(content.as_bytes())
+            .map_err(|err| format!("failed to write {}: {err}", path.display()))?;
+        println!(
+            "{} {}",
+            if existed { "Updated" } else { "Created" },
+            path.display()
+        );
+    }
+
+    if !templates.is_empty() {
+        println!(
+            "Initialized templates: {}",
+            templates
+                .iter()
+                .map(|template| template.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
     Ok(())
 }
 
@@ -2654,7 +3114,7 @@ fn print_help() {
     println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
     println!("  aishield fix <path[:line[:col]]> [--rules-dir DIR] [--write|--interactive] [--dry-run] [--config FILE] [--no-config]");
     println!("  aishield bench <path> [--rules-dir DIR] [--iterations N] [--warmup N] [--format table|json] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--config FILE] [--no-config]");
-    println!("  aishield init [--output PATH]");
+    println!("  aishield init [--output PATH] [--templates config,github-actions,gitlab-ci,bitbucket-pipelines,circleci,jenkins,vscode,pre-commit|all] [--force]");
     println!("  aishield create-rule --id ID --title TITLE --language LANG --category CAT [--severity LEVEL] [--pattern-any P] [--pattern-all P] [--pattern-not P] [--tags t1,t2] [--suggestion TEXT] [--out-dir DIR] [--force]");
     println!("  aishield stats [--last Nd] [--history-file FILE] [--format table|json] [--config FILE] [--no-config]");
     println!("  aishield hook install [--severity LEVEL] [--path TARGET] [--all-files]");
@@ -3589,12 +4049,15 @@ impl SeverityThreshold {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::{
         apply_replacements, autofix_replacements, count_replacements, dedup_machine_output,
         empty_summary, escape_github_annotation_message, escape_github_annotation_property,
-        filtered_candidate_indices, normalize_snippet, parse_fix_target_spec, percentile,
-        render_github_annotations, render_sarif, resolve_selected_indices, DedupMode, Finding,
-        OutputSummary, ScanResult, Severity,
+        filtered_candidate_indices, init_template_writes, normalize_snippet, parse_fix_target_spec,
+        parse_init_templates, percentile, render_github_annotations, render_sarif,
+        resolve_selected_indices, DedupMode, Finding, InitTemplate, OutputSummary, ScanResult,
+        Severity,
     };
 
     fn finding(
@@ -3753,6 +4216,78 @@ mod tests {
     fn bridge_engine_parser_rejects_invalid_engine() {
         let err = super::parse_bridge_engines("foo").expect_err("should reject invalid bridge");
         assert!(err.contains("bridge engine"));
+    }
+
+    #[test]
+    fn init_template_parser_supports_all_alias() {
+        let templates = parse_init_templates("all").expect("parse all init templates");
+        let values = templates.iter().map(|t| t.as_str()).collect::<Vec<_>>();
+        assert_eq!(
+            values,
+            vec![
+                "config",
+                "github-actions",
+                "gitlab-ci",
+                "bitbucket-pipelines",
+                "circleci",
+                "jenkins",
+                "vscode",
+                "pre-commit"
+            ]
+        );
+    }
+
+    #[test]
+    fn init_template_parser_dedups_entries() {
+        let templates = parse_init_templates("config,circleci,circleci,pre-commit")
+            .expect("parse dedup init templates");
+        let values = templates.iter().map(|t| t.as_str()).collect::<Vec<_>>();
+        assert_eq!(values, vec!["config", "circleci", "pre-commit"]);
+    }
+
+    #[test]
+    fn init_template_parser_rejects_unknown_values() {
+        let err = parse_init_templates("config,unknown").expect_err("should reject unknown");
+        assert!(err.contains("unknown init template"));
+    }
+
+    #[test]
+    fn init_template_writes_include_expected_paths() {
+        let writes = init_template_writes(
+            &[
+                InitTemplate::Config,
+                InitTemplate::VsCode,
+                InitTemplate::PreCommit,
+            ],
+            Path::new(".aishield-custom.yml"),
+        );
+        let paths = writes
+            .iter()
+            .map(|(path, _)| path.to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+        assert!(paths.contains(&".aishield-custom.yml".to_string()));
+        assert!(paths.contains(&".vscode/extensions.json".to_string()));
+        assert!(paths.contains(&".vscode/tasks.json".to_string()));
+        assert!(paths.contains(&".pre-commit-config.yaml".to_string()));
+    }
+
+    #[test]
+    fn init_template_writes_include_ci_ecosystem_paths() {
+        let writes = init_template_writes(
+            &[
+                InitTemplate::BitbucketPipelines,
+                InitTemplate::CircleCi,
+                InitTemplate::Jenkins,
+            ],
+            Path::new(".aishield.yml"),
+        );
+        let paths = writes
+            .iter()
+            .map(|(path, _)| path.to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+        assert!(paths.contains(&"bitbucket-pipelines.yml".to_string()));
+        assert!(paths.contains(&".circleci/config.yml".to_string()));
+        assert!(paths.contains(&"Jenkinsfile".to_string()));
     }
 
     #[test]
