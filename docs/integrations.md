@@ -44,6 +44,7 @@ Current extension UX includes:
 - hover cards with AI/risk context
 - quick-fix code actions via `aishield fix --write`
 - AIShield Findings explorer view
+- AI paste-detection heuristics with optional auto-scan
 - optional security-lens line highlighting
 
 ## GitHub Actions

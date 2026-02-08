@@ -177,6 +177,7 @@ Current implementation includes:
 - optional SAST bridge for Semgrep/Bandit/ESLint
 - VS Code extension bootstrap in `integrations/vscode-extension`
 - VS Code advanced UX beta: hover cards, quick-fix actions, findings panel, security lens
+- VS Code AI paste-detection bootstrap with scan prompt/auto-scan controls
 - C#/Ruby/PHP language ecosystem bootstrap with dedicated rules and fixtures
 - Kotlin/Swift language ecosystem bootstrap with dedicated rules and fixtures
 - hardened SARIF upload and PR annotation workflows across push/PR contexts

@@ -15,6 +15,7 @@ It provides:
 - Quick-fix code actions that invoke `aishield fix <file:line:col> --write`
 - Explorer panel: **AIShield Findings**
 - Beta AI Security Lens line highlighting for medium/high/critical findings
+- AI paste-detection heuristics with scan prompt/auto-scan options
 - Optional scan-on-save behavior
 
 ## Run Extension Locally
@@ -35,6 +36,10 @@ Then open `integrations/vscode-extension` in VS Code and launch extension host w
 - `aishield.useOnnx`
 - `aishield.onnxModelPath`
 - `aishield.scanOnSave`
+- `aishield.aiPasteDetection`
+- `aishield.aiPasteMinLines`
+- `aishield.aiPasteHeuristicThreshold`
+- `aishield.scanOnAIPaste`
 - `aishield.securityLens`
 
 ## Notes

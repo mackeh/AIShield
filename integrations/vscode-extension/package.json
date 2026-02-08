@@ -121,6 +121,29 @@
           "default": false,
           "description": "Run AIShield scan on file save."
         },
+        "aishield.aiPasteDetection": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable heuristic detection of likely AI-assisted paste events."
+        },
+        "aishield.aiPasteMinLines": {
+          "type": "number",
+          "default": 8,
+          "minimum": 3,
+          "description": "Minimum inserted lines before AI paste detection heuristics are evaluated."
+        },
+        "aishield.aiPasteHeuristicThreshold": {
+          "type": "number",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 6,
+          "description": "Signal score threshold for triggering an AI paste warning."
+        },
+        "aishield.scanOnAIPaste": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically scan the current file when suspected AI-assisted paste is detected."
+        },
         "aishield.securityLens": {
           "type": "boolean",
           "default": false,

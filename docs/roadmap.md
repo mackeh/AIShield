@@ -26,6 +26,7 @@ This page mirrors `project.md` and highlights the current implementation directi
 
 - [x] VS Code extension bootstrap (scan commands + diagnostics)
 - [x] Advanced VS Code UX beta (hover cards, quick fixes, findings panel, security lens)
+- [x] AI paste-detection bootstrap in VS Code extension
 - [ ] Advanced VS Code UX GA polish and telemetry-informed tuning
 - [ ] Web dashboard and analytics pipeline
 - [x] Alerting bootstrap via scan webhooks
