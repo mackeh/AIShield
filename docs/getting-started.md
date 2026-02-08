@@ -41,6 +41,22 @@ cargo run -p aishield-cli -- scan . --format sarif --dedup normalized --output a
 cargo run -p aishield-cli -- scan . --format github --changed-from origin/main
 ```
 
+## ONNX Classifier Mode (Optional)
+
+```bash
+python3 -m pip install --upgrade onnxruntime numpy
+cargo run -p aishield-cli --features onnx -- \
+  scan . \
+  --ai-model onnx \
+  --onnx-model models/ai-classifier/model.onnx
+
+# or use manifest-driven model + calibration
+cargo run -p aishield-cli --features onnx -- \
+  scan . \
+  --ai-model onnx \
+  --onnx-manifest models/ai-classifier/model-manifest.json
+```
+
 ## Interactive Fix Mode
 
 ```bash
@@ -67,7 +83,20 @@ Build docs for production:
 npm run docs:build
 ```
 
+## Dashboard Bootstrap
+
+```bash
+npm run dashboard:dev
+```
+
+Seed demo history if needed:
+
+```bash
+npm run dashboard:sample-history
+```
+
 ## Next Steps
 
 - Contributor onboarding: `CONTRIBUTING.md` and `/contributing`
 - Ecosystem setup guides: `/integrations`
+- VS Code extension bootstrap: `/vscode-extension`

@@ -15,6 +15,10 @@ AIShield ships workspace recommendations and task shortcuts:
 - `.vscode/extensions.json`
 - `.vscode/tasks.json`
 
+AIShield also includes a VS Code extension bootstrap:
+
+- `integrations/vscode-extension`
+
 Recommended tasks:
 
 - `AIShield: test`
@@ -23,6 +27,27 @@ Recommended tasks:
 - `AIShield: docs dev server`
 
 You can run tasks from **Terminal -> Run Task**.
+
+Extension quick start:
+
+```bash
+cd integrations/vscode-extension
+npm install
+npm run build
+```
+
+See `docs/vscode-extension.md` for commands and settings.
+
+Current extension UX includes:
+
+- diagnostics in Problems panel
+- hover cards with AI/risk context
+- quick-fix code actions via `aishield fix --write`
+- AIShield Findings explorer view
+- AI paste-detection heuristics with optional auto-scan
+- optional security-lens line highlighting
+- status bar scan summaries
+- local telemetry summary + latency-based tuning hints
 
 ## GitHub Actions
 
@@ -124,6 +149,22 @@ Config and env support:
 - `.aishield.yml`: `notify_webhook_url`, `notify_min_severity`
 - environment override: `AISHIELD_NOTIFY_WEBHOOK`
 
+## Local Dashboard + Analytics Pipeline
+
+Start dashboard:
+
+```bash
+npm run dashboard:dev
+```
+
+Ingest scan artifacts into history:
+
+```bash
+npm run dashboard:ingest -- --input aishield.json --target github-actions/main
+```
+
+Use this when scans run in CI and you want local trend analytics from exported reports.
+
 ## Local Automation
 
 Useful local commands:
@@ -131,5 +172,6 @@ Useful local commands:
 ```bash
 cargo test
 cargo run -p aishield-cli -- scan .
+cargo run -p aishield-cli --features onnx -- scan . --ai-model onnx --onnx-model models/ai-classifier/model.onnx
 npm run docs:build
 ```

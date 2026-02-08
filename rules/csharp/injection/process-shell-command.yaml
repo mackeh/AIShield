@@ -1,0 +1,13 @@
+id: AISHIELD-CS-INJ-002
+title: Shell Command Construction from User Input
+severity: high
+confidence_that_ai_generated: 0.76
+languages: [csharp]
+category: injection
+pattern:
+  all:
+    - "new processstartinfo(\"sh\""
+    - "+ userinput"
+fix:
+  suggestion: Avoid shell invocation with user input; use strict allowlists or native APIs.
+tags: [injection, command-injection]

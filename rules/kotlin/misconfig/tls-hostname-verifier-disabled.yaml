@@ -1,0 +1,13 @@
+id: AISHIELD-KT-MISC-001
+title: TLS Hostname Verification Disabled
+severity: high
+confidence_that_ai_generated: 0.77
+languages: [kotlin]
+category: misconfig
+pattern:
+  all:
+    - "hostnameverifier"
+    - "-> true"
+fix:
+  suggestion: Enforce hostname verification and certificate validation.
+tags: [misconfig, tls]

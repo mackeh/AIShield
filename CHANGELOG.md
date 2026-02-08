@@ -8,6 +8,27 @@ The format is based on Keep a Changelog and follows semantic versioning.
 
 ### Added
 
+- No unreleased entries yet.
+
+## [0.3.0] - 2026-02-08
+
+### Added
+
+- Analytics platform milestone: PostgreSQL/TimescaleDB ingestion pipeline, Axum API service, and dashboard API mode with trend/report endpoints
+- One-command analytics stack lifecycle scripts (`scripts/start-analytics-stack.sh`, `scripts/stop-analytics-stack.sh`) with smoke-test bootstrap
+- Dedicated analytics smoke CI workflow for PR/push validation (`.github/workflows/analytics-smoke.yml`)
+- CLI analytics payload enrichment with inferred compliance metadata (`cwe_id`, `owasp_category`) plus regression tests
+- API hardening upgrades: configurable CORS allowlist and request rate limiting
+
+### Changed
+
+- Updated project/testing/quickstart docs to reflect current Week 5 reliability-hardening status and stack workflow
+- Removed obsolete Docker Compose `version` key from analytics stack config
+
+## [0.2.0] - 2026-02-08
+
+### Added
+
 - `github` scan output format for GitHub Actions inline PR annotations
 - CI workflow step to emit AIShield PR annotations alongside SARIF upload
 - `scan --changed-from <ref>` to scope scans/annotations to changed files
@@ -28,6 +49,15 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - Strengthened tests to enforce phase-2 rule depth and per-language fixture detection coverage
 - Expanded Go/Rust/Java vulnerable fixtures to exercise new auth/crypto/injection/misconfig rules
 - Added heuristic AI-likelihood classifier in core (path/snippet signals) and wired risk scoring to dynamic AI confidence
+- Added web dashboard + analytics pipeline bootstrap (`dashboard/`) with trend KPIs and top-rule/target views
+- Added report ingestion utility for AIShield JSON/SARIF artifacts (`dashboard/scripts/ingest-report.js`)
+- Added dashboard sample-history generator and Node tests for analytics/history parsing logic
+- Expanded Kotlin/Swift rulepacks with additional auth/crypto/injection/misconfig detections and fixture coverage
+- Strengthened regression assertions for Kotlin/Swift fixture findings and minimum repository rule depth
+- Reached Kotlin/Swift phase-2 depth milestone (20 rules each) with updated rule-depth gates
+- Added ONNX model manifest support (`--onnx-manifest`) and calibration profiles (`--ai-calibration`)
+- Tuned classifier blending to use configurable calibration settings from profile/manifest
+- Polished VS Code extension for GA: status bar UX, debounced auto-scan controls, diagnostics cap, and local telemetry summaries
 
 ## [0.1.1] - 2026-02-07
 
@@ -54,6 +84,8 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - Machine-output dedup normalization for JSON/SARIF to reduce CI noise
 - Expanded documentation for CLI, configuration, outputs, and CI
 
-[Unreleased]: https://github.com/mackeh/AIShield/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/mackeh/AIShield/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/mackeh/AIShield/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/mackeh/AIShield/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/mackeh/AIShield/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/mackeh/AIShield/releases/tag/v0.1.0

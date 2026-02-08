@@ -691,8 +691,8 @@ function good(token, expected) {
             .expect("scan fixture suite");
 
         assert!(
-            result.summary.total >= 60,
-            "expected at least 60 findings in expanded fixture suite, got {}",
+            result.summary.total >= 130,
+            "expected at least 130 findings in expanded fixture suite, got {}",
             result.summary.total
         );
 
@@ -710,6 +710,31 @@ function good(token, expected) {
             .findings
             .iter()
             .filter(|finding| finding.id.starts_with("AISHIELD-JAVA-"))
+            .count();
+        let csharp_findings = result
+            .findings
+            .iter()
+            .filter(|finding| finding.id.starts_with("AISHIELD-CS-"))
+            .count();
+        let ruby_findings = result
+            .findings
+            .iter()
+            .filter(|finding| finding.id.starts_with("AISHIELD-RB-"))
+            .count();
+        let php_findings = result
+            .findings
+            .iter()
+            .filter(|finding| finding.id.starts_with("AISHIELD-PHP-"))
+            .count();
+        let kotlin_findings = result
+            .findings
+            .iter()
+            .filter(|finding| finding.id.starts_with("AISHIELD-KT-"))
+            .count();
+        let swift_findings = result
+            .findings
+            .iter()
+            .filter(|finding| finding.id.starts_with("AISHIELD-SW-"))
             .count();
         let terraform_findings = result
             .findings
@@ -741,6 +766,31 @@ function good(token, expected) {
             java_findings >= 15,
             "expected at least 15 java findings in fixture suite, got {}",
             java_findings
+        );
+        assert!(
+            csharp_findings >= 5,
+            "expected at least 5 csharp findings in fixture suite, got {}",
+            csharp_findings
+        );
+        assert!(
+            ruby_findings >= 5,
+            "expected at least 5 ruby findings in fixture suite, got {}",
+            ruby_findings
+        );
+        assert!(
+            php_findings >= 5,
+            "expected at least 5 php findings in fixture suite, got {}",
+            php_findings
+        );
+        assert!(
+            kotlin_findings >= 15,
+            "expected at least 15 kotlin findings in fixture suite, got {}",
+            kotlin_findings
+        );
+        assert!(
+            swift_findings >= 15,
+            "expected at least 15 swift findings in fixture suite, got {}",
+            swift_findings
         );
         assert!(
             terraform_findings >= 5,

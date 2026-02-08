@@ -70,6 +70,11 @@ fn language_from_path(path: &Path) -> Option<&'static str> {
         "go" => Some("go"),
         "rs" => Some("rust"),
         "java" => Some("java"),
+        "cs" => Some("csharp"),
+        "rb" => Some("ruby"),
+        "php" | "phtml" => Some("php"),
+        "kt" | "kts" => Some("kotlin"),
+        "swift" => Some("swift"),
         "tf" | "hcl" => Some("terraform"),
         "yaml" | "yml" => {
             if looks_like_kubernetes_manifest(path) {
@@ -110,12 +115,17 @@ mod tests {
     use super::collect_source_files;
 
     #[test]
-    fn collects_go_rust_and_java_sources() {
+    fn collects_application_language_sources() {
         let root = temp_path("aishield-scanner-lang-test");
         fs::create_dir_all(&root).expect("create root");
         fs::write(root.join("sample.go"), "package main\n").expect("write go");
         fs::write(root.join("sample.rs"), "fn main() {}\n").expect("write rust");
         fs::write(root.join("Sample.java"), "class Sample {}\n").expect("write java");
+        fs::write(root.join("Sample.cs"), "class Sample {}\n").expect("write csharp");
+        fs::write(root.join("sample.rb"), "puts 'hi'\n").expect("write ruby");
+        fs::write(root.join("sample.php"), "<?php echo 'hi';\n").expect("write php");
+        fs::write(root.join("sample.kt"), "class Sample\n").expect("write kotlin");
+        fs::write(root.join("sample.swift"), "print(\"hi\")\n").expect("write swift");
         fs::write(root.join("ignored.txt"), "noop\n").expect("write ignored");
 
         let files = collect_source_files(&root);
@@ -125,7 +135,10 @@ mod tests {
             .collect::<Vec<_>>();
         languages.sort_unstable();
 
-        assert_eq!(languages, vec!["go", "java", "rust"]);
+        assert_eq!(
+            languages,
+            vec!["csharp", "go", "java", "kotlin", "php", "ruby", "rust", "swift"]
+        );
 
         let _ = fs::remove_dir_all(root);
     }

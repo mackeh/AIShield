@@ -1,0 +1,12 @@
+id: AISHIELD-PHP-CRYPTO-001
+title: Weak Hash Algorithm (MD5)
+severity: high
+confidence_that_ai_generated: 0.78
+languages: [php]
+category: crypto
+pattern:
+  any:
+    - "md5($password)"
+fix:
+  suggestion: Use password_hash for passwords and stronger hashes for integrity use cases.
+tags: [crypto, weak-hash]

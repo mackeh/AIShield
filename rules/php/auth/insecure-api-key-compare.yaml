@@ -1,0 +1,12 @@
+id: AISHIELD-PHP-AUTH-002
+title: Insecure API Key Equality Check
+severity: high
+confidence_that_ai_generated: 0.77
+languages: [php]
+category: auth
+pattern:
+  any:
+    - "apikey == $incomingapikey"
+fix:
+  suggestion: Use hash_equals and avoid direct string equality for API keys.
+tags: [auth, api-key]

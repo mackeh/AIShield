@@ -1,0 +1,12 @@
+id: AISHIELD-SW-CRYPTO-003
+title: Predictable Random Token Pattern
+severity: medium
+confidence_that_ai_generated: 0.72
+languages: [swift]
+category: crypto
+pattern:
+  any:
+    - "int.random(in:"
+fix:
+  suggestion: Use cryptographically secure random bytes for auth tokens and secrets.
+tags: [crypto, randomness]

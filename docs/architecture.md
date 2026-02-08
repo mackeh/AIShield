@@ -11,7 +11,7 @@ Core scanner and data model:
 - rule loading and validation (`rules/` YAML)
 - file discovery and language inference
 - finding extraction + severity/risk scoring
-- AI-likelihood heuristics/classifier hooks
+- AI-likelihood heuristics + ONNX runner integration hooks
 - output shaping and dedup normalization
 - optional SAST bridge normalization
 
@@ -35,6 +35,13 @@ Operator-facing interface:
 - `.github/workflows/release.yml`: tag-driven release workflow
 - `CHANGELOG.md`: curated release narrative
 - `SECURITY.md`: vulnerability reporting and support expectations
+
+## Integration Surfaces
+
+- `models/ai-classifier/`: ONNX classifier assets, model manifest, calibration notes, and runtime runner script
+- `integrations/vscode-extension/`: VS Code extension bootstrap (commands + diagnostics)
+- `.vscode/`: workspace tasks and extension recommendations
+- `dashboard/`: local analytics dashboard (`server.js`, static UI, and report-ingest utilities)
 
 ## Documentation Stack
 

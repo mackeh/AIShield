@@ -1,0 +1,13 @@
+id: AISHIELD-KT-AUTH-005
+title: Insecure Case-Normalized Token Comparison
+severity: medium
+confidence_that_ai_generated: 0.71
+languages: [kotlin]
+category: auth
+pattern:
+  all:
+    - "token.lowercase() =="
+    - "provided.lowercase()"
+fix:
+  suggestion: Avoid case-normalizing secrets and use strict constant-time comparisons.
+tags: [auth, token]

@@ -8,9 +8,13 @@ use std::process::Command;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+mod analytics_client;
+mod config;
+mod git_utils;
+
 use aishield_core::{
-    AiClassifierMode, AiClassifierOptions, AnalysisOptions, Analyzer, Finding, RuleSet, ScanResult,
-    ScanSummary, Severity,
+    AiCalibrationProfile, AiCalibrationSettings, AiClassifierMode, AiClassifierOptions,
+    AnalysisOptions, Analyzer, Finding, RuleSet, ScanResult, ScanSummary, Severity,
 };
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
@@ -50,6 +54,8 @@ fn run() -> Result<(), String> {
         "create-rule" => run_create_rule(&args[1..]),
         "stats" => run_stats(&args[1..]),
         "hook" => run_hook(&args[1..]),
+        "config" => run_config(&args[1..]),
+        "analytics" => run_analytics(&args[1..]),
         "--help" | "-h" | "help" => {
             print_help();
             Ok(())
@@ -75,6 +81,8 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     let mut cross_file_flag = false;
     let mut ai_model_override = None::<AiClassifierMode>;
     let mut onnx_model_override = None::<PathBuf>;
+    let mut onnx_manifest_override = None::<PathBuf>;
+    let mut ai_calibration_override = None::<AiCalibrationProfile>;
     let mut min_ai_confidence_override = None;
     let mut severity_override = None;
     let mut fail_on_findings_flag = false;
@@ -84,6 +92,7 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     let mut notify_severity_override = None::<SeverityThreshold>;
     let mut history_file_override = None;
     let mut no_history_flag = false;
+    let mut analytics_push_flag = false;
     let mut staged_only = false;
     let mut changed_from = None::<String>;
     let mut config_path = PathBuf::from(".aishield.yml");
@@ -140,6 +149,18 @@ fn run_scan(args: &[String]) -> Result<(), String> {
                     args.get(i).ok_or("--onnx-model requires a value")?,
                 ));
             }
+            "--onnx-manifest" => {
+                i += 1;
+                onnx_manifest_override = Some(PathBuf::from(
+                    args.get(i).ok_or("--onnx-manifest requires a value")?,
+                ));
+            }
+            "--ai-calibration" => {
+                i += 1;
+                ai_calibration_override = Some(AiCalibrationProfile::parse(
+                    args.get(i).ok_or("--ai-calibration requires a value")?,
+                )?);
+            }
             "--min-ai-confidence" => {
                 i += 1;
                 let raw = args.get(i).ok_or("--min-ai-confidence requires a value")?;
@@ -189,6 +210,7 @@ fn run_scan(args: &[String]) -> Result<(), String> {
                 ));
             }
             "--no-history" => no_history_flag = true,
+            "--analytics-push" => analytics_push_flag = true,
             "--staged" => staged_only = true,
             "--changed-from" => {
                 i += 1;
@@ -229,8 +251,15 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     let cross_file = cross_file_flag || config.cross_file;
     let ai_model = ai_model_override
         .or_else(|| onnx_model_override.as_ref().map(|_| AiClassifierMode::Onnx))
+        .or_else(|| {
+            onnx_manifest_override
+                .as_ref()
+                .map(|_| AiClassifierMode::Onnx)
+        })
         .unwrap_or(config.ai_model);
     let onnx_model_path = onnx_model_override.or_else(|| config.onnx_model_path.clone());
+    let onnx_manifest_path = onnx_manifest_override.or_else(|| config.onnx_manifest_path.clone());
+    let ai_calibration = ai_calibration_override.unwrap_or(config.ai_calibration);
     let min_ai_confidence = min_ai_confidence_override.or(config.min_ai_confidence);
     let severity_threshold = severity_override.or(config.severity_threshold);
     let fail_on_findings = fail_on_findings_flag || config.fail_on_findings;
@@ -260,7 +289,12 @@ fn run_scan(args: &[String]) -> Result<(), String> {
 
     let rules_count = ruleset.rules.len();
     let analyzer = Analyzer::new(ruleset);
-    let ai_classifier = resolve_ai_classifier(ai_model, onnx_model_path);
+    let ai_classifier = resolve_ai_classifier(
+        ai_model,
+        onnx_model_path,
+        onnx_manifest_path.as_deref(),
+        ai_calibration,
+    );
     let options = AnalysisOptions {
         ai_only,
         cross_file,
@@ -323,6 +357,13 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     if record_history {
         if let Err(err) = append_history(&history_file, &target, &result) {
             eprintln!("warning: failed to append scan history: {err}");
+        }
+    }
+
+    // Push to analytics API if enabled
+    if analytics_push_flag {
+        if let Err(err) = push_to_analytics(&target, &result) {
+            eprintln!("warning: analytics push failed: {err}");
         }
     }
 
@@ -895,6 +936,8 @@ fn run_bench(args: &[String]) -> Result<(), String> {
     let mut cross_file_flag = false;
     let mut ai_model_override = None::<AiClassifierMode>;
     let mut onnx_model_override = None::<PathBuf>;
+    let mut onnx_manifest_override = None::<PathBuf>;
+    let mut ai_calibration_override = None::<AiCalibrationProfile>;
     let mut min_ai_confidence_override = None;
     let mut iterations = 5usize;
     let mut warmup = 1usize;
@@ -940,6 +983,18 @@ fn run_bench(args: &[String]) -> Result<(), String> {
                 onnx_model_override = Some(PathBuf::from(
                     args.get(i).ok_or("--onnx-model requires a value")?,
                 ));
+            }
+            "--onnx-manifest" => {
+                i += 1;
+                onnx_manifest_override = Some(PathBuf::from(
+                    args.get(i).ok_or("--onnx-manifest requires a value")?,
+                ));
+            }
+            "--ai-calibration" => {
+                i += 1;
+                ai_calibration_override = Some(AiCalibrationProfile::parse(
+                    args.get(i).ok_or("--ai-calibration requires a value")?,
+                )?);
             }
             "--min-ai-confidence" => {
                 i += 1;
@@ -997,8 +1052,15 @@ fn run_bench(args: &[String]) -> Result<(), String> {
     let cross_file = cross_file_flag || config.cross_file;
     let ai_model = ai_model_override
         .or_else(|| onnx_model_override.as_ref().map(|_| AiClassifierMode::Onnx))
+        .or_else(|| {
+            onnx_manifest_override
+                .as_ref()
+                .map(|_| AiClassifierMode::Onnx)
+        })
         .unwrap_or(config.ai_model);
     let onnx_model_path = onnx_model_override.or_else(|| config.onnx_model_path.clone());
+    let onnx_manifest_path = onnx_manifest_override.or_else(|| config.onnx_manifest_path.clone());
+    let ai_calibration = ai_calibration_override.unwrap_or(config.ai_calibration);
     let min_ai_confidence = min_ai_confidence_override.or(config.min_ai_confidence);
 
     let ruleset = RuleSet::load_from_dir(&rules_dir)
@@ -1008,7 +1070,12 @@ fn run_bench(args: &[String]) -> Result<(), String> {
     }
 
     let analyzer = Analyzer::new(ruleset);
-    let ai_classifier = resolve_ai_classifier(ai_model, onnx_model_path);
+    let ai_classifier = resolve_ai_classifier(
+        ai_model,
+        onnx_model_path,
+        onnx_manifest_path.as_deref(),
+        ai_calibration,
+    );
     let options = AnalysisOptions {
         ai_only,
         cross_file,
@@ -1077,11 +1144,39 @@ fn run_bench(args: &[String]) -> Result<(), String> {
 fn resolve_ai_classifier(
     requested_mode: AiClassifierMode,
     requested_model_path: Option<PathBuf>,
+    requested_manifest_path: Option<&Path>,
+    requested_calibration: AiCalibrationProfile,
 ) -> AiClassifierOptions {
+    let mut resolved_model_path = requested_model_path;
+    let mut calibration = AiCalibrationSettings::from_profile(requested_calibration);
+
+    if let Some(manifest_path) = requested_manifest_path {
+        match load_onnx_manifest(manifest_path) {
+            Ok(manifest) => {
+                if resolved_model_path.is_none() {
+                    resolved_model_path = manifest.model_path.clone();
+                }
+                if requested_calibration == AiCalibrationProfile::Balanced {
+                    if let Some(profile) = manifest.calibration_profile {
+                        calibration = AiCalibrationSettings::from_profile(profile);
+                    }
+                }
+                calibration = apply_manifest_calibration_overrides(calibration, &manifest);
+            }
+            Err(err) => {
+                eprintln!(
+                    "warning: failed to load ONNX manifest {}: {err}",
+                    manifest_path.display()
+                )
+            }
+        }
+    }
+
     if requested_mode != AiClassifierMode::Onnx {
         return AiClassifierOptions {
             mode: requested_mode,
-            onnx_model_path: requested_model_path,
+            onnx_model_path: resolved_model_path,
+            calibration,
         };
     }
 
@@ -1092,16 +1187,18 @@ fn resolve_ai_classifier(
         return AiClassifierOptions {
             mode: AiClassifierMode::Heuristic,
             onnx_model_path: None,
+            calibration,
         };
     }
 
-    let Some(model_path) = requested_model_path else {
+    let Some(model_path) = resolved_model_path else {
         eprintln!(
-            "warning: --ai-model onnx requested but no --onnx-model path was provided; falling back to heuristic scoring"
+            "warning: --ai-model onnx requested but no model path was provided (--onnx-model or manifest); falling back to heuristic scoring"
         );
         return AiClassifierOptions {
             mode: AiClassifierMode::Heuristic,
             onnx_model_path: None,
+            calibration,
         };
     };
 
@@ -1113,13 +1210,119 @@ fn resolve_ai_classifier(
         return AiClassifierOptions {
             mode: AiClassifierMode::Heuristic,
             onnx_model_path: None,
+            calibration,
         };
     }
 
     AiClassifierOptions {
         mode: AiClassifierMode::Onnx,
         onnx_model_path: Some(model_path),
+        calibration,
     }
+}
+
+#[derive(Debug, Default)]
+struct OnnxManifest {
+    model_path: Option<PathBuf>,
+    calibration_profile: Option<AiCalibrationProfile>,
+    onnx_weight: Option<f32>,
+    heuristic_weight: Option<f32>,
+    probability_scale: Option<f32>,
+    probability_bias: Option<f32>,
+    min_probability: Option<f32>,
+    max_probability: Option<f32>,
+}
+
+fn load_onnx_manifest(path: &Path) -> Result<OnnxManifest, String> {
+    let content = fs::read_to_string(path)
+        .map_err(|err| format!("failed reading {}: {err}", path.display()))?;
+    let value: Value =
+        serde_json::from_str(&content).map_err(|err| format!("invalid JSON: {err}"))?;
+
+    let mut manifest = OnnxManifest::default();
+    if let Some(model_path) = value
+        .get("model")
+        .and_then(|model| model.get("path"))
+        .and_then(Value::as_str)
+    {
+        let candidate = PathBuf::from(model_path.trim());
+        if !candidate.as_os_str().is_empty() {
+            manifest.model_path = Some(if candidate.is_relative() {
+                path.parent()
+                    .unwrap_or_else(|| Path::new("."))
+                    .join(candidate)
+            } else {
+                candidate
+            });
+        }
+    }
+
+    if let Some(calibration) = value.get("calibration") {
+        if let Some(profile_raw) = calibration.get("profile").and_then(Value::as_str) {
+            manifest.calibration_profile = Some(AiCalibrationProfile::parse(profile_raw)?);
+        }
+
+        manifest.onnx_weight = calibration
+            .get("onnx_weight")
+            .and_then(Value::as_f64)
+            .map(|v| v as f32);
+        manifest.heuristic_weight = calibration
+            .get("heuristic_weight")
+            .and_then(Value::as_f64)
+            .map(|v| v as f32);
+        manifest.probability_scale = calibration
+            .get("probability_scale")
+            .and_then(Value::as_f64)
+            .map(|v| v as f32);
+        manifest.probability_bias = calibration
+            .get("probability_bias")
+            .and_then(Value::as_f64)
+            .map(|v| v as f32);
+        manifest.min_probability = calibration
+            .get("min_probability")
+            .and_then(Value::as_f64)
+            .map(|v| v as f32);
+        manifest.max_probability = calibration
+            .get("max_probability")
+            .and_then(Value::as_f64)
+            .map(|v| v as f32);
+    }
+
+    Ok(manifest)
+}
+
+fn apply_manifest_calibration_overrides(
+    base: AiCalibrationSettings,
+    manifest: &OnnxManifest,
+) -> AiCalibrationSettings {
+    let mut tuned = base;
+    if let Some(weight) = manifest.onnx_weight {
+        tuned.onnx_weight = weight;
+    }
+    if let Some(weight) = manifest.heuristic_weight {
+        tuned.heuristic_weight = weight;
+    }
+    if let Some(scale) = manifest.probability_scale {
+        tuned.probability_scale = scale;
+    }
+    if let Some(bias) = manifest.probability_bias {
+        tuned.probability_bias = bias;
+    }
+    if let Some(min_probability) = manifest.min_probability {
+        tuned.min_probability = min_probability;
+    }
+    if let Some(max_probability) = manifest.max_probability {
+        tuned.max_probability = max_probability;
+    }
+
+    tuned.min_probability = tuned.min_probability.clamp(0.0, 1.0);
+    tuned.max_probability = tuned.max_probability.clamp(tuned.min_probability, 1.0);
+    tuned.onnx_weight = tuned.onnx_weight.max(0.0);
+    tuned.heuristic_weight = tuned.heuristic_weight.max(0.0);
+    tuned.probability_scale = tuned.probability_scale.clamp(0.2, 2.0);
+    tuned.probability_bias = tuned.probability_bias.clamp(-0.5, 0.5);
+
+    tuned
 }
 
 struct BenchMetrics {
@@ -2164,7 +2367,7 @@ fn init_template_writes(
 }
 
 fn init_config_template() -> String {
-    "version: 1\nrules_dir: rules\nformat: table\ndedup_mode: normalized\nbridge_engines: []\nrules: []\nexclude_paths: []\nai_only: false\ncross_file: false\nai_model: heuristic\nonnx_model_path: \"\"\nmin_ai_confidence: 0.70\nseverity_threshold: medium\nfail_on_findings: false\nhistory_file: .aishield-history.log\nrecord_history: true\nnotify_webhook_url: \"\"\nnotify_min_severity: high\n".to_string()
+    "version: 1\nrules_dir: rules\nformat: table\ndedup_mode: normalized\nbridge_engines: []\nrules: []\nexclude_paths: []\nai_only: false\ncross_file: false\nai_model: heuristic\nonnx_model_path: \"\"\nonnx_manifest_path: \"\"\nai_calibration: balanced\nmin_ai_confidence: 0.70\nseverity_threshold: medium\nfail_on_findings: false\nhistory_file: .aishield-history.log\nrecord_history: true\nnotify_webhook_url: \"\"\nnotify_min_severity: high\n".to_string()
 }
 
 fn init_github_actions_template() -> String {
@@ -2742,6 +2945,227 @@ fn run_create_rule(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+fn run_config(args: &[String]) -> Result<(), String> {
+    if args.is_empty() {
+        return Err("config requires a subcommand: set, get, or show\nUsage:\n  aishield config set analytics.url <url>\n  aishield config get analytics.url\n  aishield config show".to_string());
+    }
+
+    match args[0].as_str() {
+        "set" => {
+            if args.len() < 3 {
+                return Err("config set requires a key and value\nUsage: aishield config set <key> <value>\nExample: aishield config set analytics.url http://localhost:8080".to_string());
+            }
+
+            let key = &args[1];
+            let value = &args[2];
+
+            let mut config = config::Config::load().unwrap_or_default();
+            config.set(key, value)?;
+            config.save()?;
+
+            println!(
+                "✓ Set {} = {}",
+                key,
+                if key.contains("api_key") {
+                    "***"
+                } else {
+                    value
+                }
+            );
+            Ok(())
+        }
+        "get" => {
+            if args.len() < 2 {
+                return Err("config get requires a key\nUsage: aishield config get <key>\nExample: aishield config get analytics.url".to_string());
+            }
+
+            let key = &args[1];
+            let config = config::Config::load().unwrap_or_default().merge_with_env();
+
+            match config.get(key) {
+                Some(value) => {
+                    println!("{}", value);
+                    Ok(())
+                }
+                None => Err(format!("config key '{}' not set", key)),
+            }
+        }
+        "show" => {
+            let config = config::Config::load().unwrap_or_default().merge_with_env();
+
+            println!("Analytics Configuration:");
+            println!("  enabled:  {}", config.analytics.enabled);
+            println!(
+                "  url:      {}",
+                config.analytics.url.as_deref().unwrap_or("<not set>")
+            );
+            println!(
+                "  api_key:  {}",
+                if config.analytics.api_key.is_some() {
+                    "***"
+                } else {
+                    "<not set>"
+                }
+            );
+            println!(
+                "  org_id:   {}",
+                config.analytics.org_id.as_deref().unwrap_or("<not set>")
+            );
+            println!(
+                "  team_id:  {}",
+                config.analytics.team_id.as_deref().unwrap_or("<not set>")
+            );
+            println!();
+            println!(
+                "Config file: {}",
+                config::Config::get_config_path()?.display()
+            );
+            Ok(())
+        }
+        other => Err(format!(
+            "unknown config subcommand `{}`\nAvailable: set, get, show",
+            other
+        )),
+    }
+}
+
+fn run_analytics(args: &[String]) -> Result<(), String> {
+    if args.is_empty() {
+        return Err("analytics requires a subcommand: migrate-history\nUsage:\n  aishield analytics migrate-history [--dry-run] [--history-file <path>]".to_string());
+    }
+
+    match args[0].as_str() {
+        "migrate-history" => {
+            let mut dry_run = false;
+            let mut history_file = PathBuf::from(".aishield-history.log");
+
+            let mut i = 1;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--dry-run" => dry_run = true,
+                    "--history-file" => {
+                        i += 1;
+                        history_file =
+                            PathBuf::from(args.get(i).ok_or("--history-file requires a value")?);
+                    }
+                    other => return Err(format!("unknown option `{}`", other)),
+                }
+                i += 1;
+            }
+
+            // Load config
+            let config = config::Config::load()
+                .map_err(|e| format!("Failed to load config: {}", e))?
+                .merge_with_env();
+
+            // Check if analytics is configured
+            if config.analytics.url.is_none() {
+                return Err(
+                    "Analytics URL not configured\nRun: aishield config set analytics.url <url>"
+                        .to_string(),
+                );
+            }
+
+            if config.analytics.api_key.is_none() {
+                return Err("Analytics API key not configured\nRun: aishield config set analytics.api_key <key>".to_string());
+            }
+
+            // Load history
+            println!("Loading history from {}...", history_file.display());
+            let records = load_history(&history_file)?;
+
+            if records.is_empty() {
+                println!("No history records found");
+                return Ok(());
+            }
+
+            println!("Found {} history records", records.len());
+
+            if dry_run {
+                println!("\n[DRY RUN] Would migrate {} scans:", records.len());
+                for (idx, record) in records.iter().take(5).enumerate() {
+                    println!(
+                        "  {}. {} - {} findings ({} critical, {} high)",
+                        idx + 1,
+                        record.target,
+                        record.total,
+                        record.critical,
+                        record.high
+                    );
+                }
+                if records.len() > 5 {
+                    println!("  ... and {} more", records.len() - 5);
+                }
+                return Ok(());
+            }
+
+            // Migrate each record
+            let client = analytics_client::AnalyticsClient::new(&config.analytics)?;
+            let runtime = tokio::runtime::Runtime::new()
+                .map_err(|e| format!("Failed to create async runtime: {}", e))?;
+
+            let mut success_count = 0;
+            let mut error_count = 0;
+
+            println!("\nMigrating history records...");
+            for (idx, record) in records.iter().enumerate() {
+                let target_path = PathBuf::from(&record.target);
+
+                // Extract git metadata (best effort)
+                let repo_metadata = git_utils::RepoMetadata::from_path(&target_path);
+
+                // Create scan metadata
+                let scan_metadata = analytics_client::ScanMetadata::from_repo(
+                    &repo_metadata,
+                    record.target.clone(),
+                    &config.analytics,
+                );
+
+                // Create minimal scan summary from history record
+                let scan_summary = analytics_client::ScanResultSummary {
+                    total_findings: record.total,
+                    critical: record.critical,
+                    high: record.high,
+                    medium: record.medium,
+                    low: record.low,
+                    info: record.info,
+                    ai_estimated_count: record.ai_estimated,
+                    scan_duration_ms: 0,
+                    files_scanned: 0,
+                    rules_loaded: 0,
+                    findings: vec![], // No detailed findings from history
+                };
+
+                // Push to analytics
+                match runtime.block_on(client.push_scan_result(&scan_summary, &scan_metadata)) {
+                    Ok(_scan_id) => {
+                        success_count += 1;
+                        if (idx + 1) % 10 == 0 {
+                            println!("  Migrated {}/{} scans...", idx + 1, records.len());
+                        }
+                    }
+                    Err(e) => {
+                        error_count += 1;
+                        eprintln!("  Warning: Failed to migrate scan #{}: {}", idx + 1, e);
+                    }
+                }
+            }
+
+            println!("\n✓ Migration complete:");
+            println!("  Success: {}", success_count);
+            if error_count > 0 {
+                println!("  Errors:  {}", error_count);
+            }
+
+            Ok(())
+        }
+        other => Err(format!(
+            "unknown analytics subcommand `{}`\nAvailable: migrate-history",
+            other
+        )),
+    }
+}
+
 fn run_stats(args: &[String]) -> Result<(), String> {
     let mut days: u64 = 30;
     let mut history_file = PathBuf::from(".aishield-history.log");
@@ -2958,8 +3382,8 @@ fn autofix_replacements(rule_id: &str) -> Vec<(&'static str, &'static str)> {
         )],
         "AISHIELD-JAVA-CRYPTO-002" => vec![("new Random()", "new java.security.SecureRandom()")],
         "AISHIELD-JAVA-AUTH-001" => vec![
-            ("if (token == provided)", "if (token.equals(provided))"),
-            ("if(token == provided)", "if(token.equals(provided))"),
+            ("if (secret == provided)", "if (secret.equals(provided))"),
+            ("if(secret == provided)", "if(secret.equals(provided))"),
         ],
         "AISHIELD-GO-CRYPTO-001" => vec![("md5.Sum(", "sha256.Sum256(")],
         "AISHIELD-GO-INJ-001" => vec![(
@@ -2967,7 +3391,7 @@ fn autofix_replacements(rule_id: &str) -> Vec<(&'static str, &'static str)> {
             "exec.Command(\"cat\", userInput)",
         )],
         "AISHIELD-GO-AUTH-001" => vec![(
-            "if token == incoming",
+            "if secret == incoming",
             "if subtle.ConstantTimeCompare([]byte(token), []byte(incoming)) == 1",
         )],
         "AISHIELD-JS-MISC-002" => vec![
@@ -3165,6 +3589,213 @@ fn append_history(history_file: &Path, target: &Path, result: &ScanResult) -> Re
         .map_err(|err| format!("failed opening {}: {err}", history_file.display()))?;
     file.write_all(record.to_line().as_bytes())
         .map_err(|err| format!("failed writing {}: {err}", history_file.display()))?;
+    Ok(())
+}
+
+fn enrich_finding_compliance_metadata(finding: &Finding) -> (Option<String>, Option<String>) {
+    let mut cwe_id: Option<&'static str> = None;
+    let mut owasp_category: Option<&'static str> = None;
+
+    for tag in &finding.tags {
+        let normalized = tag.trim().to_ascii_lowercase();
+        apply_compliance_mapping(
+            &mut cwe_id,
+            &mut owasp_category,
+            match normalized.as_str() {
+                "sql-injection" => (Some("CWE-89"), Some("A03:2021 - Injection")),
+                "nosql" => (Some("CWE-943"), Some("A03:2021 - Injection")),
+                "command-injection" | "command" => (Some("CWE-78"), Some("A03:2021 - Injection")),
+                "path-traversal" => (Some("CWE-22"), Some("A01:2021 - Broken Access Control")),
+                "code-execution" => (Some("CWE-94"), Some("A03:2021 - Injection")),
+                "timing-attack" => (
+                    Some("CWE-208"),
+                    Some("A07:2021 - Identification and Authentication Failures"),
+                ),
+                "weak-hash" | "crypto" | "key-management" => {
+                    (Some("CWE-327"), Some("A02:2021 - Cryptographic Failures"))
+                }
+                "secrets" => (
+                    Some("CWE-798"),
+                    Some("A07:2021 - Identification and Authentication Failures"),
+                ),
+                "cors" => (
+                    Some("CWE-942"),
+                    Some("A05:2021 - Security Misconfiguration"),
+                ),
+                "debug" => (
+                    Some("CWE-489"),
+                    Some("A05:2021 - Security Misconfiguration"),
+                ),
+                "supply-chain" => (
+                    Some("CWE-1104"),
+                    Some("A06:2021 - Vulnerable and Outdated Components"),
+                ),
+                "auth" | "token" | "identity" => (
+                    Some("CWE-287"),
+                    Some("A07:2021 - Identification and Authentication Failures"),
+                ),
+                "misconfig" | "hardening" | "network" => {
+                    (Some("CWE-16"), Some("A05:2021 - Security Misconfiguration"))
+                }
+                _ => (None, None),
+            },
+        );
+    }
+
+    let category = finding
+        .category
+        .as_deref()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    apply_compliance_mapping(
+        &mut cwe_id,
+        &mut owasp_category,
+        match category.as_str() {
+            "auth" => (
+                Some("CWE-287"),
+                Some("A07:2021 - Identification and Authentication Failures"),
+            ),
+            "crypto" => (Some("CWE-327"), Some("A02:2021 - Cryptographic Failures")),
+            "injection" => (Some("CWE-74"), Some("A03:2021 - Injection")),
+            "misconfig" => (Some("CWE-16"), Some("A05:2021 - Security Misconfiguration")),
+            _ => (None, None),
+        },
+    );
+
+    let rule_id = finding.id.to_ascii_uppercase();
+    apply_compliance_mapping(
+        &mut cwe_id,
+        &mut owasp_category,
+        if rule_id.contains("-AUTH-") {
+            (
+                Some("CWE-287"),
+                Some("A07:2021 - Identification and Authentication Failures"),
+            )
+        } else if rule_id.contains("-CRYPTO-") {
+            (Some("CWE-327"), Some("A02:2021 - Cryptographic Failures"))
+        } else if rule_id.contains("-INJ-") {
+            (Some("CWE-74"), Some("A03:2021 - Injection"))
+        } else if rule_id.contains("-MISC-") || rule_id.contains("-MISCONFIG-") {
+            (Some("CWE-16"), Some("A05:2021 - Security Misconfiguration"))
+        } else {
+            (None, None)
+        },
+    );
+
+    (
+        cwe_id.map(|value| value.to_string()),
+        owasp_category.map(|value| value.to_string()),
+    )
+}
+
+fn apply_compliance_mapping(
+    cwe_id: &mut Option<&'static str>,
+    owasp_category: &mut Option<&'static str>,
+    candidate: (Option<&'static str>, Option<&'static str>),
+) {
+    if cwe_id.is_none() {
+        *cwe_id = candidate.0;
+    }
+    if owasp_category.is_none() {
+        *owasp_category = candidate.1;
+    }
+}
+
+fn push_to_analytics(target: &Path, result: &ScanResult) -> Result<(), String> {
+    // Load config and merge with env vars
+    let config = config::Config::load()
+        .map_err(|e| format!("Failed to load config: {}", e))?
+        .merge_with_env();
+
+    // Check if analytics is configured
+    if config.analytics.url.is_none() {
+        return Err("Analytics URL not configured (use 'aishield config set analytics.url <url>' or set AISHIELD_ANALYTICS_URL)".to_string());
+    }
+
+    if config.analytics.api_key.is_none() {
+        return Err("Analytics API key not configured (use 'aishield config set analytics.api_key <key>' or set AISHIELD_API_KEY)".to_string());
+    }
+
+    // Extract repository metadata
+    let repo_metadata = git_utils::RepoMetadata::from_path(target);
+
+    // Create scan metadata
+    let scan_metadata = analytics_client::ScanMetadata::from_repo(
+        &repo_metadata,
+        target.display().to_string(),
+        &config.analytics,
+    );
+
+    // Convert scan result to analytics format
+    let scan_summary = analytics_client::ScanResultSummary {
+        total_findings: result.summary.total,
+        critical: *result.summary.by_severity.get("critical").unwrap_or(&0),
+        high: *result.summary.by_severity.get("high").unwrap_or(&0),
+        medium: *result.summary.by_severity.get("medium").unwrap_or(&0),
+        low: *result.summary.by_severity.get("low").unwrap_or(&0),
+        info: *result.summary.by_severity.get("info").unwrap_or(&0),
+        ai_estimated_count: result
+            .findings
+            .iter()
+            .filter(|f| f.ai_confidence >= 70.0)
+            .count(),
+        scan_duration_ms: 0, // Not tracked in current ScanResult
+        files_scanned: result.summary.scanned_files,
+        rules_loaded: result.summary.matched_rules,
+        findings: result
+            .findings
+            .iter()
+            .map(|f| {
+                let (cwe_id, owasp_category) = enrich_finding_compliance_metadata(f);
+                analytics_client::FindingDetail {
+                    rule_id: f.id.clone(),
+                    rule_title: f.title.clone(),
+                    severity: match f.severity {
+                        Severity::Critical => "Critical",
+                        Severity::High => "High",
+                        Severity::Medium => "Medium",
+                        Severity::Low => "Low",
+                        Severity::Info => "Info",
+                    }
+                    .to_string(),
+                    file_path: f.file.clone(),
+                    line_number: Some(f.line),
+                    snippet: Some(f.snippet.clone()), // Skip snippet to reduce payload size
+                    ai_confidence: if f.ai_confidence > 0.0 {
+                        Some(f.ai_confidence)
+                    } else {
+                        None
+                    },
+                    ai_tendency: f.ai_tendency.clone(),
+                    fix_suggestion: f.fix_suggestion.clone(),
+                    cwe_id,
+                    owasp_category,
+                }
+            })
+            .collect(),
+    };
+
+    // Create analytics client
+    let client = analytics_client::AnalyticsClient::new(&config.analytics)?;
+
+    // Create tokio runtime for async operation
+    let runtime = tokio::runtime::Runtime::new()
+        .map_err(|e| format!("Failed to create async runtime: {}", e))?;
+
+    // Validate endpoint before attempting push for clearer operator feedback.
+    let is_healthy = runtime
+        .block_on(client.health_check())
+        .map_err(|e| format!("Analytics health check failed: {}", e))?;
+    if !is_healthy {
+        return Err("Analytics API is unreachable or unhealthy".to_string());
+    }
+
+    // Push to analytics API
+    let scan_id = runtime
+        .block_on(client.push_scan_result(&scan_summary, &scan_metadata))
+        .map_err(|e| format!("API error: {}", e))?;
+
+    println!("✓ Scan pushed to analytics (ID: {})", scan_id);
     Ok(())
 }
 
@@ -3381,9 +4012,9 @@ fn render_stats_json(aggregate: &StatsAggregate, days: u64, history_file: &Path)
 fn print_help() {
     println!("AIShield CLI (foundation)\n");
     println!("Usage:");
-    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--cross-file] [--ai-model heuristic|onnx] [--onnx-model FILE] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--baseline FILE] [--notify-webhook URL] [--notify-min-severity LEVEL] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
+    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--cross-file] [--ai-model heuristic|onnx] [--onnx-model FILE] [--onnx-manifest FILE] [--ai-calibration conservative|balanced|aggressive] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--baseline FILE] [--notify-webhook URL] [--notify-min-severity LEVEL] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
     println!("  aishield fix <path[:line[:col]]> [--rules-dir DIR] [--write|--interactive] [--dry-run] [--config FILE] [--no-config]");
-    println!("  aishield bench <path> [--rules-dir DIR] [--iterations N] [--warmup N] [--format table|json] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--cross-file] [--ai-model heuristic|onnx] [--onnx-model FILE] [--min-ai-confidence N] [--config FILE] [--no-config]");
+    println!("  aishield bench <path> [--rules-dir DIR] [--iterations N] [--warmup N] [--format table|json] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--cross-file] [--ai-model heuristic|onnx] [--onnx-model FILE] [--onnx-manifest FILE] [--ai-calibration conservative|balanced|aggressive] [--min-ai-confidence N] [--config FILE] [--no-config]");
     println!("  aishield init [--output PATH] [--templates config,github-actions,gitlab-ci,bitbucket-pipelines,circleci,jenkins,vscode,pre-commit|all] [--force]");
     println!("  aishield create-rule --id ID --title TITLE --language LANG --category CAT [--severity LEVEL] [--pattern-any P] [--pattern-all P] [--pattern-not P] [--tags t1,t2] [--suggestion TEXT] [--out-dir DIR] [--force]");
     println!("  aishield stats [--last Nd] [--history-file FILE] [--format table|json] [--config FILE] [--no-config]");
@@ -4220,6 +4851,8 @@ struct AppConfig {
     cross_file: bool,
     ai_model: AiClassifierMode,
     onnx_model_path: Option<PathBuf>,
+    onnx_manifest_path: Option<PathBuf>,
+    ai_calibration: AiCalibrationProfile,
     min_ai_confidence: Option<f32>,
     severity_threshold: Option<SeverityThreshold>,
     fail_on_findings: bool,
@@ -4242,6 +4875,8 @@ impl Default for AppConfig {
             cross_file: false,
             ai_model: AiClassifierMode::Heuristic,
             onnx_model_path: None,
+            onnx_manifest_path: None,
+            ai_calibration: AiCalibrationProfile::Balanced,
             min_ai_confidence: None,
             severity_threshold: None,
             fail_on_findings: false,
@@ -4297,6 +4932,13 @@ impl AppConfig {
                         config.onnx_model_path = Some(PathBuf::from(parsed));
                     }
                 }
+                "onnx_manifest_path" => {
+                    let parsed = strip_quotes(value);
+                    if !parsed.trim().is_empty() {
+                        config.onnx_manifest_path = Some(PathBuf::from(parsed));
+                    }
+                }
+                "ai_calibration" => config.ai_calibration = AiCalibrationProfile::parse(value)?,
                 "min_ai_confidence" => {
                     config.min_ai_confidence = Some(
                         value
@@ -4483,7 +5125,7 @@ impl SeverityThreshold {
 
 #[cfg(test)]
 mod tests {
-    use aishield_core::AiClassifierMode;
+    use aishield_core::{AiCalibrationProfile, AiClassifierMode};
     use serde_json::Value;
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -4491,13 +5133,13 @@ mod tests {
 
     use super::{
         apply_replacements, autofix_replacements, build_webhook_payload, count_replacements,
-        dedup_machine_output, empty_summary, escape_github_annotation_message,
-        escape_github_annotation_property, filter_findings_against_baseline,
-        filtered_candidate_indices, init_template_writes, load_baseline_keys,
-        maybe_send_webhook_notification, normalize_snippet, parse_fix_target_spec,
-        parse_init_templates, percentile, render_github_annotations, render_sarif,
-        resolve_ai_classifier, resolve_selected_indices, DedupMode, Finding, InitTemplate,
-        OutputSummary, ScanResult, Severity, SeverityThreshold,
+        dedup_machine_output, empty_summary, enrich_finding_compliance_metadata,
+        escape_github_annotation_message, escape_github_annotation_property,
+        filter_findings_against_baseline, filtered_candidate_indices, init_template_writes,
+        load_baseline_keys, load_onnx_manifest, maybe_send_webhook_notification, normalize_snippet,
+        parse_fix_target_spec, parse_init_templates, percentile, render_github_annotations,
+        render_sarif, resolve_ai_classifier, resolve_selected_indices, DedupMode, Finding,
+        InitTemplate, OutputSummary, ScanResult, Severity, SeverityThreshold,
     };
 
     fn finding(
@@ -4533,6 +5175,66 @@ mod tests {
     }
 
     #[test]
+    fn enriches_sql_injection_with_specific_cwe_and_owasp() {
+        let mut candidate = finding(
+            "AISHIELD-GO-INJ-003",
+            Severity::High,
+            "src/db.go",
+            42,
+            "query := \"SELECT * FROM users WHERE id = \" + userInput",
+            85.0,
+        );
+        candidate.category = Some("injection".to_string());
+        candidate.tags = vec!["injection".to_string(), "sql-injection".to_string()];
+
+        let (cwe_id, owasp_category) = enrich_finding_compliance_metadata(&candidate);
+        assert_eq!(cwe_id.as_deref(), Some("CWE-89"));
+        assert_eq!(owasp_category.as_deref(), Some("A03:2021 - Injection"));
+    }
+
+    #[test]
+    fn enriches_from_category_when_tags_are_missing() {
+        let mut candidate = finding(
+            "AISHIELD-PY-MISC-001",
+            Severity::Medium,
+            "src/app.py",
+            12,
+            "app.run(debug=True)",
+            70.0,
+        );
+        candidate.category = Some("misconfig".to_string());
+        candidate.tags = vec![];
+
+        let (cwe_id, owasp_category) = enrich_finding_compliance_metadata(&candidate);
+        assert_eq!(cwe_id.as_deref(), Some("CWE-16"));
+        assert_eq!(
+            owasp_category.as_deref(),
+            Some("A05:2021 - Security Misconfiguration")
+        );
+    }
+
+    #[test]
+    fn enriches_from_rule_id_when_category_is_absent() {
+        let mut candidate = finding(
+            "AISHIELD-JAVA-CRYPTO-001",
+            Severity::High,
+            "src/CryptoUtil.java",
+            8,
+            "MessageDigest.getInstance(\"MD5\")",
+            83.0,
+        );
+        candidate.category = None;
+        candidate.tags = vec![];
+
+        let (cwe_id, owasp_category) = enrich_finding_compliance_metadata(&candidate);
+        assert_eq!(cwe_id.as_deref(), Some("CWE-327"));
+        assert_eq!(
+            owasp_category.as_deref(),
+            Some("A02:2021 - Cryptographic Failures")
+        );
+    }
+
+    #[test]
     fn normalized_dedup_keeps_highest_risk_finding_per_key() {
         let raw = result(vec![
             finding(
@@ -4540,7 +5242,7 @@ mod tests {
                 Severity::Medium,
                 "src/app.py",
                 10,
-                "if token == provided:",
+                "if secret == provided:",
                 60.0,
             ),
             finding(
@@ -4548,7 +5250,7 @@ mod tests {
                 Severity::High,
                 "src/app.py",
                 10,
-                "if token==provided:",
+                "if secret==provided:",
                 90.0,
             ),
             finding(
@@ -4556,7 +5258,7 @@ mod tests {
                 Severity::High,
                 "src/app.py",
                 11,
-                "if token == provided:",
+                "if secret == provided:",
                 88.0,
             ),
         ]);
@@ -4583,7 +5285,7 @@ mod tests {
                 Severity::Medium,
                 "src/app.py",
                 10,
-                "if token == provided:",
+                "if secret == provided:",
                 60.0,
             ),
             finding(
@@ -4591,7 +5293,7 @@ mod tests {
                 Severity::High,
                 "src/app.py",
                 10,
-                "if token==provided:",
+                "if secret==provided:",
                 90.0,
             ),
         ]);
@@ -4609,7 +5311,7 @@ mod tests {
                 Severity::High,
                 "src/app.py",
                 10,
-                "if token == provided:",
+                "if secret == provided:",
                 80.0,
             ),
             finding(
@@ -4644,7 +5346,7 @@ mod tests {
       "file": "src/app.py",
       "line": 10,
       "category": "auth",
-      "snippet": "if token == provided:"
+      "snippet": "if secret == provided:"
     }
   ]
 }"#,
@@ -4700,7 +5402,7 @@ mod tests {
             Severity::High,
             "src/app.py",
             10,
-            "if token == provided:",
+            "if secret == provided:",
             88.0,
         )]);
 
@@ -4752,8 +5454,8 @@ mod tests {
     #[test]
     fn snippet_normalization_collapses_whitespace_and_punctuation() {
         assert_eq!(
-            normalize_snippet("if token==provided:"),
-            normalize_snippet("if   token == provided ;")
+            normalize_snippet("if secret==provided:"),
+            normalize_snippet("if   secret == provided ;")
         );
     }
 
@@ -4773,7 +5475,7 @@ mod tests {
             Severity::High,
             "src/app.py",
             10,
-            "if token == provided:",
+            "if secret == provided:",
             88.0,
         )]);
         let summary = OutputSummary {
@@ -4894,6 +5596,8 @@ mod tests {
         assert!(template.contains("cross_file: false"));
         assert!(template.contains("ai_model: heuristic"));
         assert!(template.contains("onnx_model_path: \"\""));
+        assert!(template.contains("onnx_manifest_path: \"\""));
+        assert!(template.contains("ai_calibration: balanced"));
     }
 
     #[test]
@@ -4906,6 +5610,8 @@ format: table
 cross_file: true
 ai_model: onnx
 onnx_model_path: models/aishield.onnx
+onnx_manifest_path: models/ai-classifier/model-manifest.json
+ai_calibration: aggressive
 "#,
         )
         .expect("parse config");
@@ -4916,20 +5622,103 @@ onnx_model_path: models/aishield.onnx
             config.onnx_model_path,
             Some(PathBuf::from("models/aishield.onnx"))
         );
+        assert_eq!(
+            config.onnx_manifest_path,
+            Some(PathBuf::from("models/ai-classifier/model-manifest.json"))
+        );
+        assert_eq!(config.ai_calibration, AiCalibrationProfile::Aggressive);
     }
 
     #[test]
     fn resolve_ai_classifier_keeps_heuristic_mode() {
-        let resolved = resolve_ai_classifier(AiClassifierMode::Heuristic, None);
+        let resolved = resolve_ai_classifier(
+            AiClassifierMode::Heuristic,
+            None,
+            None,
+            AiCalibrationProfile::Balanced,
+        );
         assert_eq!(resolved.mode, AiClassifierMode::Heuristic);
         assert_eq!(resolved.onnx_model_path, None);
     }
 
     #[test]
     fn resolve_ai_classifier_falls_back_on_missing_onnx_path() {
-        let resolved = resolve_ai_classifier(AiClassifierMode::Onnx, None);
+        let resolved = resolve_ai_classifier(
+            AiClassifierMode::Onnx,
+            None,
+            None,
+            AiCalibrationProfile::Balanced,
+        );
         assert_eq!(resolved.mode, AiClassifierMode::Heuristic);
         assert_eq!(resolved.onnx_model_path, None);
+    }
+
+    #[test]
+    fn load_onnx_manifest_parses_model_and_calibration_fields() {
+        let temp = std::env::temp_dir().join("aishield-onnx-manifest-test.json");
+        fs::write(
+            &temp,
+            r#"{
+  "schema_version": 1,
+  "model": { "path": "models/model.onnx" },
+  "calibration": {
+    "profile": "conservative",
+    "onnx_weight": 0.6,
+    "heuristic_weight": 0.4,
+    "probability_scale": 0.95,
+    "probability_bias": -0.02
+  }
+}"#,
+        )
+        .expect("write manifest");
+
+        let parsed = load_onnx_manifest(&temp).expect("parse manifest");
+        assert!(parsed.model_path.is_some());
+        assert_eq!(
+            parsed.calibration_profile,
+            Some(AiCalibrationProfile::Conservative)
+        );
+        assert_eq!(parsed.onnx_weight, Some(0.6));
+        assert_eq!(parsed.heuristic_weight, Some(0.4));
+        assert_eq!(parsed.probability_scale, Some(0.95));
+        assert_eq!(parsed.probability_bias, Some(-0.02));
+
+        let _ = fs::remove_file(temp);
+    }
+
+    #[test]
+    fn resolve_ai_classifier_uses_manifest_model_when_model_not_set() {
+        let root = std::env::temp_dir().join("aishield-onnx-manifest-resolve");
+        let _ = fs::create_dir_all(root.join("models"));
+        let manifest = root.join("manifest.json");
+        let model = root.join("models/model.onnx");
+        fs::write(&model, vec![0u8; 128]).expect("write model");
+        fs::write(
+            &manifest,
+            r#"{
+  "schema_version": 1,
+  "model": { "path": "models/model.onnx" },
+  "calibration": { "onnx_weight": 0.8, "heuristic_weight": 0.2 }
+}"#,
+        )
+        .expect("write manifest");
+
+        let resolved = resolve_ai_classifier(
+            AiClassifierMode::Onnx,
+            None,
+            Some(&manifest),
+            AiCalibrationProfile::Balanced,
+        );
+        if cfg!(feature = "onnx") {
+            assert_eq!(resolved.mode, AiClassifierMode::Onnx);
+            assert_eq!(resolved.onnx_model_path, Some(model));
+        } else {
+            assert_eq!(resolved.mode, AiClassifierMode::Heuristic);
+            assert_eq!(resolved.onnx_model_path, None);
+        }
+        assert!(resolved.calibration.onnx_weight >= 0.7);
+
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]

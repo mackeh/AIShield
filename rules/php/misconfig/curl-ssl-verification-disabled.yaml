@@ -1,0 +1,12 @@
+id: AISHIELD-PHP-MISC-001
+title: cURL TLS Verification Disabled
+severity: high
+confidence_that_ai_generated: 0.77
+languages: [php]
+category: misconfig
+pattern:
+  any:
+    - "curl_setopt($ch, curlopt_ssl_verifypeer, false)"
+fix:
+  suggestion: Keep CURLOPT_SSL_VERIFYPEER enabled and validate certificates.
+tags: [misconfig, tls]

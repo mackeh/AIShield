@@ -18,6 +18,8 @@ ai_only: false
 cross_file: false
 ai_model: heuristic
 onnx_model_path: ""
+onnx_manifest_path: ""
+ai_calibration: balanced
 min_ai_confidence: 0.70
 severity_threshold: medium
 fail_on_findings: false
@@ -40,6 +42,8 @@ notify_min_severity: high
 - `cross_file`: if `true`, enables experimental cross-file auth-route heuristics
 - `ai_model`: AI-likelihood scorer mode (`heuristic|onnx`)
 - `onnx_model_path`: local ONNX model path used when `ai_model: onnx`
+- `onnx_manifest_path`: optional ONNX manifest path with model metadata and calibration overrides
+- `ai_calibration`: calibration profile for ONNX blend (`conservative|balanced|aggressive`)
 - `min_ai_confidence`: threshold for AI likelihood (`0.0..1.0`)
 - `severity_threshold`: minimum severity shown
 - `fail_on_findings`: if `true`, scan exits with code `2` when findings exist
@@ -69,3 +73,11 @@ If `dedup_mode` is not set:
 - `json`, `sarif`, and `github` output default to `normalized`
 
 This reduces noisy duplicate findings in CI while keeping table output closer to raw scan data.
+
+## ONNX Notes
+
+- Build with ONNX feature for full runtime path:
+  - `cargo run -p aishield-cli --features onnx -- scan . --ai-model onnx --onnx-model models/ai-classifier/model.onnx`
+- Manifest-driven model resolution is also supported:
+  - `cargo run -p aishield-cli --features onnx -- scan . --ai-model onnx --onnx-manifest models/ai-classifier/model-manifest.json`
+- If ONNX runtime prerequisites are unavailable, AIShield falls back to heuristic scoring.

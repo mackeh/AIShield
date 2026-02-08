@@ -5,12 +5,34 @@ edition.workspace = true
 license.workspace = true
 
 [features]
-default = []
+default = ["onnx"]
 onnx = ["aishield-core/onnx"]
 
 [dependencies]
 aishield-core = { path = "../aishield-core" }
+clap = { version = "4.0", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+colored = "2.0"
+walkdir = "2.3"
+chrono = "0.4"
+rayon = "1.7"
+
+# HTTP client for analytics API
+reqwest = { version = "0.11", features = [
+    "json",
+    "rustls-tls",
+    "blocking",
+], default-features = false }
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
+
+# Configuration management
+toml = "0.8"
+dirs = "5.0"
+
+# Progress bars for migration
+indicatif = "0.17"
+
+# TUI (existing code)
 ratatui = "0.28"
 crossterm = "0.28"
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }

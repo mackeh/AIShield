@@ -1,0 +1,13 @@
+id: AISHIELD-KT-MISC-005
+title: Sensitive Authorization Header Logging
+severity: medium
+confidence_that_ai_generated: 0.68
+languages: [kotlin]
+category: misconfig
+pattern:
+  all:
+    - 'println("authorization:"
+    - "authheader"
+fix:
+  suggestion: Avoid logging raw authorization headers; redact sensitive values.
+tags: [misconfig, logging]

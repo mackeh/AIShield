@@ -1,0 +1,13 @@
+id: AISHIELD-KT-CRYPTO-002
+title: Weak Hash Algorithm (SHA1)
+severity: high
+confidence_that_ai_generated: 0.75
+languages: [kotlin]
+category: crypto
+pattern:
+  any:
+    - 'messagedigest.getinstance("sha-1")'
+    - 'messagedigest.getinstance("sha1")'
+fix:
+  suggestion: Replace SHA1 with SHA-256+ or Argon2/bcrypt for password storage.
+tags: [crypto, weak-hash]

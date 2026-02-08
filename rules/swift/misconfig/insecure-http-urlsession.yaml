@@ -1,0 +1,13 @@
+id: AISHIELD-SW-MISC-003
+title: Insecure HTTP Request via URLSession
+severity: medium
+confidence_that_ai_generated: 0.70
+languages: [swift]
+category: misconfig
+pattern:
+  all:
+    - 'url(string: "http://'
+    - "urlsession.shared.datatask("
+fix:
+  suggestion: Use HTTPS endpoints and enforce transport security policies.
+tags: [misconfig, transport-security]

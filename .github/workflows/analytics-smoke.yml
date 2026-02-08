@@ -1,0 +1,50 @@
+name: Analytics Smoke
+
+on:
+  pull_request:
+    paths:
+      - "crates/aishield-analytics/**"
+      - "crates/aishield-cli/**"
+      - "dashboard/**"
+      - "migrations/**"
+      - "scripts/start-analytics-stack.sh"
+      - "scripts/stop-analytics-stack.sh"
+      - "scripts/smoke-analytics-api.sh"
+      - "docker-compose.analytics.yml"
+      - ".github/workflows/analytics-smoke.yml"
+  push:
+    branches: [main]
+    paths:
+      - "crates/aishield-analytics/**"
+      - "crates/aishield-cli/**"
+      - "dashboard/**"
+      - "migrations/**"
+      - "scripts/start-analytics-stack.sh"
+      - "scripts/stop-analytics-stack.sh"
+      - "scripts/smoke-analytics-api.sh"
+      - "docker-compose.analytics.yml"
+      - ".github/workflows/analytics-smoke.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      AISHIELD_API_KEY: test_key_e2e_12345
+      DATABASE_URL: postgres://aishield:aishield_dev_password@localhost:5432/aishield_analytics
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Start analytics stack and run smoke test
+        run: ./scripts/start-analytics-stack.sh
+
+      - name: Stop analytics stack
+        if: always()
+        run: ./scripts/stop-analytics-stack.sh

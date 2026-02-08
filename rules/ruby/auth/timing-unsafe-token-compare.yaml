@@ -1,0 +1,12 @@
+id: AISHIELD-RB-AUTH-001
+title: Timing-Unsafe Token Comparison
+severity: high
+confidence_that_ai_generated: 0.80
+languages: [ruby]
+category: auth
+pattern:
+  any:
+    - "token == provided"
+fix:
+  suggestion: Use a constant-time comparison helper for secret tokens.
+tags: [auth, timing-attack]

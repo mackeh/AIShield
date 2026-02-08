@@ -1,0 +1,53 @@
+services:
+  # PostgreSQL with TimescaleDB for analytics
+  analytics-db:
+    image: timescale/timescaledb:latest-pg16
+    container_name: aishield-analytics-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: aishield
+      POSTGRES_PASSWORD: aishield_dev_password
+      POSTGRES_DB: aishield_analytics
+      # TimescaleDB tuning
+      TIMESCALEDB_TELEMETRY: 'off'
+    ports:
+      - "5432:5432"
+    volumes:
+      - aishield-analytics-data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aishield -d aishield_analytics"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aishield-network
+
+  # pgAdmin (optional - web UI for database management)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: aishield-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@aishield.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    depends_on:
+      analytics-db:
+        condition: service_healthy
+    networks:
+      - aishield-network
+    volumes:
+      - aishield-pgadmin-data:/var/lib/pgadmin
+
+volumes:
+  aishield-analytics-data:
+    driver: local
+  aishield-pgadmin-data:
+    driver: local
+
+networks:
+  aishield-network:
+    driver: bridge

@@ -1,0 +1,13 @@
+id: AISHIELD-SW-MISC-004
+title: Authorization Header Logged
+severity: medium
+confidence_that_ai_generated: 0.70
+languages: [swift]
+category: misconfig
+pattern:
+  all:
+    - 'print("authorization:'
+    - "authheader"
+fix:
+  suggestion: Remove sensitive auth header logging from runtime paths.
+tags: [misconfig, logging]

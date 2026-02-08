@@ -1,0 +1,199 @@
+# AIShield Rule Template
+#
+# Copy this template to create a new security detection rule.
+# Save to: rules/<language>/<category>/<rule-name>.yaml
+#
+# Example: rules/python/crypto/weak-hash-sha1.yaml
+
+# =============================================================================
+# REQUIRED FIELDS
+# =============================================================================
+
+# Unique identifier for this rule
+# Format: AISHIELD-<LANG>-<CATEGORY>-<NUMBER>
+# Language codes: PY, JS, GO, RUST, JAVA, CS, RB, PHP, KT, SWIFT, TF, K8S, DOCKER
+# Categories: AUTH, CRYPTO, INJECT, MISCONFIG
+# Example: AISHIELD-PY-CRYPTO-001
+id: AISHIELD-XX-CATEGORY-NNN
+
+# Short, descriptive title (< 60 chars)
+# Example: "AI-Suggested Weak Hash Algorithm"
+title: [Your rule title]
+
+# Severity level: critical | high | medium | low | info
+# critical: RCE, SQL injection, auth bypass
+# high: Crypto weakness, timing attacks, SSRF  
+# medium: Info disclosure, weak validation
+# low: Minor issues, best practices
+# info: Code smells
+severity: [critical|high|medium|low|info]
+
+# AI confidence score: 0.0 to 1.0
+# How likely is it that AI generated this pattern?
+# 0.9+: Very common (md5, eval, ==password)
+# 0.7-0.9: Frequently suggested
+# 0.5-0.7: Sometimes suggested
+# <0.5: Rare in AI output
+confidence_that_ai_generated: 0.XX
+
+# Languages this rule applies to
+# Can be a single language or multiple
+# Options: python, javascript, typescript, go, rust, java, csharp, ruby, php, kotlin, swift, hcl, kubernetes, dockerfile
+languages: [language1, language2]
+
+# Category of vulnerability
+# Options: auth, crypto, injection, misconfig
+category: [auth|crypto|injection|misconfig]
+
+# =============================================================================
+# AI TENDENCY (REQUIRED)
+# =============================================================================
+
+# Explain WHY AI coding assistants generate this vulnerable pattern
+# This helps users understand the root cause
+# Good examples:
+# - "LLMs frequently suggest md5/sha1 from outdated tutorials"
+# - "AI autocomplete suggests == for password checks, missing constant-time requirement"
+# - "Copilot copies insecure examples from StackOverflow training data"
+ai_tendency: |
+  [Explain why AI tools generate this pattern]
+
+# =============================================================================
+# PATTERN MATCHING (REQUIRED)
+# =============================================================================
+
+# Define the pattern to match
+# Options:
+#   contains: List of strings that must appear
+#   starts_with: Line must start with string
+#   ends_with: Line must end with string
+#   regex: Regular expression pattern
+#   any: At least one must match (OR logic)
+#   all: All must match (AND logic)
+#   not: Must NOT match
+
+# Example 1: Simple contains
+pattern:
+  contains:
+    - "vulnerable_pattern"
+    - "another_pattern"
+
+# Example 2: Regular expression
+# pattern:
+#   regex: 'eval\s*\(\s*.*user.*\)'
+
+# Example 3: Complex logic
+# pattern:
+#   all:
+#     - contains: ["password"]
+#     - contains: ["=="]
+#   not:
+#     - contains: ["bcrypt"]
+
+# =============================================================================
+# NEGATIVE PATTERNS (RECOMMENDED)
+# =============================================================================
+
+# Patterns to EXCLUDE (prevent false positives)
+# Use this to skip:
+# - Safe library usage 
+# - Test/example code
+# - User annotations
+negative_patterns:
+  - "safe_pattern"
+  - "secure_library"
+  - "# noqa"
+  # Add more patterns that indicate safe usage
+
+# =============================================================================
+# FIX GUIDANCE (REQUIRED)
+# =============================================================================
+
+# Provide actionable remediation advice
+# Be specific: mention exact functions, libraries, or approaches
+# Good examples:
+# - "Use secrets.compare_digest() for constant-time comparison"
+# - "Replace MD5 with SHA-256 for integrity checks, or bcrypt for passwords"
+# - "Use parameterized queries: db.execute('SELECT * FROM users WHERE id = ?', [user_id])"
+fix:
+  suggestion: |
+    [How to fix this vulnerability. Be specific and actionable.]
+
+# =============================================================================
+# METADATA (OPTIONAL BUT RECOMMENDED)
+# =============================================================================
+
+# Tags for categorization and searching
+# Common tags: owasp-top10, sans-top25, pci-dss, timing-attack, etc.
+tags: [tag1, tag2, tag3]
+
+# CWE (Common Weakness Enumeration) number
+# Find at: https://cwe.mitre.org/
+# Example: CWE-89 (SQL Injection), CWE-327 (Weak Crypto)
+cwe: CWE-XXX
+
+# OWASP Top 10 mapping
+# Find at: https://owasp.org/Top10/
+# Example: A03:2021 (Injection), A07:2021 (Auth Failures)
+owasp: AXX:2021
+
+# =============================================================================
+# EXAMPLES
+# =============================================================================
+
+# Below are complete examples for reference:
+
+# Example 1: Weak Hash Detection (Python)
+# ---
+# id: AISHIELD-PY-CRYPTO-001
+# title: AI-Suggested Weak Hash Algorithm
+# severity: high
+# confidence_that_ai_generated: 0.85
+# languages: [python]
+# category: crypto
+# ai_tendency: LLMs frequently suggest md5/sha1 from outdated tutorials and examples.
+# pattern:
+#   contains:
+#     - "hashlib.md5("
+#     - "hashlib.sha1("
+# negative_patterns:
+#   - "checksum"
+#   - "non-security"
+# fix:
+#   suggestion: Use sha256 for integrity checks and bcrypt/argon2id for password hashing.
+# tags: [crypto, owasp-top10]
+# cwe: CWE-327
+
+# Example 2: SQL Injection (JavaScript)
+# ---
+# id: AISHIELD-JS-INJECT-001
+# title: SQL injection via string concatenation
+# severity: critical
+# confidence_that_ai_generated: 0.91
+# languages: [javascript, typescript]
+# category: injection
+# ai_tendency: AI autocomplete suggests string concatenation for SQL without considering injection risks.
+# pattern:
+#   regex: 'query\s*=\s*["`]SELECT.*?\+\s*\w+.*?["`]'
+# negative_patterns:
+#   - "prepared"
+#   - "// sql-safe"
+# fix:
+#   suggestion: Use parameterized queries with placeholders (e.g., db.query("SELECT * FROM users WHERE id = ?", [userId]))
+# tags: [injection, sql-injection, owasp-top10]
+# cwe: CWE-89
+# owasp: A03:2021
+
+# =============================================================================
+# NEXT STEPS
+# =============================================================================
+
+# 1. Fill in all required fields above
+# 2. Create test fixtures in tests/fixtures/
+#    - Add vulnerable code that SHOULD be detected
+#    - Add safe code that should NOT be detected
+# 3. Test your rule: cargo run -p aishield-cli -- scan tests/fixtures
+# 4. Update CHANGELOG.md
+# 5. Submit a PR using the PR template
+
+# Questions? See docs/guides/writing-your-first-rule.md

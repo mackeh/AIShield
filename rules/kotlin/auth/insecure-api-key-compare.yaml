@@ -1,0 +1,12 @@
+id: AISHIELD-KT-AUTH-002
+title: Insecure API Key Equality Check
+severity: high
+confidence_that_ai_generated: 0.78
+languages: [kotlin]
+category: auth
+pattern:
+  any:
+    - "apikey == incomingapikey"
+fix:
+  suggestion: Use constant-time comparison for API keys and avoid direct string equality.
+tags: [auth, api-key]

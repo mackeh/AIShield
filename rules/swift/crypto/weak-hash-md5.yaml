@@ -1,0 +1,12 @@
+id: AISHIELD-SW-CRYPTO-001
+title: Weak Hash Algorithm (MD5)
+severity: high
+confidence_that_ai_generated: 0.78
+languages: [swift]
+category: crypto
+pattern:
+  any:
+    - "cc_md5("
+fix:
+  suggestion: Replace MD5 with SHA-256 for integrity checks and modern password hashing.
+tags: [crypto, weak-hash]

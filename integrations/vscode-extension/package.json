@@ -1,0 +1,230 @@
+{
+  "name": "aishield-vscode-extension",
+  "displayName": "AIShield",
+  "description": "AIShield security diagnostics for AI-generated code in VS Code.",
+  "version": "0.2.0",
+  "publisher": "aishield",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Linters",
+    "Programming Languages",
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:aishield.scanWorkspace",
+    "onCommand:aishield.scanCurrentFile",
+    "onCommand:aishield.clearDiagnostics",
+    "onCommand:aishield.refreshFindings",
+    "onCommand:aishield.applyFixForFinding",
+    "onCommand:aishield.openFinding",
+    "onCommand:aishield.showTelemetrySummary",
+    "onCommand:aishield.resetTelemetry",
+    "onView:aishield.findings",
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "aishield.scanWorkspace",
+        "title": "AIShield: Scan Workspace"
+      },
+      {
+        "command": "aishield.scanCurrentFile",
+        "title": "AIShield: Scan Current File"
+      },
+      {
+        "command": "aishield.clearDiagnostics",
+        "title": "AIShield: Clear Diagnostics"
+      },
+      {
+        "command": "aishield.refreshFindings",
+        "title": "AIShield: Refresh Findings"
+      },
+      {
+        "command": "aishield.applyFixForFinding",
+        "title": "AIShield: Apply Fix"
+      },
+      {
+        "command": "aishield.openFinding",
+        "title": "AIShield: Open Finding"
+      },
+      {
+        "command": "aishield.showTelemetrySummary",
+        "title": "AIShield: Show Telemetry Summary"
+      },
+      {
+        "command": "aishield.resetTelemetry",
+        "title": "AIShield: Reset Telemetry Summary"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "aishield.findings",
+          "name": "AIShield Findings"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "aishield.scanWorkspace",
+          "when": "view == aishield.findings",
+          "group": "navigation"
+        },
+        {
+          "command": "aishield.refreshFindings",
+          "when": "view == aishield.findings",
+          "group": "navigation@1"
+        },
+        {
+          "command": "aishield.clearDiagnostics",
+          "when": "view == aishield.findings",
+          "group": "navigation@2"
+        },
+        {
+          "command": "aishield.showTelemetrySummary",
+          "when": "view == aishield.findings",
+          "group": "navigation@3"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "AIShield",
+      "properties": {
+        "aishield.cliCommand": {
+          "type": "string",
+          "default": "cargo run -p aishield-cli --",
+          "description": "Command prefix used to invoke AIShield CLI."
+        },
+        "aishield.extraScanArgs": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "description": "Extra arguments appended to scan commands."
+        },
+        "aishield.minSeverity": {
+          "type": "string",
+          "default": "low",
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "info"
+          ],
+          "description": "Minimum severity for diagnostics."
+        },
+        "aishield.useOnnx": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable ONNX AI-likelihood scoring mode."
+        },
+        "aishield.onnxModelPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to ONNX model file used when useOnnx=true."
+        },
+        "aishield.onnxManifestPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to ONNX model manifest (takes precedence over onnxModelPath)."
+        },
+        "aishield.aiCalibration": {
+          "type": "string",
+          "default": "balanced",
+          "enum": [
+            "conservative",
+            "balanced",
+            "aggressive"
+          ],
+          "description": "AI classifier calibration profile passed to AIShield CLI."
+        },
+        "aishield.scanOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run AIShield scan on file save."
+        },
+        "aishield.scanDebounceMs": {
+          "type": "number",
+          "default": 350,
+          "minimum": 0,
+          "maximum": 5000,
+          "description": "Debounce window (ms) for automatic scans (save/AI paste)."
+        },
+        "aishield.maxDiagnostics": {
+          "type": "number",
+          "default": 600,
+          "minimum": 50,
+          "maximum": 5000,
+          "description": "Maximum number of findings published as diagnostics per scan."
+        },
+        "aishield.statusBarEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show AIShield scan status in the VS Code status bar."
+        },
+        "aishield.telemetryEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Collect local extension telemetry counters (no network transmission)."
+        },
+        "aishield.telemetrySampleRate": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Sampling rate for local telemetry events (0.0 to 1.0)."
+        },
+        "aishield.performanceHints": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show tuning hints based on local scan latency telemetry."
+        },
+        "aishield.aiPasteDetection": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable heuristic detection of likely AI-assisted paste events."
+        },
+        "aishield.aiPasteMinLines": {
+          "type": "number",
+          "default": 8,
+          "minimum": 3,
+          "description": "Minimum inserted lines before AI paste detection heuristics are evaluated."
+        },
+        "aishield.aiPasteHeuristicThreshold": {
+          "type": "number",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 6,
+          "description": "Signal score threshold for triggering an AI paste warning."
+        },
+        "aishield.scanOnAIPaste": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically scan the current file when suspected AI-assisted paste is detected."
+        },
+        "aishield.securityLens": {
+          "type": "boolean",
+          "default": false,
+          "description": "Highlight medium/high/critical lines in editors after scan."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "watch": "tsc -watch -p ."
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.17",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.7.3"
+  }
+}

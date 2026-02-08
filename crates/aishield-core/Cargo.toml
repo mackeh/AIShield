@@ -6,6 +6,8 @@ license.workspace = true
 
 [features]
 default = []
-onnx = []
+onnx = ["dep:ort", "dep:ndarray"]
 
 [dependencies]
+ort = { version = "2.0.0-rc.2", features = ["ndarray"], optional = true }
+ndarray = { version = "0.17", optional = true }

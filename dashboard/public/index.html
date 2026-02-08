@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AIShield Dashboard</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="bg-grid"></div>
+    <header class="hero">
+      <div>
+        <h1>AIShield Security Dashboard</h1>
+        <p>
+          Org-style local analytics from scan history with trend and pattern
+          intelligence.
+        </p>
+      </div>
+      <div class="controls">
+        <div class="filter-group" id="filter-group" style="display: none;">
+          <label for="org-filter">Org</label>
+          <select id="org-filter">
+            <option value="">All Organizations</option>
+          </select>
+          
+          <label for="team-filter">Team</label>
+          <select id="team-filter">
+            <option value="">All Teams</option>
+          </select>
+          
+          <label for="repo-filter">Repo</label>
+          <select id="repo-filter">
+            <option value="">All Repositories</option>
+          </select>
+        </div>
+        
+        <label for="days">Window</label>
+        <select id="days">
+          <option value="7">7d</option>
+          <option value="14">14d</option>
+          <option value="30" selected>30d</option>
+          <option value="90">90d</option>
+          <option value="180">180d</option>
+        </select>
+        <button id="refresh-btn" class="btn">↻ Refresh</button>
+        <button id="settings-btn" class="btn secondary" title="API Settings">⚙️</button>
+        <button id="export-btn" class="btn secondary" title="Export Report" style="display: none;">📋</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="kpis" id="kpis"></section>
+
+      <!-- Enterprise Visualizations (API mode only) -->
+      <section class="panel wide enterprise-viz" id="org-heatmap-panel" style="display: none;">
+        <div class="panel-head">
+          <h2>🔥 Organization Heatmap</h2>
+          <small>Findings distribution across teams</small>
+        </div>
+        <div id="org-heatmap" class="heatmap-container"></div>
+      </section>
+
+      <section class="panel wide enterprise-viz" id="team-comparison-panel" style="display: none;">
+        <div class="panel-head">
+          <h2>📊 Team Comparison</h2>
+          <small>Side-by-side security metrics</small>
+        </div>
+        <div id="team-comparison" class="comparison-container"></div>
+      </section>
+
+      <section class="panel wide">
+        <div class="panel-head">
+          <h2>Findings Trend</h2>
+          <small id="history-file"></small>
+        </div>
+        <div class="trend-meta">
+          <div class="legend">
+            <span><i class="dot findings"></i> Findings</span>
+            <span><i class="dot high"></i> High + Critical</span>
+          </div>
+          <div id="deltas" class="deltas"></div>
+        </div>
+        <svg
+          id="trend-chart"
+          viewBox="0 0 960 260"
+          preserveAspectRatio="none"
+        ></svg>
+      </section>
+
+      <section class="panel split">
+        <div>
+          <h2>Top Rules</h2>
+          <ul id="top-rules" class="list"></ul>
+        </div>
+        <div>
+          <h2>Top Targets</h2>
+          <ul id="top-targets" class="list"></ul>
+        </div>
+      </section>
+
+      <section class="panel split">
+        <div>
+          <h2>Pipeline Tips</h2>
+          <p class="muted">
+            Ingest JSON/SARIF reports from CI to keep dashboard history active.
+          </p>
+          <pre id="ingest-cmd" class="cmd"></pre>
+        </div>
+        <div>
+          <h2>Snapshot</h2>
+          <ul id="snapshot" class="list"></ul>
+        </div>
+      </section>
+
+      <!-- AI Metrics Dashboard -->
+      <section class="panel wide enterprise-viz" id="ai-metrics-panel" style="display: none;">
+        <div class="panel-head">
+          <h2>🤖 AI Detection Metrics</h2>
+          <small>Breakdown by tool and pattern confidence</small>
+        </div>
+        <div class="metrics-grid">
+          <div class="metric-col">
+            <h3>Tool Breakdown</h3>
+            <div id="ai-tool-breakdown" class="chart-container"></div>
+          </div>
+          <div class="metric-col">
+            <h3>Top AI Patterns</h3>
+            <div id="ai-top-patterns" class="list-container"></div>
+          </div>
+          <div class="metric-col">
+            <h3>Confidence Distribution</h3>
+            <div id="ai-confidence-dist" class="chart-container"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Daily Severity Mix</h2>
+        <table id="severity-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Scans</th>
+              <th>Findings</th>
+              <th>High+</th>
+              <th>Critical</th>
+              <th>High</th>
+              <th>Medium</th>
+              <th>Low</th>
+              <th>AI-est.</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </section>
+    </main>
+
+    <template id="kpi-template">
+      <article class="kpi">
+        <h3></h3>
+        <p></p>
+      </article>
+    </template>
+
+    <script type="module" src="/api-client.js"></script>
+    <script type="module" src="/settings.js"></script>
+    <script type="module" src="/app.js"></script>
+    <!-- Report Generation Modal -->
+    <div id="report-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Generate Compliance Report</h2>
+          <button class="close-modal" id="close-report-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Format</label>
+            <select id="report-format" class="filter-select">
+              <option value="csv">CSV (Spreadsheet)</option>
+              <option value="pdf" disabled>PDF (High Quality) - Coming Soon</option>
+              <option value="pdf-text">PDF (Text Draft)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Template</label>
+            <select id="report-template" class="filter-select">
+              <option value="general">General Audit</option>
+              <option value="soc2">SOC 2 Preliminary</option>
+              <option value="pci-dss">PCI-DSS Overview</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Date Range</label>
+            <div class="date-range">
+              <input type="date" id="report-start" class="filter-select" placeholder="Start">
+              <span style="align-self:center">to</span>
+              <input type="date" id="report-end" class="filter-select" placeholder="End">
+            </div>
+            <small class="hint">Leave empty for last 30 days</small>
+          </div>
+          <div class="modal-actions">
+            <button id="generate-report-btn" class="btn primary">Download Report</button>
+            <button id="cancel-report-btn" class="btn secondary">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

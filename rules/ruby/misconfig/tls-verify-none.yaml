@@ -1,0 +1,12 @@
+id: AISHIELD-RB-MISC-001
+title: TLS Verification Disabled
+severity: high
+confidence_that_ai_generated: 0.77
+languages: [ruby]
+category: misconfig
+pattern:
+  any:
+    - "verify_mode: openssl::ssl::verify_none"
+fix:
+  suggestion: Enforce peer verification when making TLS connections.
+tags: [misconfig, tls]
