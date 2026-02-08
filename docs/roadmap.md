@@ -28,7 +28,7 @@ This page mirrors `project.md` and highlights the current implementation directi
 - [x] Advanced VS Code UX beta (hover cards, quick fixes, findings panel, security lens)
 - [x] AI paste-detection bootstrap in VS Code extension
 - [ ] Advanced VS Code UX GA polish and telemetry-informed tuning
-- [ ] Web dashboard and analytics pipeline
+- [x] Web dashboard and analytics pipeline bootstrap
 - [x] Alerting bootstrap via scan webhooks
 - [x] Experimental cross-file auth-route heuristics (`--cross-file`)
 - [x] Additional language bootstrap (C#, Ruby, PHP)

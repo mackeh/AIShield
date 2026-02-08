@@ -77,6 +77,18 @@ Build docs for production:
 npm run docs:build
 ```
 
+## Dashboard Bootstrap
+
+```bash
+npm run dashboard:dev
+```
+
+Seed demo history if needed:
+
+```bash
+npm run dashboard:sample-history
+```
+
 ## Next Steps
 
 - Contributor onboarding: `CONTRIBUTING.md` and `/contributing`

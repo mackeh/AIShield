@@ -120,6 +120,24 @@ npm run build
 
 Then open `integrations/vscode-extension` in VS Code and run extension host (`F5`).
 
+## Dashboard and Analytics Bootstrap
+
+```bash
+npm run dashboard:dev
+```
+
+Ingest CI artifacts (JSON/SARIF) into local analytics history:
+
+```bash
+npm run dashboard:ingest -- --input aishield.json --target github-actions/main
+```
+
+Generate demo history quickly:
+
+```bash
+npm run dashboard:sample-history
+```
+
 ## Core Commands
 
 - `scan`: run analysis with filters, dedup mode, bridge engines, and output formats
@@ -146,6 +164,7 @@ Key docs:
 
 - `docs/getting-started.md`
 - `docs/cli.md`
+- `docs/dashboard.md`
 - `docs/ai-classifier.md`
 - `docs/configuration.md`
 - `docs/output-formats.md`
@@ -178,6 +197,7 @@ Current implementation includes:
 - VS Code extension bootstrap in `integrations/vscode-extension`
 - VS Code advanced UX beta: hover cards, quick-fix actions, findings panel, security lens
 - VS Code AI paste-detection bootstrap with scan prompt/auto-scan controls
+- local web dashboard and analytics ingestion bootstrap in `dashboard/`
 - C#/Ruby/PHP language ecosystem bootstrap with dedicated rules and fixtures
 - Kotlin/Swift language ecosystem bootstrap with dedicated rules and fixtures
 - hardened SARIF upload and PR annotation workflows across push/PR contexts

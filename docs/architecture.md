@@ -41,6 +41,7 @@ Operator-facing interface:
 - `models/ai-classifier/`: ONNX classifier assets and runtime runner script
 - `integrations/vscode-extension/`: VS Code extension bootstrap (commands + diagnostics)
 - `.vscode/`: workspace tasks and extension recommendations
+- `dashboard/`: local analytics dashboard (`server.js`, static UI, and report-ingest utilities)
 
 ## Documentation Stack
 

@@ -3,6 +3,10 @@
   "private": true,
   "description": "AIShield documentation tooling",
   "scripts": {
+    "dashboard:dev": "node dashboard/server.js",
+    "dashboard:ingest": "node dashboard/scripts/ingest-report.js",
+    "dashboard:sample-history": "node dashboard/scripts/sample-history.js",
+    "dashboard:test": "node --test dashboard/lib/*.test.js",
     "docs:dev": "vitepress dev docs --host 0.0.0.0 --port 5173",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs --host 0.0.0.0 --port 4173"

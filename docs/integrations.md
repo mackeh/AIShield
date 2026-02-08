@@ -147,6 +147,22 @@ Config and env support:
 - `.aishield.yml`: `notify_webhook_url`, `notify_min_severity`
 - environment override: `AISHIELD_NOTIFY_WEBHOOK`
 
+## Local Dashboard + Analytics Pipeline
+
+Start dashboard:
+
+```bash
+npm run dashboard:dev
+```
+
+Ingest scan artifacts into history:
+
+```bash
+npm run dashboard:ingest -- --input aishield.json --target github-actions/main
+```
+
+Use this when scans run in CI and you want local trend analytics from exported reports.
+
 ## Local Automation
 
 Useful local commands:

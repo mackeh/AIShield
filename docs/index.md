@@ -31,4 +31,6 @@ features:
     details: Run default heuristic scoring or ONNX model scoring (`--ai-model onnx`) with runtime fallback safety.
   - title: Contributor-ready workflows
     details: Includes onboarding docs, issue/PR templates, VS Code extension bootstrap, VS Code tasks, and CI examples for GitHub Actions and GitLab CI.
+  - title: Dashboard + analytics bootstrap
+    details: Local web dashboard with trend KPIs, top-rule/target hotspots, and report ingestion for artifact-based CI pipelines.
 ---

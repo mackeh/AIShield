@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AIShield Dashboard</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="bg-grid"></div>
+    <header class="hero">
+      <div>
+        <h1>AIShield Security Dashboard</h1>
+        <p>Org-style local analytics from scan history with trend and pattern intelligence.</p>
+      </div>
+      <div class="controls">
+        <label for="days">Window</label>
+        <select id="days">
+          <option value="7">7d</option>
+          <option value="14">14d</option>
+          <option value="30" selected>30d</option>
+          <option value="90">90d</option>
+          <option value="180">180d</option>
+        </select>
+        <button id="refresh" type="button">Refresh</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="kpis" id="kpis"></section>
+
+      <section class="panel wide">
+        <div class="panel-head">
+          <h2>Findings Trend</h2>
+          <small id="history-file"></small>
+        </div>
+        <div class="trend-meta">
+          <div class="legend">
+            <span><i class="dot findings"></i> Findings</span>
+            <span><i class="dot high"></i> High + Critical</span>
+          </div>
+          <div id="deltas" class="deltas"></div>
+        </div>
+        <svg id="trend-chart" viewBox="0 0 960 260" preserveAspectRatio="none"></svg>
+      </section>
+
+      <section class="panel split">
+        <div>
+          <h2>Top Rules</h2>
+          <ul id="top-rules" class="list"></ul>
+        </div>
+        <div>
+          <h2>Top Targets</h2>
+          <ul id="top-targets" class="list"></ul>
+        </div>
+      </section>
+
+      <section class="panel split">
+        <div>
+          <h2>Pipeline Tips</h2>
+          <p class="muted">Ingest JSON/SARIF reports from CI to keep dashboard history active.</p>
+          <pre id="ingest-cmd" class="cmd"></pre>
+        </div>
+        <div>
+          <h2>Snapshot</h2>
+          <ul id="snapshot" class="list"></ul>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Daily Severity Mix</h2>
+        <table id="severity-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Scans</th>
+              <th>Findings</th>
+              <th>High+</th>
+              <th>Critical</th>
+              <th>High</th>
+              <th>Medium</th>
+              <th>Low</th>
+              <th>AI-est.</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </section>
+    </main>
+
+    <template id="kpi-template">
+      <article class="kpi">
+        <h3></h3>
+        <p></p>
+      </article>
+    </template>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

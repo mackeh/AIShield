@@ -28,6 +28,9 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - Strengthened tests to enforce phase-2 rule depth and per-language fixture detection coverage
 - Expanded Go/Rust/Java vulnerable fixtures to exercise new auth/crypto/injection/misconfig rules
 - Added heuristic AI-likelihood classifier in core (path/snippet signals) and wired risk scoring to dynamic AI confidence
+- Added web dashboard + analytics pipeline bootstrap (`dashboard/`) with trend KPIs and top-rule/target views
+- Added report ingestion utility for AIShield JSON/SARIF artifacts (`dashboard/scripts/ingest-report.js`)
+- Added dashboard sample-history generator and Node tests for analytics/history parsing logic
 
 ## [0.1.1] - 2026-02-07
 

@@ -27,6 +27,7 @@ export default defineConfig({
     nav: [
       { text: "Guide", link: "/getting-started" },
       { text: "CLI", link: "/cli" },
+      { text: "Dashboard", link: "/dashboard" },
       { text: "AI Classifier", link: "/ai-classifier" },
       { text: "Integrations", link: "/integrations" },
       { text: "Configuration", link: "/configuration" },
@@ -40,6 +41,7 @@ export default defineConfig({
           { text: "Overview", link: "/" },
           { text: "Getting Started", link: "/getting-started" },
           { text: "Architecture", link: "/architecture" },
+          { text: "Dashboard and Analytics", link: "/dashboard" },
           { text: "Roadmap", link: "/roadmap" },
         ],
       },
@@ -56,6 +58,7 @@ export default defineConfig({
         text: "Operations",
         items: [
           { text: "Integrations", link: "/integrations" },
+          { text: "Dashboard", link: "/dashboard" },
           { text: "VS Code Extension", link: "/vscode-extension" },
           { text: "GitHub Actions", link: "/ci-github-actions" },
           { text: "Releasing", link: "/releasing" },
