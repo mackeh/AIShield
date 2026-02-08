@@ -88,7 +88,7 @@ cargo run -p aishield-cli -- scan . --bridge all
 Print or apply safe autofixes for supported rules.
 
 ```bash
-aishield fix <path> [--rules-dir DIR] [--write|--interactive] [--dry-run] [--config FILE] [--no-config]
+aishield fix <path[:line[:col]]> [--rules-dir DIR] [--write|--interactive] [--dry-run] [--config FILE] [--no-config]
 ```
 
 Options:
@@ -96,6 +96,16 @@ Options:
 - `--write`: apply changes in place
 - `--dry-run`: show planned edits without writing
 - `--interactive`: prompt per autofix candidate (`yes/no/all/quit`)
+
+Examples:
+
+```bash
+# interactive review across all findings in a file/dir
+cargo run -p aishield-cli -- fix src --interactive
+
+# target one finding location from scan output
+cargo run -p aishield-cli -- fix src/auth/login.py:34 --interactive
+```
 
 ## `bench`
 

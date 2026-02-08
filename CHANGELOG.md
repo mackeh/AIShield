@@ -18,6 +18,8 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - Added initial Go/Rust/Java language scanning support with starter rulepacks and fixtures
 - Added `bench` command for repeatable scan-time benchmarking with table/JSON output
 - Added `fix --interactive` groundwork for prompt-driven autofix selection (`yes/no/all/quit`)
+- Added `fix <path:line[:col]>` targeting to focus remediation on a specific finding location
+- Expanded safe autofix replacements for additional JavaScript/Java crypto and debug patterns
 
 ## [0.1.1] - 2026-02-07
 

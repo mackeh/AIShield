@@ -122,12 +122,13 @@ aishield scan <path> \
 ### `fix`
 
 ```bash
-aishield fix <path> [--rules-dir DIR] [--write|--interactive] [--dry-run] [--config FILE] [--no-config]
+aishield fix <path[:line[:col]]> [--rules-dir DIR] [--write|--interactive] [--dry-run] [--config FILE] [--no-config]
 ```
 
 `--write` applies available safe autofixes in-place for supported rules.  
 `--dry-run` reports what would change without writing files.
 `--interactive` prompts per autofix candidate with `yes/no/all/quit`.
+You can target a specific finding location like `aishield fix src/auth/login.py:34`.
 
 ### `bench`
 

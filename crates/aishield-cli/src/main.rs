@@ -1143,7 +1143,8 @@ fn run_fix(args: &[String]) -> Result<(), String> {
         return Err("fix requires a target path".to_string());
     }
 
-    let target = PathBuf::from(&args[0]);
+    let target_spec = parse_fix_target_spec(&args[0])?;
+    let target = target_spec.scan_path.clone();
     let mut rules_dir_override = None;
     let mut write_changes = false;
     let mut dry_run = false;
@@ -1194,10 +1195,32 @@ fn run_fix(args: &[String]) -> Result<(), String> {
     let ruleset = RuleSet::load_from_dir(&rules_dir)
         .map_err(|err| format!("failed to load rules from {}: {err}", rules_dir.display()))?;
     let analyzer = Analyzer::new(ruleset);
-    let result = analyzer.analyze_path(&target, &AnalysisOptions::default())?;
+    let mut result = analyzer.analyze_path(&target, &AnalysisOptions::default())?;
+
+    if target_spec.line.is_some() {
+        result.findings = result
+            .findings
+            .into_iter()
+            .filter(|finding| fix_location_matches(finding, &target_spec))
+            .collect::<Vec<_>>();
+        result.summary = recompute_summary(&result);
+    }
 
     if result.findings.is_empty() {
-        println!("No findings detected. Nothing to remediate.");
+        if let Some(line) = target_spec.line {
+            if let Some(column) = target_spec.column {
+                println!(
+                    "No findings detected at {}:{}:{}.",
+                    target.display(),
+                    line,
+                    column
+                );
+            } else {
+                println!("No findings detected at {}:{}.", target.display(), line);
+            }
+        } else {
+            println!("No findings detected. Nothing to remediate.");
+        }
         return Ok(());
     }
 
@@ -1210,6 +1233,77 @@ fn run_fix(args: &[String]) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct FixTargetSpec {
+    scan_path: PathBuf,
+    line: Option<usize>,
+    column: Option<usize>,
+}
+
+fn parse_fix_target_spec(raw: &str) -> Result<FixTargetSpec, String> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Err("fix requires a target path".to_string());
+    }
+
+    let segments = raw.split(':').collect::<Vec<_>>();
+    if segments.len() >= 3 {
+        let maybe_column = segments[segments.len() - 1].parse::<usize>();
+        let maybe_line = segments[segments.len() - 2].parse::<usize>();
+        if let (Ok(line), Ok(column)) = (maybe_line, maybe_column) {
+            if line == 0 || column == 0 {
+                return Err("fix location must be 1-based (line/column > 0)".to_string());
+            }
+            let path = segments[..segments.len() - 2].join(":");
+            if path.is_empty() {
+                return Err("fix requires a target path".to_string());
+            }
+            return Ok(FixTargetSpec {
+                scan_path: PathBuf::from(path),
+                line: Some(line),
+                column: Some(column),
+            });
+        }
+    }
+
+    if segments.len() >= 2 {
+        if let Ok(line) = segments[segments.len() - 1].parse::<usize>() {
+            if line == 0 {
+                return Err("fix location line must be 1-based (> 0)".to_string());
+            }
+            let path = segments[..segments.len() - 1].join(":");
+            if path.is_empty() {
+                return Err("fix requires a target path".to_string());
+            }
+            return Ok(FixTargetSpec {
+                scan_path: PathBuf::from(path),
+                line: Some(line),
+                column: None,
+            });
+        }
+    }
+
+    Ok(FixTargetSpec {
+        scan_path: PathBuf::from(raw),
+        line: None,
+        column: None,
+    })
+}
+
+fn fix_location_matches(finding: &Finding, target: &FixTargetSpec) -> bool {
+    let Some(line) = target.line else {
+        return true;
+    };
+    if finding.line != line {
+        return false;
+    }
+
+    match target.column {
+        Some(column) => finding.column == column,
+        None => true,
+    }
 }
 
 #[derive(Clone)]
@@ -1820,6 +1914,24 @@ fn autofix_replacements(rule_id: &str) -> Vec<(&'static str, &'static str)> {
             ("innerHTML =", "textContent ="),
             ("innerHTML=", "textContent="),
         ],
+        "AISHIELD-JS-CRYPTO-001" => vec![
+            ("createHash('md5')", "createHash('sha256')"),
+            ("createHash(\"md5\")", "createHash(\"sha256\")"),
+            ("createHash('sha1')", "createHash('sha256')"),
+            ("createHash(\"sha1\")", "createHash(\"sha256\")"),
+        ],
+        "AISHIELD-JS-CRYPTO-003" => vec![(
+            "Math.random().toString(36).slice(2)",
+            "crypto.randomBytes(32).toString('hex')",
+        )],
+        "AISHIELD-JAVA-CRYPTO-001" => vec![(
+            "MessageDigest.getInstance(\"MD5\")",
+            "MessageDigest.getInstance(\"SHA-256\")",
+        )],
+        "AISHIELD-JS-MISC-002" => vec![
+            ("debug: true", "debug: false"),
+            ("debug:true", "debug:false"),
+        ],
         _ => Vec::new(),
     }
 }
@@ -2144,7 +2256,7 @@ fn print_help() {
     println!("AIShield CLI (foundation)\n");
     println!("Usage:");
     println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
-    println!("  aishield fix <path> [--rules-dir DIR] [--write|--interactive] [--dry-run] [--config FILE] [--no-config]");
+    println!("  aishield fix <path[:line[:col]]> [--rules-dir DIR] [--write|--interactive] [--dry-run] [--config FILE] [--no-config]");
     println!("  aishield bench <path> [--rules-dir DIR] [--iterations N] [--warmup N] [--format table|json] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--min-ai-confidence N] [--config FILE] [--no-config]");
     println!("  aishield init [--output PATH]");
     println!("  aishield create-rule --id ID --title TITLE --language LANG --category CAT [--severity LEVEL] [--pattern-any P] [--pattern-all P] [--pattern-not P] [--tags t1,t2] [--suggestion TEXT] [--out-dir DIR] [--force]");
@@ -3084,8 +3196,8 @@ mod tests {
     use super::{
         apply_replacements, count_replacements, dedup_machine_output, empty_summary,
         escape_github_annotation_message, escape_github_annotation_property, normalize_snippet,
-        percentile, render_github_annotations, render_sarif, DedupMode, Finding, OutputSummary,
-        ScanResult, Severity,
+        parse_fix_target_spec, percentile, render_github_annotations, render_sarif, DedupMode,
+        Finding, OutputSummary, ScanResult, Severity,
     };
 
     fn finding(
@@ -3294,5 +3406,32 @@ mod tests {
         assert_eq!(applied, 2);
         assert!(content.contains("hashlib.sha256(data)"));
         assert!(content.contains("verify=True"));
+    }
+
+    #[test]
+    fn parse_fix_target_supports_file_line_and_column() {
+        let path_only = parse_fix_target_spec("src/app.py").expect("path parse");
+        assert_eq!(path_only.scan_path.to_string_lossy(), "src/app.py");
+        assert_eq!(path_only.line, None);
+        assert_eq!(path_only.column, None);
+
+        let line = parse_fix_target_spec("src/app.py:42").expect("line parse");
+        assert_eq!(line.scan_path.to_string_lossy(), "src/app.py");
+        assert_eq!(line.line, Some(42));
+        assert_eq!(line.column, None);
+
+        let line_col = parse_fix_target_spec("src/app.py:42:7").expect("line/col parse");
+        assert_eq!(line_col.scan_path.to_string_lossy(), "src/app.py");
+        assert_eq!(line_col.line, Some(42));
+        assert_eq!(line_col.column, Some(7));
+    }
+
+    #[test]
+    fn parse_fix_target_rejects_zero_line_or_column() {
+        let err_line = parse_fix_target_spec("src/app.py:0").expect_err("line must be > 0");
+        assert!(err_line.contains("1-based"));
+
+        let err_col = parse_fix_target_spec("src/app.py:5:0").expect_err("column must be > 0");
+        assert!(err_col.contains("1-based"));
     }
 }
