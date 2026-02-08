@@ -155,7 +155,12 @@ impl Analyzer {
                         snippet: line.trim().to_string(),
                         ai_confidence: ((rule.confidence_that_ai_generated * 100.0) * 10.0).round()
                             / 10.0,
-                        risk_score: compute_risk_score(rule, rule.severity, &file.path),
+                        risk_score: compute_risk_score(
+                            rule,
+                            rule.severity,
+                            &file.path,
+                            line.trim(),
+                        ),
                         category: rule.category.clone(),
                         tags: rule.tags.clone(),
                         ai_tendency: rule.ai_tendency.clone(),

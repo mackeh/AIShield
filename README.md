@@ -10,7 +10,7 @@ AI coding assistants increase development speed, but they also repeat insecure p
 
 - Rule-based detection for AI-prone vulnerabilities
 - AI-confidence metadata per rule
-- Context-aware risk scoring
+- Context-aware risk scoring (severity + AI confidence + path/sink exploitability heuristics)
 - CLI + CI + pre-commit integration
 
 ## Current implementation status
