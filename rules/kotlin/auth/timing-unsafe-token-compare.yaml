@@ -1,0 +1,12 @@
+id: AISHIELD-KT-AUTH-001
+title: Timing-Unsafe Token Comparison
+severity: high
+confidence_that_ai_generated: 0.80
+languages: [kotlin]
+category: auth
+pattern:
+  any:
+    - "token == provided"
+fix:
+  suggestion: Use constant-time comparison for secret token checks.
+tags: [auth, timing-attack]

@@ -31,7 +31,8 @@ This page mirrors `project.md` and highlights the current implementation directi
 - [x] Alerting bootstrap via scan webhooks
 - [x] Experimental cross-file auth-route heuristics (`--cross-file`)
 - [x] Additional language bootstrap (C#, Ruby, PHP)
-- [ ] Additional language ecosystems (Kotlin, Swift)
+- [x] Additional language ecosystems (Kotlin, Swift)
+- [ ] Expand language rulepack depth toward 20-per-language targets for new ecosystems
 - [x] Infra/IaC scanning bootstrap (Terraform, Kubernetes YAML, Dockerfiles)
 
 ## Milestone Notes

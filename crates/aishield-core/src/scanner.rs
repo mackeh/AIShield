@@ -73,6 +73,8 @@ fn language_from_path(path: &Path) -> Option<&'static str> {
         "cs" => Some("csharp"),
         "rb" => Some("ruby"),
         "php" | "phtml" => Some("php"),
+        "kt" | "kts" => Some("kotlin"),
+        "swift" => Some("swift"),
         "tf" | "hcl" => Some("terraform"),
         "yaml" | "yml" => {
             if looks_like_kubernetes_manifest(path) {
@@ -122,6 +124,8 @@ mod tests {
         fs::write(root.join("Sample.cs"), "class Sample {}\n").expect("write csharp");
         fs::write(root.join("sample.rb"), "puts 'hi'\n").expect("write ruby");
         fs::write(root.join("sample.php"), "<?php echo 'hi';\n").expect("write php");
+        fs::write(root.join("sample.kt"), "class Sample\n").expect("write kotlin");
+        fs::write(root.join("sample.swift"), "print(\"hi\")\n").expect("write swift");
         fs::write(root.join("ignored.txt"), "noop\n").expect("write ignored");
 
         let files = collect_source_files(&root);
@@ -133,7 +137,7 @@ mod tests {
 
         assert_eq!(
             languages,
-            vec!["csharp", "go", "java", "php", "ruby", "rust"]
+            vec!["csharp", "go", "java", "kotlin", "php", "ruby", "rust", "swift"]
         );
 
         let _ = fs::remove_dir_all(root);

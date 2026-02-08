@@ -8,7 +8,7 @@ It finds high-risk patterns that often look plausible in review but are unsafe i
 
 AI coding assistants increase delivery speed, but they also reproduce insecure examples from public training data. AIShield adds a dedicated guardrail layer for AI-assisted codebases by combining:
 
-- AI-prone vulnerability rulepacks across Python, JavaScript, Go, Rust, Java, C#, Ruby, and PHP
+- AI-prone vulnerability rulepacks across Python, JavaScript, Go, Rust, Java, C#, Ruby, PHP, Kotlin, and Swift
 - infrastructure rulepacks for Terraform/HCL, Kubernetes manifests, and Dockerfiles
 - AI-likelihood scoring and context-aware risk scoring per finding
 - CI-ready outputs (`json`, `sarif`, `github`) with dedup normalization
@@ -178,6 +178,7 @@ Current implementation includes:
 - VS Code extension bootstrap in `integrations/vscode-extension`
 - VS Code advanced UX beta: hover cards, quick-fix actions, findings panel, security lens
 - C#/Ruby/PHP language ecosystem bootstrap with dedicated rules and fixtures
+- Kotlin/Swift language ecosystem bootstrap with dedicated rules and fixtures
 - hardened SARIF upload and PR annotation workflows across push/PR contexts
 - VitePress documentation site + GitHub Pages deployment workflow
 

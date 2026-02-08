@@ -1,0 +1,13 @@
+id: AISHIELD-SW-MISC-001
+title: TLS Trust-All Certificate Handling
+severity: high
+confidence_that_ai_generated: 0.77
+languages: [swift]
+category: misconfig
+pattern:
+  all:
+    - "didreceive challenge"
+    - "urlcredential(trust: trust)"
+fix:
+  suggestion: Validate TLS trust chain and avoid unconditional trust acceptance.
+tags: [misconfig, tls]

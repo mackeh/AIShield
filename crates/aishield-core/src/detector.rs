@@ -691,8 +691,8 @@ function good(token, expected) {
             .expect("scan fixture suite");
 
         assert!(
-            result.summary.total >= 80,
-            "expected at least 80 findings in expanded fixture suite, got {}",
+            result.summary.total >= 95,
+            "expected at least 95 findings in expanded fixture suite, got {}",
             result.summary.total
         );
 
@@ -725,6 +725,16 @@ function good(token, expected) {
             .findings
             .iter()
             .filter(|finding| finding.id.starts_with("AISHIELD-PHP-"))
+            .count();
+        let kotlin_findings = result
+            .findings
+            .iter()
+            .filter(|finding| finding.id.starts_with("AISHIELD-KT-"))
+            .count();
+        let swift_findings = result
+            .findings
+            .iter()
+            .filter(|finding| finding.id.starts_with("AISHIELD-SW-"))
             .count();
         let terraform_findings = result
             .findings
@@ -771,6 +781,16 @@ function good(token, expected) {
             php_findings >= 5,
             "expected at least 5 php findings in fixture suite, got {}",
             php_findings
+        );
+        assert!(
+            kotlin_findings >= 5,
+            "expected at least 5 kotlin findings in fixture suite, got {}",
+            kotlin_findings
+        );
+        assert!(
+            swift_findings >= 5,
+            "expected at least 5 swift findings in fixture suite, got {}",
+            swift_findings
         );
         assert!(
             terraform_findings >= 5,

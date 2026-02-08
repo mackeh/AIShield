@@ -1,0 +1,13 @@
+id: AISHIELD-SW-INJ-001
+title: SQL Query Built with String Concatenation
+severity: high
+confidence_that_ai_generated: 0.77
+languages: [swift]
+category: injection
+pattern:
+  all:
+    - "select * from users where id ="
+    - "+ userinput"
+fix:
+  suggestion: Use parameterized database queries instead of string concatenation.
+tags: [injection, sql-injection]
