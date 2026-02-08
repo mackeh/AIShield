@@ -6,10 +6,23 @@ use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use aishield_core::{
     AnalysisOptions, Analyzer, Finding, RuleSet, ScanResult, ScanSummary, Severity,
+};
+use crossterm::{
+    event::{self, Event, KeyCode, KeyEventKind},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
+use ratatui::{
+    backend::CrosstermBackend,
+    layout::{Constraint, Layout},
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
+    Terminal,
 };
 use serde_json::Value;
 
@@ -1315,30 +1328,15 @@ struct InteractiveAutofixCandidate {
     line: usize,
     column: usize,
     fix_suggestion: Option<String>,
+    proposed_replacements: usize,
 }
 
 fn run_fix_interactive(target: &Path, result: &ScanResult, dry_run: bool) -> Result<(), String> {
-    let candidates = collect_interactive_candidates(target, result);
-    if candidates.is_empty() {
-        println!("No safe autofixes are available for these findings.");
-        print_suggested_remediations(result);
-        return Ok(());
-    }
-
-    println!(
-        "Interactive fix mode: {} autofix candidate(s).",
-        candidates.len()
-    );
-    if dry_run {
-        println!("Dry-run enabled: no files will be written.");
-    }
-
+    let raw_candidates = collect_interactive_candidates(target, result);
     let mut file_contents = BTreeMap::<PathBuf, String>::new();
-    let mut changed_files = std::collections::BTreeSet::<PathBuf>::new();
-    let mut total_replacements = 0usize;
-    let mut apply_remaining = false;
+    let mut candidates = Vec::new();
 
-    for (idx, candidate) in candidates.iter().enumerate() {
+    for mut candidate in raw_candidates {
         if !file_contents.contains_key(&candidate.file_path) {
             let content = match fs::read_to_string(&candidate.file_path) {
                 Ok(content) => content,
@@ -1354,51 +1352,43 @@ fn run_fix_interactive(target: &Path, result: &ScanResult, dry_run: bool) -> Res
             file_contents.insert(candidate.file_path.clone(), content);
         }
 
+        let Some(content) = file_contents.get(&candidate.file_path) else {
+            continue;
+        };
+        let replacements = autofix_replacements(&candidate.rule_id);
+        candidate.proposed_replacements = count_replacements(content, &replacements);
+        if candidate.proposed_replacements > 0 {
+            candidates.push(candidate);
+        }
+    }
+
+    if candidates.is_empty() {
+        println!("No safe autofixes are available for these findings.");
+        print_suggested_remediations(result);
+        return Ok(());
+    }
+
+    let selection = run_fix_tui(&candidates, dry_run)?;
+    let Some(selected_indices) = selection else {
+        println!("No autofix changes selected.");
+        return Ok(());
+    };
+
+    let mut changed_files = std::collections::BTreeSet::<PathBuf>::new();
+    let mut total_replacements = 0usize;
+
+    for idx in selected_indices {
+        let Some(candidate) = candidates.get(idx) else {
+            continue;
+        };
         let Some(content) = file_contents.get_mut(&candidate.file_path) else {
             continue;
         };
         let replacements = autofix_replacements(&candidate.rule_id);
-        let possible_replacements = count_replacements(content, &replacements);
-        if possible_replacements == 0 {
-            continue;
-        }
-
-        println!(
-            "\n[{}/{}] [{}] {}:{}:{}",
-            idx + 1,
-            candidates.len(),
-            candidate.rule_id,
-            candidate.file_display,
-            candidate.line,
-            candidate.column
-        );
-        println!("  {}", candidate.title);
-        if let Some(suggestion) = &candidate.fix_suggestion {
-            println!("  Fix: {suggestion}");
-        }
-        println!("  Proposed replacements: {}", possible_replacements);
-
-        let action = if apply_remaining {
-            "a".to_string()
-        } else {
-            prompt_action("Apply autofix? [y]es/[n]o/[a]ll/[q]uit (default n): ", "n")?
-        };
-
-        match action.as_str() {
-            "q" => break,
-            "n" => continue,
-            "a" => {
-                apply_remaining = true;
-            }
-            "y" => {}
-            _ => continue,
-        }
-
         let applied = apply_replacements(content, &replacements);
         if applied > 0 {
             changed_files.insert(candidate.file_path.clone());
             total_replacements += applied;
-            println!("  Applied {} replacement(s).", applied);
         }
     }
 
@@ -1454,35 +1444,208 @@ fn collect_interactive_candidates(
                 line: finding.line,
                 column: finding.column,
                 fix_suggestion: finding.fix_suggestion.clone(),
+                proposed_replacements: 0,
             });
     }
 
     keyed.into_values().collect::<Vec<_>>()
 }
 
-fn prompt_action(prompt: &str, default: &str) -> Result<String, String> {
+fn run_fix_tui(
+    candidates: &[InteractiveAutofixCandidate],
+    dry_run: bool,
+) -> Result<Option<Vec<usize>>, String> {
+    enable_raw_mode().map_err(|err| format!("failed to enable raw mode: {err}"))?;
     let mut stdout = io::stdout();
-    stdout
-        .write_all(prompt.as_bytes())
-        .map_err(|err| format!("failed to write prompt: {err}"))?;
-    stdout
-        .flush()
-        .map_err(|err| format!("failed to flush prompt: {err}"))?;
+    execute!(stdout, EnterAlternateScreen)
+        .map_err(|err| format!("failed to enter alternate screen: {err}"))?;
 
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .map_err(|err| format!("failed to read input: {err}"))?;
-    let action = if input.trim().is_empty() {
-        default.to_string()
-    } else {
-        input.trim().to_ascii_lowercase()
-    };
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal =
+        Terminal::new(backend).map_err(|err| format!("failed to initialize terminal UI: {err}"))?;
+    let ui_result = run_fix_tui_loop(&mut terminal, candidates, dry_run);
 
-    match action.as_str() {
-        "y" | "n" | "a" | "q" => Ok(action),
-        _ => Ok(default.to_string()),
+    let _ = disable_raw_mode();
+    let _ = execute!(terminal.backend_mut(), LeaveAlternateScreen);
+    let _ = terminal.show_cursor();
+
+    ui_result
+}
+
+fn run_fix_tui_loop(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    candidates: &[InteractiveAutofixCandidate],
+    dry_run: bool,
+) -> Result<Option<Vec<usize>>, String> {
+    let mut cursor = 0usize;
+    let mut selected = vec![false; candidates.len()];
+    let mut list_state = ListState::default();
+
+    loop {
+        list_state.select(Some(cursor));
+        terminal
+            .draw(|frame| {
+                let chunks = Layout::vertical([
+                    Constraint::Length(3),
+                    Constraint::Min(8),
+                    Constraint::Length(6),
+                    Constraint::Length(3),
+                ])
+                .split(frame.area());
+
+                let title = if dry_run {
+                    "AIShield Fix TUI (Dry Run)"
+                } else {
+                    "AIShield Fix TUI"
+                };
+                let header = Paragraph::new(vec![
+                    Line::from(Span::styled(
+                        title,
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    )),
+                    Line::from(format!(
+                        "Candidates: {} | Selected: {}",
+                        candidates.len(),
+                        selected.iter().filter(|v| **v).count()
+                    )),
+                ])
+                .block(Block::default().borders(Borders::ALL).title("Summary"));
+                frame.render_widget(header, chunks[0]);
+
+                let items = candidates
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, candidate)| {
+                        let mark = if selected[idx] { 'x' } else { ' ' };
+                        ListItem::new(Line::from(vec![
+                            Span::raw(format!("[{}] ", mark)),
+                            Span::styled(
+                                format!("[{}] ", candidate.rule_id),
+                                Style::default().fg(Color::Yellow),
+                            ),
+                            Span::raw(format!(
+                                "{}:{}:{} (+{})",
+                                candidate.file_display,
+                                candidate.line,
+                                candidate.column,
+                                candidate.proposed_replacements
+                            )),
+                        ]))
+                    })
+                    .collect::<Vec<_>>();
+
+                let list = List::new(items)
+                    .block(Block::default().borders(Borders::ALL).title("Autofix Candidates"))
+                    .highlight_style(
+                        Style::default()
+                            .bg(Color::DarkGray)
+                            .add_modifier(Modifier::BOLD),
+                    )
+                    .highlight_symbol("> ");
+                frame.render_stateful_widget(list, chunks[1], &mut list_state);
+
+                let details = candidates.get(cursor).map(|candidate| {
+                    let suggestion = candidate
+                        .fix_suggestion
+                        .as_deref()
+                        .unwrap_or("Review this path and apply secure defaults.");
+                    vec![
+                        Line::from(Span::styled(
+                            &candidate.title,
+                            Style::default().add_modifier(Modifier::BOLD),
+                        )),
+                        Line::from(format!(
+                            "Location: {}:{}:{}",
+                            candidate.file_display, candidate.line, candidate.column
+                        )),
+                        Line::from(format!(
+                            "Rule: {} | Proposed replacements: {}",
+                            candidate.rule_id, candidate.proposed_replacements
+                        )),
+                        Line::from(""),
+                        Line::from(format!("Fix: {suggestion}")),
+                    ]
+                });
+                let detail_text = details.unwrap_or_else(|| vec![Line::from("No candidate selected.")]);
+                let detail = Paragraph::new(detail_text)
+                    .wrap(Wrap { trim: true })
+                    .block(Block::default().borders(Borders::ALL).title("Details"));
+                frame.render_widget(detail, chunks[2]);
+
+                let footer = Paragraph::new(vec![
+                    Line::from("Keys: ↑/↓ move  space toggle  a select-all  c clear  enter apply  q cancel"),
+                    Line::from("If no rows are selected, Enter applies the highlighted row."),
+                ])
+                .block(Block::default().borders(Borders::ALL).title("Controls"));
+                frame.render_widget(footer, chunks[3]);
+            })
+            .map_err(|err| format!("failed to draw fix UI: {err}"))?;
+
+        if !event::poll(Duration::from_millis(200))
+            .map_err(|err| format!("failed reading keyboard events: {err}"))?
+        {
+            continue;
+        }
+
+        let Event::Key(key) =
+            event::read().map_err(|err| format!("failed to read keyboard event: {err}"))?
+        else {
+            continue;
+        };
+
+        if !matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat) {
+            continue;
+        }
+
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                cursor = cursor.saturating_sub(1);
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if cursor + 1 < candidates.len() {
+                    cursor += 1;
+                }
+            }
+            KeyCode::Char('g') => {
+                cursor = 0;
+            }
+            KeyCode::Char('G') => {
+                cursor = candidates.len().saturating_sub(1);
+            }
+            KeyCode::Char(' ') => {
+                if let Some(slot) = selected.get_mut(cursor) {
+                    *slot = !*slot;
+                }
+            }
+            KeyCode::Char('a') => {
+                selected.fill(true);
+            }
+            KeyCode::Char('c') => {
+                selected.fill(false);
+            }
+            KeyCode::Enter => {
+                return Ok(Some(resolve_selected_indices(&selected, cursor)));
+            }
+            KeyCode::Esc | KeyCode::Char('q') => {
+                return Ok(None);
+            }
+            _ => {}
+        }
     }
+}
+
+fn resolve_selected_indices(selected: &[bool], cursor: usize) -> Vec<usize> {
+    let mut indices = selected
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, is_selected)| if *is_selected { Some(idx) } else { None })
+        .collect::<Vec<_>>();
+    if indices.is_empty() {
+        indices.push(cursor);
+    }
+    indices
 }
 
 fn count_replacements(content: &str, replacements: &[(&str, &str)]) -> usize {
@@ -3242,7 +3405,8 @@ mod tests {
         apply_replacements, autofix_replacements, count_replacements, dedup_machine_output,
         empty_summary, escape_github_annotation_message, escape_github_annotation_property,
         normalize_snippet, parse_fix_target_spec, percentile, render_github_annotations,
-        render_sarif, DedupMode, Finding, OutputSummary, ScanResult, Severity,
+        render_sarif, resolve_selected_indices, DedupMode, Finding, OutputSummary, ScanResult,
+        Severity,
     };
 
     fn finding(
@@ -3518,5 +3682,19 @@ mod tests {
                 "expected autofix mapping for {id}"
             );
         }
+    }
+
+    #[test]
+    fn resolve_selected_indices_uses_cursor_when_none_selected() {
+        let selected = vec![false, false, false];
+        let resolved = resolve_selected_indices(&selected, 1);
+        assert_eq!(resolved, vec![1]);
+    }
+
+    #[test]
+    fn resolve_selected_indices_prefers_explicit_selections() {
+        let selected = vec![true, false, true, false];
+        let resolved = resolve_selected_indices(&selected, 3);
+        assert_eq!(resolved, vec![0, 2]);
     }
 }

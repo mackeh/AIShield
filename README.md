@@ -28,7 +28,7 @@ This repository currently contains a solid foundation for Phase 1:
 - Scan history tracking plus `aishield stats --last Nd` analytics
 - Local pre-commit hook installer
 - Benchmark command for scan-performance baselining (`aishield bench`)
-- Interactive fix groundwork (`aishield fix --interactive`)
+- Interactive fix TUI (`aishield fix --interactive`)
 - Location-targeted remediation (`aishield fix file.py:line[:col]`)
 - Expanded safe autofix mappings across Python/JS/Go/Java high-frequency patterns
 - GitHub Actions workflow uploading SARIF to GitHub Security
@@ -129,7 +129,8 @@ aishield fix <path[:line[:col]]> [--rules-dir DIR] [--write|--interactive] [--dr
 
 `--write` applies available safe autofixes in-place for supported rules.  
 `--dry-run` reports what would change without writing files.
-`--interactive` prompts per autofix candidate with `yes/no/all/quit`.
+`--interactive` launches a keyboard-driven TUI for reviewing/applying autofixes.
+TUI keys: `↑/↓` move, `space` toggle, `a` select-all, `c` clear, `enter` apply, `q` cancel.
 You can target a specific finding location like `aishield fix src/auth/login.py:34`.
 
 ### `bench`

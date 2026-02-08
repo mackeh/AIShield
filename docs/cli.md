@@ -95,8 +95,17 @@ Options:
 
 - `--write`: apply changes in place
 - `--dry-run`: show planned edits without writing
-- `--interactive`: prompt per autofix candidate (`yes/no/all/quit`)
+- `--interactive`: open interactive TUI selection/apply flow
 - supports safe replacements for a growing high-frequency rule set across Python/JavaScript/Go/Java
+
+Interactive TUI controls:
+
+- `↑/↓` or `k/j`: move selection
+- `space`: toggle highlighted candidate
+- `a`: select all candidates
+- `c`: clear all selections
+- `enter`: apply selected (or highlighted item if none selected)
+- `q`/`esc`: cancel
 
 Examples:
 
