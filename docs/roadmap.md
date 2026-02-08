@@ -19,7 +19,7 @@ This page mirrors `project.md` and highlights the current implementation directi
 - [x] Interactive fix TUI upgrades (search/filter, badges, preview pane)
 - [x] ONNX classifier integration bootstrap (feature-flagged with heuristic fallback)
 - [x] ONNX runtime runner bridge integration (model execution path + fallback behavior)
-- [ ] Trained model distribution and calibration tuning
+- [x] Trained model distribution and calibration tuning
 - [x] Full PR annotation + SARIF workflow hardening across repo contexts
 
 ## Phase 3+: Platform and Ecosystem
@@ -44,3 +44,4 @@ Near-term focus is reliability and signal quality:
 - improve remediation coverage and fix confidence
 - harden release and security workflows
 - Kotlin/Swift now at 20 rules each with expanded fixture coverage and regression gates
+- ONNX model manifest + calibration profile support now wired in CLI/config/docs

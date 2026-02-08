@@ -28,7 +28,7 @@ features:
   - title: Multi-engine bridge
     details: Optionally enrich findings with Semgrep, Bandit, and ESLint while preserving a unified result model.
   - title: AI classifier modes
-    details: Run default heuristic scoring or ONNX model scoring (`--ai-model onnx`) with runtime fallback safety.
+    details: Run heuristic or ONNX scoring with manifest-driven model distribution (`--onnx-manifest`) and calibration profiles.
   - title: Contributor-ready workflows
     details: Includes onboarding docs, issue/PR templates, VS Code extension bootstrap, VS Code tasks, and CI examples for GitHub Actions and GitLab CI.
   - title: Dashboard + analytics bootstrap

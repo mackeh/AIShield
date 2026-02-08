@@ -74,6 +74,9 @@ cargo run -p aishield-cli -- scan . --ai-model onnx --onnx-model models/aishield
 # ONNX runtime-enabled build path
 cargo run -p aishield-cli --features onnx -- scan . --ai-model onnx --onnx-model models/ai-classifier/model.onnx
 
+# manifest-driven ONNX model distribution + calibration settings
+cargo run -p aishield-cli --features onnx -- scan . --ai-model onnx --onnx-manifest models/ai-classifier/model-manifest.json
+
 # send webhook alert for high+ findings
 cargo run -p aishield-cli -- scan . --notify-webhook https://hooks.example/security --notify-min-severity high
 
@@ -193,6 +196,7 @@ Current implementation includes:
 - experimental cross-file auth-route heuristics (`--cross-file`)
 - ONNX classifier integration bootstrap (`--ai-model onnx --onnx-model FILE`)
 - ONNX runtime runner bridge via `models/ai-classifier/onnx_runner.py`
+- ONNX model manifest distribution + calibration profile tuning (`--onnx-manifest`, `--ai-calibration`)
 - optional SAST bridge for Semgrep/Bandit/ESLint
 - VS Code extension bootstrap in `integrations/vscode-extension`
 - VS Code advanced UX beta: hover cards, quick-fix actions, findings panel, security lens

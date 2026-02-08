@@ -30,6 +30,8 @@ aishield scan <path> \
   [--cross-file] \
   [--ai-model heuristic|onnx] \
   [--onnx-model FILE] \
+  [--onnx-manifest FILE] \
+  [--ai-calibration conservative|balanced|aggressive] \
   [--min-ai-confidence N] \
   [--severity LEVEL] \
   [--fail-on-findings] \
@@ -56,6 +58,8 @@ Options:
 - `--cross-file`: enable experimental cross-file auth-route heuristics
 - `--ai-model`: AI-likelihood scoring mode (`heuristic` default, `onnx` optional)
 - `--onnx-model FILE`: path to ONNX model (auto-enables `onnx` mode when set)
+- `--onnx-manifest FILE`: ONNX model manifest with model path + calibration metadata (also auto-enables `onnx` mode)
+- `--ai-calibration`: ONNX blend profile (`conservative|balanced|aggressive`, default `balanced`)
 - `--min-ai-confidence N`: threshold for `--ai-only` in `0.0..1.0`
 - `--severity LEVEL`: minimum severity gate (`critical|high|medium|low|info`)
 - `--fail-on-findings`: return exit code `2` when findings exist
@@ -99,6 +103,9 @@ cargo run -p aishield-cli -- scan . --ai-model onnx --onnx-model models/aishield
 
 # ONNX-enabled binary build path
 cargo run -p aishield-cli --features onnx -- scan . --ai-model onnx --onnx-model models/ai-classifier/model.onnx
+
+# manifest-driven model path + calibration settings
+cargo run -p aishield-cli --features onnx -- scan . --ai-model onnx --onnx-manifest models/ai-classifier/model-manifest.json
 
 # send alerts to webhook for high+ findings
 cargo run -p aishield-cli -- scan . --notify-webhook https://hooks.example/security --notify-min-severity high
@@ -170,6 +177,8 @@ aishield bench <path> \
   [--cross-file] \
   [--ai-model heuristic|onnx] \
   [--onnx-model FILE] \
+  [--onnx-manifest FILE] \
+  [--ai-calibration conservative|balanced|aggressive] \
   [--min-ai-confidence N] \
   [--config FILE] \
   [--no-config]

@@ -34,6 +34,8 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - Expanded Kotlin/Swift rulepacks with additional auth/crypto/injection/misconfig detections and fixture coverage
 - Strengthened regression assertions for Kotlin/Swift fixture findings and minimum repository rule depth
 - Reached Kotlin/Swift phase-2 depth milestone (20 rules each) with updated rule-depth gates
+- Added ONNX model manifest support (`--onnx-manifest`) and calibration profiles (`--ai-calibration`)
+- Tuned classifier blending to use configurable calibration settings from profile/manifest
 
 ## [0.1.1] - 2026-02-07
 

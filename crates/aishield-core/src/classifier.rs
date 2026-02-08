@@ -32,10 +32,84 @@ impl AiClassifierMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AiCalibrationProfile {
+    Conservative,
+    Balanced,
+    Aggressive,
+}
+
+impl AiCalibrationProfile {
+    pub fn parse(raw: &str) -> Result<Self, String> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "conservative" => Ok(Self::Conservative),
+            "balanced" => Ok(Self::Balanced),
+            "aggressive" => Ok(Self::Aggressive),
+            _ => Err("ai_calibration must be conservative, balanced, or aggressive".to_string()),
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Conservative => "conservative",
+            Self::Balanced => "balanced",
+            Self::Aggressive => "aggressive",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct AiCalibrationSettings {
+    pub onnx_weight: f32,
+    pub heuristic_weight: f32,
+    pub probability_scale: f32,
+    pub probability_bias: f32,
+    pub min_probability: f32,
+    pub max_probability: f32,
+}
+
+impl AiCalibrationSettings {
+    pub fn from_profile(profile: AiCalibrationProfile) -> Self {
+        match profile {
+            AiCalibrationProfile::Conservative => Self {
+                onnx_weight: 0.55,
+                heuristic_weight: 0.45,
+                probability_scale: 0.90,
+                probability_bias: -0.03,
+                min_probability: 0.02,
+                max_probability: 0.97,
+            },
+            AiCalibrationProfile::Balanced => Self {
+                onnx_weight: 0.70,
+                heuristic_weight: 0.30,
+                probability_scale: 1.00,
+                probability_bias: 0.00,
+                min_probability: 0.01,
+                max_probability: 0.99,
+            },
+            AiCalibrationProfile::Aggressive => Self {
+                onnx_weight: 0.82,
+                heuristic_weight: 0.18,
+                probability_scale: 1.08,
+                probability_bias: 0.03,
+                min_probability: 0.00,
+                max_probability: 1.00,
+            },
+        }
+    }
+}
+
+impl Default for AiCalibrationSettings {
+    fn default() -> Self {
+        Self::from_profile(AiCalibrationProfile::Balanced)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct AiClassifierOptions {
     pub mode: AiClassifierMode,
     pub onnx_model_path: Option<PathBuf>,
+    pub calibration: AiCalibrationSettings,
 }
 
 impl Default for AiClassifierOptions {
@@ -43,6 +117,7 @@ impl Default for AiClassifierOptions {
         Self {
             mode: AiClassifierMode::Heuristic,
             onnx_model_path: None,
+            calibration: AiCalibrationSettings::default(),
         }
     }
 }
@@ -72,7 +147,7 @@ impl AiLikelihoodScorer {
             return heuristic;
         };
 
-        blend_onnx_with_heuristic(probability, heuristic)
+        blend_onnx_with_heuristic(probability, heuristic, self.options.calibration)
     }
 }
 
@@ -320,9 +395,24 @@ fn predict_with_onnx_backend(
     None
 }
 
-fn blend_onnx_with_heuristic(probability: f32, heuristic_score: f32) -> f32 {
-    let onnx_score = probability.clamp(0.0, 1.0) * 100.0;
-    ((onnx_score * 0.70 + heuristic_score * 0.30).clamp(0.0, 100.0) * 10.0).round() / 10.0
+fn blend_onnx_with_heuristic(
+    probability: f32,
+    heuristic_score: f32,
+    calibration: AiCalibrationSettings,
+) -> f32 {
+    let prob_floor = calibration.min_probability.clamp(0.0, 1.0);
+    let prob_ceil = calibration.max_probability.clamp(prob_floor, 1.0);
+    let calibrated_probability = (probability.clamp(0.0, 1.0) * calibration.probability_scale
+        + calibration.probability_bias)
+        .clamp(prob_floor, prob_ceil);
+
+    let onnx_score = calibrated_probability * 100.0;
+    let onnx_weight = calibration.onnx_weight.max(0.0);
+    let heuristic_weight = calibration.heuristic_weight.max(0.0);
+    let total_weight = (onnx_weight + heuristic_weight).max(f32::EPSILON);
+    let blended = (onnx_score * onnx_weight + heuristic_score * heuristic_weight) / total_weight;
+
+    (blended.clamp(0.0, 100.0) * 10.0).round() / 10.0
 }
 
 #[cfg(feature = "onnx")]
@@ -435,7 +525,10 @@ mod tests {
     use crate::Severity;
 
     use super::{estimate_ai_likelihood, estimate_ai_likelihood_with_options};
-    use super::{AiClassifierMode, AiClassifierOptions, AiLikelihoodScorer};
+    use super::{
+        AiCalibrationProfile, AiCalibrationSettings, AiClassifierMode, AiClassifierOptions,
+        AiLikelihoodScorer,
+    };
 
     fn rule(confidence: f32) -> Rule {
         Rule {
@@ -467,6 +560,28 @@ mod tests {
         );
         assert_eq!(AiClassifierMode::Heuristic.as_str(), "heuristic");
         assert_eq!(AiClassifierMode::Onnx.as_str(), "onnx");
+    }
+
+    #[test]
+    fn calibration_profile_parser_accepts_known_values() {
+        assert_eq!(
+            AiCalibrationProfile::parse("conservative").expect("parse"),
+            AiCalibrationProfile::Conservative
+        );
+        assert_eq!(
+            AiCalibrationProfile::parse("balanced").expect("parse"),
+            AiCalibrationProfile::Balanced
+        );
+        assert_eq!(
+            AiCalibrationProfile::parse("aggressive").expect("parse"),
+            AiCalibrationProfile::Aggressive
+        );
+    }
+
+    #[test]
+    fn calibration_profile_parser_rejects_unknown_values() {
+        let err = AiCalibrationProfile::parse("custom").expect_err("reject invalid profile");
+        assert!(err.contains("ai_calibration"));
     }
 
     #[test]
@@ -524,6 +639,7 @@ mod tests {
             &AiClassifierOptions {
                 mode: AiClassifierMode::Onnx,
                 onnx_model_path: None,
+                calibration: AiCalibrationSettings::default(),
             },
         );
         assert_eq!(default_score, onnx_score);
@@ -572,6 +688,7 @@ print("0.95")
             &AiClassifierOptions {
                 mode: AiClassifierMode::Onnx,
                 onnx_model_path: Some(model_path.clone()),
+                calibration: AiCalibrationSettings::default(),
             },
         );
         assert!(onnx_score > heuristic_score);
@@ -597,6 +714,7 @@ print("0.95")
             &AiClassifierOptions {
                 mode: AiClassifierMode::Onnx,
                 onnx_model_path: Some(model_path),
+                calibration: AiCalibrationSettings::default(),
             },
         );
         assert_eq!(onnx_score, heuristic_score);
@@ -622,5 +740,59 @@ print("0.95")
             .expect("clock")
             .as_nanos();
         std::env::temp_dir().join(format!("{prefix}-{stamp}"))
+    }
+
+    #[cfg(feature = "onnx")]
+    #[test]
+    fn calibration_profile_influences_blend_weight() {
+        if !python_available() {
+            return;
+        }
+
+        let temp_dir = temp_path("aishield-onnx-calibration");
+        fs::create_dir_all(&temp_dir).expect("create temp dir");
+        let model_path = temp_dir.join("model.onnx");
+        let runner_path = temp_dir.join("onnx_runner.py");
+        fs::write(&model_path, vec![0u8; 2048]).expect("write fake model");
+        fs::write(
+            &runner_path,
+            r#"#!/usr/bin/env python3
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument("--model", required=True)
+parser.add_argument("--features", required=True)
+parser.parse_args()
+print("0.95")
+"#,
+        )
+        .expect("write fake runner");
+
+        let r = rule(0.75);
+        let conservative = estimate_ai_likelihood_with_options(
+            &r,
+            Path::new("src/auth/login.py"),
+            "if token == provided:",
+            &AiClassifierOptions {
+                mode: AiClassifierMode::Onnx,
+                onnx_model_path: Some(model_path.clone()),
+                calibration: AiCalibrationSettings::from_profile(
+                    AiCalibrationProfile::Conservative,
+                ),
+            },
+        );
+        let aggressive = estimate_ai_likelihood_with_options(
+            &r,
+            Path::new("src/auth/login.py"),
+            "if token == provided:",
+            &AiClassifierOptions {
+                mode: AiClassifierMode::Onnx,
+                onnx_model_path: Some(model_path),
+                calibration: AiCalibrationSettings::from_profile(AiCalibrationProfile::Aggressive),
+            },
+        );
+
+        assert!(aggressive > conservative);
+
+        let _ = fs::remove_dir_all(temp_dir);
     }
 }

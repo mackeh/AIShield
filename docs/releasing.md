@@ -7,6 +7,7 @@ AIShield uses tag-driven GitHub Releases.
 - `main` is green in CI
 - `CHANGELOG.md` has an updated `Unreleased` section
 - version/tag follows semver (`v0.1.1`, `v0.2.0`, ...)
+- if ONNX model distribution changes, update `models/ai-classifier/model-manifest.json`
 
 ## Release Steps
 
@@ -20,6 +21,7 @@ git push origin v0.1.1
 ```
 
 4. GitHub Actions workflow `.github/workflows/release.yml` automatically creates/updates the release with generated notes.
+5. If classifier assets changed, include model artifact + manifest details in release notes.
 
 ## Manual Rerun
 

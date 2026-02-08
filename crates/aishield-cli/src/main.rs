@@ -9,8 +9,8 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use aishield_core::{
-    AiClassifierMode, AiClassifierOptions, AnalysisOptions, Analyzer, Finding, RuleSet, ScanResult,
-    ScanSummary, Severity,
+    AiCalibrationProfile, AiCalibrationSettings, AiClassifierMode, AiClassifierOptions,
+    AnalysisOptions, Analyzer, Finding, RuleSet, ScanResult, ScanSummary, Severity,
 };
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
@@ -75,6 +75,8 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     let mut cross_file_flag = false;
     let mut ai_model_override = None::<AiClassifierMode>;
     let mut onnx_model_override = None::<PathBuf>;
+    let mut onnx_manifest_override = None::<PathBuf>;
+    let mut ai_calibration_override = None::<AiCalibrationProfile>;
     let mut min_ai_confidence_override = None;
     let mut severity_override = None;
     let mut fail_on_findings_flag = false;
@@ -139,6 +141,18 @@ fn run_scan(args: &[String]) -> Result<(), String> {
                 onnx_model_override = Some(PathBuf::from(
                     args.get(i).ok_or("--onnx-model requires a value")?,
                 ));
+            }
+            "--onnx-manifest" => {
+                i += 1;
+                onnx_manifest_override = Some(PathBuf::from(
+                    args.get(i).ok_or("--onnx-manifest requires a value")?,
+                ));
+            }
+            "--ai-calibration" => {
+                i += 1;
+                ai_calibration_override = Some(AiCalibrationProfile::parse(
+                    args.get(i).ok_or("--ai-calibration requires a value")?,
+                )?);
             }
             "--min-ai-confidence" => {
                 i += 1;
@@ -229,8 +243,15 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     let cross_file = cross_file_flag || config.cross_file;
     let ai_model = ai_model_override
         .or_else(|| onnx_model_override.as_ref().map(|_| AiClassifierMode::Onnx))
+        .or_else(|| {
+            onnx_manifest_override
+                .as_ref()
+                .map(|_| AiClassifierMode::Onnx)
+        })
         .unwrap_or(config.ai_model);
     let onnx_model_path = onnx_model_override.or_else(|| config.onnx_model_path.clone());
+    let onnx_manifest_path = onnx_manifest_override.or_else(|| config.onnx_manifest_path.clone());
+    let ai_calibration = ai_calibration_override.unwrap_or(config.ai_calibration);
     let min_ai_confidence = min_ai_confidence_override.or(config.min_ai_confidence);
     let severity_threshold = severity_override.or(config.severity_threshold);
     let fail_on_findings = fail_on_findings_flag || config.fail_on_findings;
@@ -260,7 +281,12 @@ fn run_scan(args: &[String]) -> Result<(), String> {
 
     let rules_count = ruleset.rules.len();
     let analyzer = Analyzer::new(ruleset);
-    let ai_classifier = resolve_ai_classifier(ai_model, onnx_model_path);
+    let ai_classifier = resolve_ai_classifier(
+        ai_model,
+        onnx_model_path,
+        onnx_manifest_path.as_deref(),
+        ai_calibration,
+    );
     let options = AnalysisOptions {
         ai_only,
         cross_file,
@@ -895,6 +921,8 @@ fn run_bench(args: &[String]) -> Result<(), String> {
     let mut cross_file_flag = false;
     let mut ai_model_override = None::<AiClassifierMode>;
     let mut onnx_model_override = None::<PathBuf>;
+    let mut onnx_manifest_override = None::<PathBuf>;
+    let mut ai_calibration_override = None::<AiCalibrationProfile>;
     let mut min_ai_confidence_override = None;
     let mut iterations = 5usize;
     let mut warmup = 1usize;
@@ -940,6 +968,18 @@ fn run_bench(args: &[String]) -> Result<(), String> {
                 onnx_model_override = Some(PathBuf::from(
                     args.get(i).ok_or("--onnx-model requires a value")?,
                 ));
+            }
+            "--onnx-manifest" => {
+                i += 1;
+                onnx_manifest_override = Some(PathBuf::from(
+                    args.get(i).ok_or("--onnx-manifest requires a value")?,
+                ));
+            }
+            "--ai-calibration" => {
+                i += 1;
+                ai_calibration_override = Some(AiCalibrationProfile::parse(
+                    args.get(i).ok_or("--ai-calibration requires a value")?,
+                )?);
             }
             "--min-ai-confidence" => {
                 i += 1;
@@ -997,8 +1037,15 @@ fn run_bench(args: &[String]) -> Result<(), String> {
     let cross_file = cross_file_flag || config.cross_file;
     let ai_model = ai_model_override
         .or_else(|| onnx_model_override.as_ref().map(|_| AiClassifierMode::Onnx))
+        .or_else(|| {
+            onnx_manifest_override
+                .as_ref()
+                .map(|_| AiClassifierMode::Onnx)
+        })
         .unwrap_or(config.ai_model);
     let onnx_model_path = onnx_model_override.or_else(|| config.onnx_model_path.clone());
+    let onnx_manifest_path = onnx_manifest_override.or_else(|| config.onnx_manifest_path.clone());
+    let ai_calibration = ai_calibration_override.unwrap_or(config.ai_calibration);
     let min_ai_confidence = min_ai_confidence_override.or(config.min_ai_confidence);
 
     let ruleset = RuleSet::load_from_dir(&rules_dir)
@@ -1008,7 +1055,12 @@ fn run_bench(args: &[String]) -> Result<(), String> {
     }
 
     let analyzer = Analyzer::new(ruleset);
-    let ai_classifier = resolve_ai_classifier(ai_model, onnx_model_path);
+    let ai_classifier = resolve_ai_classifier(
+        ai_model,
+        onnx_model_path,
+        onnx_manifest_path.as_deref(),
+        ai_calibration,
+    );
     let options = AnalysisOptions {
         ai_only,
         cross_file,
@@ -1077,11 +1129,39 @@ fn run_bench(args: &[String]) -> Result<(), String> {
 fn resolve_ai_classifier(
     requested_mode: AiClassifierMode,
     requested_model_path: Option<PathBuf>,
+    requested_manifest_path: Option<&Path>,
+    requested_calibration: AiCalibrationProfile,
 ) -> AiClassifierOptions {
+    let mut resolved_model_path = requested_model_path;
+    let mut calibration = AiCalibrationSettings::from_profile(requested_calibration);
+
+    if let Some(manifest_path) = requested_manifest_path {
+        match load_onnx_manifest(manifest_path) {
+            Ok(manifest) => {
+                if resolved_model_path.is_none() {
+                    resolved_model_path = manifest.model_path.clone();
+                }
+                if requested_calibration == AiCalibrationProfile::Balanced {
+                    if let Some(profile) = manifest.calibration_profile {
+                        calibration = AiCalibrationSettings::from_profile(profile);
+                    }
+                }
+                calibration = apply_manifest_calibration_overrides(calibration, &manifest);
+            }
+            Err(err) => {
+                eprintln!(
+                    "warning: failed to load ONNX manifest {}: {err}",
+                    manifest_path.display()
+                )
+            }
+        }
+    }
+
     if requested_mode != AiClassifierMode::Onnx {
         return AiClassifierOptions {
             mode: requested_mode,
-            onnx_model_path: requested_model_path,
+            onnx_model_path: resolved_model_path,
+            calibration,
         };
     }
 
@@ -1092,16 +1172,18 @@ fn resolve_ai_classifier(
         return AiClassifierOptions {
             mode: AiClassifierMode::Heuristic,
             onnx_model_path: None,
+            calibration,
         };
     }
 
-    let Some(model_path) = requested_model_path else {
+    let Some(model_path) = resolved_model_path else {
         eprintln!(
-            "warning: --ai-model onnx requested but no --onnx-model path was provided; falling back to heuristic scoring"
+            "warning: --ai-model onnx requested but no model path was provided (--onnx-model or manifest); falling back to heuristic scoring"
         );
         return AiClassifierOptions {
             mode: AiClassifierMode::Heuristic,
             onnx_model_path: None,
+            calibration,
         };
     };
 
@@ -1113,13 +1195,119 @@ fn resolve_ai_classifier(
         return AiClassifierOptions {
             mode: AiClassifierMode::Heuristic,
             onnx_model_path: None,
+            calibration,
         };
     }
 
     AiClassifierOptions {
         mode: AiClassifierMode::Onnx,
         onnx_model_path: Some(model_path),
+        calibration,
     }
+}
+
+#[derive(Debug, Default)]
+struct OnnxManifest {
+    model_path: Option<PathBuf>,
+    calibration_profile: Option<AiCalibrationProfile>,
+    onnx_weight: Option<f32>,
+    heuristic_weight: Option<f32>,
+    probability_scale: Option<f32>,
+    probability_bias: Option<f32>,
+    min_probability: Option<f32>,
+    max_probability: Option<f32>,
+}
+
+fn load_onnx_manifest(path: &Path) -> Result<OnnxManifest, String> {
+    let content = fs::read_to_string(path)
+        .map_err(|err| format!("failed reading {}: {err}", path.display()))?;
+    let value: Value =
+        serde_json::from_str(&content).map_err(|err| format!("invalid JSON: {err}"))?;
+
+    let mut manifest = OnnxManifest::default();
+    if let Some(model_path) = value
+        .get("model")
+        .and_then(|model| model.get("path"))
+        .and_then(Value::as_str)
+    {
+        let candidate = PathBuf::from(model_path.trim());
+        if !candidate.as_os_str().is_empty() {
+            manifest.model_path = Some(if candidate.is_relative() {
+                path.parent()
+                    .unwrap_or_else(|| Path::new("."))
+                    .join(candidate)
+            } else {
+                candidate
+            });
+        }
+    }
+
+    if let Some(calibration) = value.get("calibration") {
+        if let Some(profile_raw) = calibration.get("profile").and_then(Value::as_str) {
+            manifest.calibration_profile = Some(AiCalibrationProfile::parse(profile_raw)?);
+        }
+
+        manifest.onnx_weight = calibration
+            .get("onnx_weight")
+            .and_then(Value::as_f64)
+            .map(|v| v as f32);
+        manifest.heuristic_weight = calibration
+            .get("heuristic_weight")
+            .and_then(Value::as_f64)
+            .map(|v| v as f32);
+        manifest.probability_scale = calibration
+            .get("probability_scale")
+            .and_then(Value::as_f64)
+            .map(|v| v as f32);
+        manifest.probability_bias = calibration
+            .get("probability_bias")
+            .and_then(Value::as_f64)
+            .map(|v| v as f32);
+        manifest.min_probability = calibration
+            .get("min_probability")
+            .and_then(Value::as_f64)
+            .map(|v| v as f32);
+        manifest.max_probability = calibration
+            .get("max_probability")
+            .and_then(Value::as_f64)
+            .map(|v| v as f32);
+    }
+
+    Ok(manifest)
+}
+
+fn apply_manifest_calibration_overrides(
+    base: AiCalibrationSettings,
+    manifest: &OnnxManifest,
+) -> AiCalibrationSettings {
+    let mut tuned = base;
+    if let Some(weight) = manifest.onnx_weight {
+        tuned.onnx_weight = weight;
+    }
+    if let Some(weight) = manifest.heuristic_weight {
+        tuned.heuristic_weight = weight;
+    }
+    if let Some(scale) = manifest.probability_scale {
+        tuned.probability_scale = scale;
+    }
+    if let Some(bias) = manifest.probability_bias {
+        tuned.probability_bias = bias;
+    }
+    if let Some(min_probability) = manifest.min_probability {
+        tuned.min_probability = min_probability;
+    }
+    if let Some(max_probability) = manifest.max_probability {
+        tuned.max_probability = max_probability;
+    }
+
+    tuned.min_probability = tuned.min_probability.clamp(0.0, 1.0);
+    tuned.max_probability = tuned.max_probability.clamp(tuned.min_probability, 1.0);
+    tuned.onnx_weight = tuned.onnx_weight.max(0.0);
+    tuned.heuristic_weight = tuned.heuristic_weight.max(0.0);
+    tuned.probability_scale = tuned.probability_scale.clamp(0.2, 2.0);
+    tuned.probability_bias = tuned.probability_bias.clamp(-0.5, 0.5);
+
+    tuned
 }
 
 struct BenchMetrics {
@@ -2164,7 +2352,7 @@ fn init_template_writes(
 }
 
 fn init_config_template() -> String {
-    "version: 1\nrules_dir: rules\nformat: table\ndedup_mode: normalized\nbridge_engines: []\nrules: []\nexclude_paths: []\nai_only: false\ncross_file: false\nai_model: heuristic\nonnx_model_path: \"\"\nmin_ai_confidence: 0.70\nseverity_threshold: medium\nfail_on_findings: false\nhistory_file: .aishield-history.log\nrecord_history: true\nnotify_webhook_url: \"\"\nnotify_min_severity: high\n".to_string()
+    "version: 1\nrules_dir: rules\nformat: table\ndedup_mode: normalized\nbridge_engines: []\nrules: []\nexclude_paths: []\nai_only: false\ncross_file: false\nai_model: heuristic\nonnx_model_path: \"\"\nonnx_manifest_path: \"\"\nai_calibration: balanced\nmin_ai_confidence: 0.70\nseverity_threshold: medium\nfail_on_findings: false\nhistory_file: .aishield-history.log\nrecord_history: true\nnotify_webhook_url: \"\"\nnotify_min_severity: high\n".to_string()
 }
 
 fn init_github_actions_template() -> String {
@@ -3381,9 +3569,9 @@ fn render_stats_json(aggregate: &StatsAggregate, days: u64, history_file: &Path)
 fn print_help() {
     println!("AIShield CLI (foundation)\n");
     println!("Usage:");
-    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--cross-file] [--ai-model heuristic|onnx] [--onnx-model FILE] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--baseline FILE] [--notify-webhook URL] [--notify-min-severity LEVEL] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
+    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--cross-file] [--ai-model heuristic|onnx] [--onnx-model FILE] [--onnx-manifest FILE] [--ai-calibration conservative|balanced|aggressive] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--baseline FILE] [--notify-webhook URL] [--notify-min-severity LEVEL] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
     println!("  aishield fix <path[:line[:col]]> [--rules-dir DIR] [--write|--interactive] [--dry-run] [--config FILE] [--no-config]");
-    println!("  aishield bench <path> [--rules-dir DIR] [--iterations N] [--warmup N] [--format table|json] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--cross-file] [--ai-model heuristic|onnx] [--onnx-model FILE] [--min-ai-confidence N] [--config FILE] [--no-config]");
+    println!("  aishield bench <path> [--rules-dir DIR] [--iterations N] [--warmup N] [--format table|json] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--cross-file] [--ai-model heuristic|onnx] [--onnx-model FILE] [--onnx-manifest FILE] [--ai-calibration conservative|balanced|aggressive] [--min-ai-confidence N] [--config FILE] [--no-config]");
     println!("  aishield init [--output PATH] [--templates config,github-actions,gitlab-ci,bitbucket-pipelines,circleci,jenkins,vscode,pre-commit|all] [--force]");
     println!("  aishield create-rule --id ID --title TITLE --language LANG --category CAT [--severity LEVEL] [--pattern-any P] [--pattern-all P] [--pattern-not P] [--tags t1,t2] [--suggestion TEXT] [--out-dir DIR] [--force]");
     println!("  aishield stats [--last Nd] [--history-file FILE] [--format table|json] [--config FILE] [--no-config]");
@@ -4220,6 +4408,8 @@ struct AppConfig {
     cross_file: bool,
     ai_model: AiClassifierMode,
     onnx_model_path: Option<PathBuf>,
+    onnx_manifest_path: Option<PathBuf>,
+    ai_calibration: AiCalibrationProfile,
     min_ai_confidence: Option<f32>,
     severity_threshold: Option<SeverityThreshold>,
     fail_on_findings: bool,
@@ -4242,6 +4432,8 @@ impl Default for AppConfig {
             cross_file: false,
             ai_model: AiClassifierMode::Heuristic,
             onnx_model_path: None,
+            onnx_manifest_path: None,
+            ai_calibration: AiCalibrationProfile::Balanced,
             min_ai_confidence: None,
             severity_threshold: None,
             fail_on_findings: false,
@@ -4297,6 +4489,13 @@ impl AppConfig {
                         config.onnx_model_path = Some(PathBuf::from(parsed));
                     }
                 }
+                "onnx_manifest_path" => {
+                    let parsed = strip_quotes(value);
+                    if !parsed.trim().is_empty() {
+                        config.onnx_manifest_path = Some(PathBuf::from(parsed));
+                    }
+                }
+                "ai_calibration" => config.ai_calibration = AiCalibrationProfile::parse(value)?,
                 "min_ai_confidence" => {
                     config.min_ai_confidence = Some(
                         value
@@ -4483,7 +4682,7 @@ impl SeverityThreshold {
 
 #[cfg(test)]
 mod tests {
-    use aishield_core::AiClassifierMode;
+    use aishield_core::{AiCalibrationProfile, AiClassifierMode};
     use serde_json::Value;
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -4493,7 +4692,7 @@ mod tests {
         apply_replacements, autofix_replacements, build_webhook_payload, count_replacements,
         dedup_machine_output, empty_summary, escape_github_annotation_message,
         escape_github_annotation_property, filter_findings_against_baseline,
-        filtered_candidate_indices, init_template_writes, load_baseline_keys,
+        filtered_candidate_indices, init_template_writes, load_baseline_keys, load_onnx_manifest,
         maybe_send_webhook_notification, normalize_snippet, parse_fix_target_spec,
         parse_init_templates, percentile, render_github_annotations, render_sarif,
         resolve_ai_classifier, resolve_selected_indices, DedupMode, Finding, InitTemplate,
@@ -4894,6 +5093,8 @@ mod tests {
         assert!(template.contains("cross_file: false"));
         assert!(template.contains("ai_model: heuristic"));
         assert!(template.contains("onnx_model_path: \"\""));
+        assert!(template.contains("onnx_manifest_path: \"\""));
+        assert!(template.contains("ai_calibration: balanced"));
     }
 
     #[test]
@@ -4906,6 +5107,8 @@ format: table
 cross_file: true
 ai_model: onnx
 onnx_model_path: models/aishield.onnx
+onnx_manifest_path: models/ai-classifier/model-manifest.json
+ai_calibration: aggressive
 "#,
         )
         .expect("parse config");
@@ -4916,20 +5119,103 @@ onnx_model_path: models/aishield.onnx
             config.onnx_model_path,
             Some(PathBuf::from("models/aishield.onnx"))
         );
+        assert_eq!(
+            config.onnx_manifest_path,
+            Some(PathBuf::from("models/ai-classifier/model-manifest.json"))
+        );
+        assert_eq!(config.ai_calibration, AiCalibrationProfile::Aggressive);
     }
 
     #[test]
     fn resolve_ai_classifier_keeps_heuristic_mode() {
-        let resolved = resolve_ai_classifier(AiClassifierMode::Heuristic, None);
+        let resolved = resolve_ai_classifier(
+            AiClassifierMode::Heuristic,
+            None,
+            None,
+            AiCalibrationProfile::Balanced,
+        );
         assert_eq!(resolved.mode, AiClassifierMode::Heuristic);
         assert_eq!(resolved.onnx_model_path, None);
     }
 
     #[test]
     fn resolve_ai_classifier_falls_back_on_missing_onnx_path() {
-        let resolved = resolve_ai_classifier(AiClassifierMode::Onnx, None);
+        let resolved = resolve_ai_classifier(
+            AiClassifierMode::Onnx,
+            None,
+            None,
+            AiCalibrationProfile::Balanced,
+        );
         assert_eq!(resolved.mode, AiClassifierMode::Heuristic);
         assert_eq!(resolved.onnx_model_path, None);
+    }
+
+    #[test]
+    fn load_onnx_manifest_parses_model_and_calibration_fields() {
+        let temp = std::env::temp_dir().join("aishield-onnx-manifest-test.json");
+        fs::write(
+            &temp,
+            r#"{
+  "schema_version": 1,
+  "model": { "path": "models/model.onnx" },
+  "calibration": {
+    "profile": "conservative",
+    "onnx_weight": 0.6,
+    "heuristic_weight": 0.4,
+    "probability_scale": 0.95,
+    "probability_bias": -0.02
+  }
+}"#,
+        )
+        .expect("write manifest");
+
+        let parsed = load_onnx_manifest(&temp).expect("parse manifest");
+        assert!(parsed.model_path.is_some());
+        assert_eq!(
+            parsed.calibration_profile,
+            Some(AiCalibrationProfile::Conservative)
+        );
+        assert_eq!(parsed.onnx_weight, Some(0.6));
+        assert_eq!(parsed.heuristic_weight, Some(0.4));
+        assert_eq!(parsed.probability_scale, Some(0.95));
+        assert_eq!(parsed.probability_bias, Some(-0.02));
+
+        let _ = fs::remove_file(temp);
+    }
+
+    #[test]
+    fn resolve_ai_classifier_uses_manifest_model_when_model_not_set() {
+        let root = std::env::temp_dir().join("aishield-onnx-manifest-resolve");
+        let _ = fs::create_dir_all(root.join("models"));
+        let manifest = root.join("manifest.json");
+        let model = root.join("models/model.onnx");
+        fs::write(&model, vec![0u8; 128]).expect("write model");
+        fs::write(
+            &manifest,
+            r#"{
+  "schema_version": 1,
+  "model": { "path": "models/model.onnx" },
+  "calibration": { "onnx_weight": 0.8, "heuristic_weight": 0.2 }
+}"#,
+        )
+        .expect("write manifest");
+
+        let resolved = resolve_ai_classifier(
+            AiClassifierMode::Onnx,
+            None,
+            Some(&manifest),
+            AiCalibrationProfile::Balanced,
+        );
+        if cfg!(feature = "onnx") {
+            assert_eq!(resolved.mode, AiClassifierMode::Onnx);
+            assert_eq!(resolved.onnx_model_path, Some(model));
+        } else {
+            assert_eq!(resolved.mode, AiClassifierMode::Heuristic);
+            assert_eq!(resolved.onnx_model_path, None);
+        }
+        assert!(resolved.calibration.onnx_weight >= 0.7);
+
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]

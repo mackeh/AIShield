@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "model": {
+    "name": "aishield-ai-likelihood",
+    "version": "2026.02.08",
+    "path": "model.onnx",
+    "sha256": "",
+    "download_url": "https://github.com/mackeh/AIShield/releases"
+  },
+  "calibration": {
+    "profile": "balanced",
+    "onnx_weight": 0.70,
+    "heuristic_weight": 0.30,
+    "probability_scale": 1.00,
+    "probability_bias": 0.00,
+    "min_probability": 0.01,
+    "max_probability": 0.99
+  }
+}

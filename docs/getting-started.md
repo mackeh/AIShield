@@ -49,6 +49,12 @@ cargo run -p aishield-cli --features onnx -- \
   scan . \
   --ai-model onnx \
   --onnx-model models/ai-classifier/model.onnx
+
+# or use manifest-driven model + calibration
+cargo run -p aishield-cli --features onnx -- \
+  scan . \
+  --ai-model onnx \
+  --onnx-manifest models/ai-classifier/model-manifest.json
 ```
 
 ## Interactive Fix Mode
