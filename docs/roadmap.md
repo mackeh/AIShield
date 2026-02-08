@@ -25,7 +25,8 @@ This page mirrors `project.md` and highlights the current implementation directi
 ## Phase 3+: Platform and Ecosystem
 
 - [x] VS Code extension bootstrap (scan commands + diagnostics)
-- [ ] Advanced VS Code UX (hover cards, quick fixes, AI security lens)
+- [x] Advanced VS Code UX beta (hover cards, quick fixes, findings panel, security lens)
+- [ ] Advanced VS Code UX GA polish and telemetry-informed tuning
 - [ ] Web dashboard and analytics pipeline
 - [x] Alerting bootstrap via scan webhooks
 - [x] Experimental cross-file auth-route heuristics (`--cross-file`)

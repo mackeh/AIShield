@@ -9,7 +9,12 @@ It provides:
 - `AIShield: Scan Workspace`
 - `AIShield: Scan Current File`
 - `AIShield: Clear Diagnostics`
+- `AIShield: Refresh Findings`
 - Diagnostics integration in VS Code Problems panel
+- Hover detail cards with severity, risk, confidence, and snippet context
+- Quick-fix code actions that invoke `aishield fix <file:line:col> --write`
+- Explorer panel: **AIShield Findings**
+- Beta AI Security Lens line highlighting for medium/high/critical findings
 - Optional scan-on-save behavior
 
 ## Run Extension Locally
@@ -30,10 +35,11 @@ Then open `integrations/vscode-extension` in VS Code and launch extension host w
 - `aishield.useOnnx`
 - `aishield.onnxModelPath`
 - `aishield.scanOnSave`
+- `aishield.securityLens`
 
 ## Notes
 
-- The extension currently shells out to `aishield-cli` and parses JSON output.
+- The extension shells out to `aishield-cli` and parses JSON output.
 - Diagnostics severity is mapped from AIShield severities:
   - `critical/high` -> VS Code Error
   - `medium` -> VS Code Warning

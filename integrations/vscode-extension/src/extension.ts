@@ -12,6 +12,7 @@ type AiShieldFinding = {
   snippet: string;
   risk_score?: number;
   ai_confidence?: number;
+  fix_suggestion?: string;
 };
 
 type AiShieldScanResult = {
@@ -24,11 +25,240 @@ type CliInvocation = {
   args: string[];
 };
 
+type ScanContext = {
+  targetPath: string;
+  workspaceRoot: string;
+};
+
+type FindingEntry = {
+  finding: AiShieldFinding;
+  uri: vscode.Uri;
+  range: vscode.Range;
+  key: string;
+};
+
+class FindingsProvider implements vscode.TreeDataProvider<FindingEntry> {
+  private readonly emitter = new vscode.EventEmitter<FindingEntry | undefined | null | void>();
+  private items: FindingEntry[] = [];
+
+  readonly onDidChangeTreeData = this.emitter.event;
+
+  setItems(next: FindingEntry[]): void {
+    this.items = [...next].sort((a, b) => {
+      const sevCmp = severityRank(b.finding.severity) - severityRank(a.finding.severity);
+      if (sevCmp !== 0) {
+        return sevCmp;
+      }
+      if (a.uri.fsPath !== b.uri.fsPath) {
+        return a.uri.fsPath.localeCompare(b.uri.fsPath);
+      }
+      return (a.finding.line || 0) - (b.finding.line || 0);
+    });
+    this.emitter.fire();
+  }
+
+  clear(): void {
+    this.items = [];
+    this.emitter.fire();
+  }
+
+  getTreeItem(item: FindingEntry): vscode.TreeItem {
+    const line = item.finding.line || 1;
+    const label = `${severityLabel(item.finding.severity)} ${path.basename(item.uri.fsPath)}:${line} ${item.finding.title}`;
+    const tree = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
+    tree.tooltip = new vscode.MarkdownString(
+      `**${item.finding.id}**\n\n${escapeMarkdown(item.finding.snippet)}\n\nRisk: ${(item.finding.risk_score ?? 0).toFixed(1)} | AI: ${(item.finding.ai_confidence ?? 0).toFixed(1)}`,
+    );
+    tree.description = item.finding.id;
+    tree.command = {
+      command: "aishield.openFinding",
+      title: "Open Finding",
+      arguments: [item],
+    };
+    tree.iconPath = iconForSeverity(item.finding.severity);
+    return tree;
+  }
+
+  getChildren(): FindingEntry[] {
+    return this.items;
+  }
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   const diagnostics = vscode.languages.createDiagnosticCollection("aishield");
   const output = vscode.window.createOutputChannel("AIShield");
+  const findings = new FindingsProvider();
+  const lastScanByFile = new Map<string, FindingEntry[]>();
+  const activeScan = { value: null as Promise<void> | null };
+  let lastScanContext: ScanContext | null = null;
 
-  context.subscriptions.push(diagnostics, output);
+  const lensCritical = vscode.window.createTextEditorDecorationType({
+    isWholeLine: true,
+    backgroundColor: "rgba(220,38,38,0.10)",
+    borderColor: "rgba(220,38,38,0.35)",
+    borderStyle: "solid",
+    borderWidth: "0 0 0 2px",
+  });
+  const lensHigh = vscode.window.createTextEditorDecorationType({
+    isWholeLine: true,
+    backgroundColor: "rgba(249,115,22,0.10)",
+    borderColor: "rgba(249,115,22,0.35)",
+    borderStyle: "solid",
+    borderWidth: "0 0 0 2px",
+  });
+  const lensMedium = vscode.window.createTextEditorDecorationType({
+    isWholeLine: true,
+    backgroundColor: "rgba(234,179,8,0.08)",
+    borderColor: "rgba(234,179,8,0.30)",
+    borderStyle: "solid",
+    borderWidth: "0 0 0 2px",
+  });
+
+  context.subscriptions.push(
+    diagnostics,
+    output,
+    lensCritical,
+    lensHigh,
+    lensMedium,
+    vscode.window.registerTreeDataProvider("aishield.findings", findings),
+  );
+
+  const refreshLens = (): void => {
+    const enabled = vscode.workspace.getConfiguration("aishield").get<boolean>("securityLens", false);
+    for (const editor of vscode.window.visibleTextEditors) {
+      if (!enabled) {
+        editor.setDecorations(lensCritical, []);
+        editor.setDecorations(lensHigh, []);
+        editor.setDecorations(lensMedium, []);
+        continue;
+      }
+
+      const entries = lastScanByFile.get(editor.document.uri.fsPath) ?? [];
+      const criticalRanges: vscode.Range[] = [];
+      const highRanges: vscode.Range[] = [];
+      const mediumRanges: vscode.Range[] = [];
+      for (const entry of entries) {
+        const sev = (entry.finding.severity || "").toLowerCase();
+        if (sev === "critical") {
+          criticalRanges.push(entry.range);
+        } else if (sev === "high") {
+          highRanges.push(entry.range);
+        } else if (sev === "medium") {
+          mediumRanges.push(entry.range);
+        }
+      }
+      editor.setDecorations(lensCritical, criticalRanges);
+      editor.setDecorations(lensHigh, highRanges);
+      editor.setDecorations(lensMedium, mediumRanges);
+    }
+  };
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("aishield.securityLens")) {
+        refreshLens();
+      }
+    }),
+    vscode.window.onDidChangeVisibleTextEditors(() => refreshLens()),
+    vscode.window.onDidChangeActiveTextEditor(() => refreshLens()),
+  );
+
+  context.subscriptions.push(
+    vscode.languages.registerHoverProvider({ scheme: "file" }, {
+      provideHover(document, position) {
+        const fileEntries = lastScanByFile.get(document.uri.fsPath) ?? [];
+        const matches = fileEntries.filter((entry) => entry.range.contains(position));
+        if (matches.length === 0) {
+          return null;
+        }
+
+        const md = new vscode.MarkdownString(undefined, true);
+        md.isTrusted = false;
+        for (const [index, match] of matches.entries()) {
+          if (index > 0) {
+            md.appendMarkdown("\n---\n");
+          }
+          const f = match.finding;
+          md.appendMarkdown(
+            `**${escapeMarkdown(f.id)}** · ${severityLabel(f.severity)}\n\n` +
+              `**${escapeMarkdown(f.title)}**\n\n` +
+              `AI confidence: ${(f.ai_confidence ?? 0).toFixed(1)} · Risk: ${(f.risk_score ?? 0).toFixed(1)}\n\n` +
+              `\`${escapeMarkdown(f.snippet)}\``,
+          );
+          if (f.fix_suggestion && f.fix_suggestion.trim().length > 0) {
+            md.appendMarkdown(`\n\nFix suggestion: ${escapeMarkdown(f.fix_suggestion)}`);
+          }
+        }
+        return new vscode.Hover(md);
+      },
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.languages.registerCodeActionsProvider(
+      { scheme: "file" },
+      {
+        provideCodeActions(document, _range, context) {
+          const out: vscode.CodeAction[] = [];
+          const fileEntries = lastScanByFile.get(document.uri.fsPath) ?? [];
+          if (fileEntries.length === 0) {
+            return out;
+          }
+
+          for (const diagnostic of context.diagnostics) {
+            const id = String(diagnostic.code ?? "");
+            if (!id || diagnostic.source !== "AIShield") {
+              continue;
+            }
+            const match = fileEntries.find(
+              (entry) =>
+                entry.finding.id === id &&
+                entry.range.start.line === diagnostic.range.start.line,
+            );
+            if (!match) {
+              continue;
+            }
+
+            const apply = new vscode.CodeAction(
+              `AIShield: Apply fix (${match.finding.id})`,
+              vscode.CodeActionKind.QuickFix,
+            );
+            apply.diagnostics = [diagnostic];
+            apply.isPreferred = true;
+            apply.command = {
+              command: "aishield.applyFixForFinding",
+              title: "Apply AIShield Fix",
+              arguments: [match],
+            };
+            out.push(apply);
+          }
+          return out;
+        },
+      },
+      { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] },
+    ),
+  );
+
+  const runScanWithLock = async (scanContext: ScanContext): Promise<void> => {
+    if (activeScan.value) {
+      await activeScan.value;
+    }
+    activeScan.value = runScan(scanContext, {
+      diagnostics,
+      output,
+      findings,
+      lastScanByFile,
+      setLastContext: (next) => {
+        lastScanContext = next;
+      },
+      refreshLens,
+    });
+    try {
+      await activeScan.value;
+    } finally {
+      activeScan.value = null;
+    }
+  };
 
   context.subscriptions.push(
     vscode.commands.registerCommand("aishield.scanWorkspace", async () => {
@@ -37,59 +267,93 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.window.showWarningMessage("AIShield: open a workspace folder first.");
         return;
       }
-
-      await runScan({
+      await runScanWithLock({
         targetPath: workspace.uri.fsPath,
         workspaceRoot: workspace.uri.fsPath,
-        diagnostics,
-        output,
       });
     }),
-  );
-
-  context.subscriptions.push(
     vscode.commands.registerCommand("aishield.scanCurrentFile", async () => {
       const editor = vscode.window.activeTextEditor;
-      if (!editor) {
+      if (!editor || editor.document.uri.scheme !== "file") {
         vscode.window.showWarningMessage("AIShield: no active file to scan.");
         return;
       }
-
       const workspace = vscode.workspace.getWorkspaceFolder(editor.document.uri);
-      const workspaceRoot = workspace?.uri.fsPath ?? path.dirname(editor.document.uri.fsPath);
-      await runScan({
+      await runScanWithLock({
         targetPath: editor.document.uri.fsPath,
-        workspaceRoot,
-        diagnostics,
-        output,
+        workspaceRoot: workspace?.uri.fsPath ?? path.dirname(editor.document.uri.fsPath),
       });
     }),
-  );
-
-  context.subscriptions.push(
     vscode.commands.registerCommand("aishield.clearDiagnostics", () => {
       diagnostics.clear();
+      findings.clear();
+      lastScanByFile.clear();
+      refreshLens();
       vscode.window.showInformationMessage("AIShield diagnostics cleared.");
+    }),
+    vscode.commands.registerCommand("aishield.refreshFindings", async () => {
+      if (!lastScanContext) {
+        vscode.window.showInformationMessage("AIShield: no previous scan context to refresh.");
+        return;
+      }
+      await runScanWithLock(lastScanContext);
+    }),
+    vscode.commands.registerCommand("aishield.openFinding", async (entry: FindingEntry) => {
+      if (!entry) {
+        return;
+      }
+      const doc = await vscode.workspace.openTextDocument(entry.uri);
+      const editor = await vscode.window.showTextDocument(doc, { preview: false });
+      editor.selection = new vscode.Selection(entry.range.start, entry.range.end);
+      editor.revealRange(entry.range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+    }),
+    vscode.commands.registerCommand("aishield.applyFixForFinding", async (entry: FindingEntry) => {
+      if (!entry) {
+        return;
+      }
+      const invocation = parseCliCommand(
+        vscode.workspace.getConfiguration("aishield").get<string>(
+          "cliCommand",
+          "cargo run -p aishield-cli --",
+        ),
+      );
+      const location = `${entry.uri.fsPath}:${entry.finding.line || 1}:${entry.finding.column || 1}`;
+      const args = [...invocation.args, "fix", location, "--write"];
+      output.appendLine(`[AIShield] Running: ${invocation.command} ${args.join(" ")}`);
+      const workspace = vscode.workspace.getWorkspaceFolder(entry.uri);
+      const result = await execCommand(
+        invocation.command,
+        args,
+        workspace?.uri.fsPath ?? path.dirname(entry.uri.fsPath),
+      );
+      if (result.code !== 0) {
+        output.appendLine(`[AIShield] fix stderr:\n${result.stderr}`);
+        vscode.window.showErrorMessage(
+          `AIShield fix failed for ${entry.finding.id}. See AIShield output channel.`,
+        );
+        return;
+      }
+
+      const doc = await vscode.workspace.openTextDocument(entry.uri);
+      await doc.save();
+      vscode.window.showInformationMessage(`AIShield fix applied for ${entry.finding.id}.`);
+      await runScanWithLock({
+        targetPath: entry.uri.fsPath,
+        workspaceRoot: workspace?.uri.fsPath ?? path.dirname(entry.uri.fsPath),
+      });
     }),
   );
 
   context.subscriptions.push(
     vscode.workspace.onDidSaveTextDocument(async (document) => {
       const config = vscode.workspace.getConfiguration("aishield");
-      if (!config.get<boolean>("scanOnSave", false)) {
+      if (!config.get<boolean>("scanOnSave", false) || document.uri.scheme !== "file") {
         return;
       }
-      if (document.uri.scheme !== "file") {
-        return;
-      }
-
       const workspace = vscode.workspace.getWorkspaceFolder(document.uri);
-      const workspaceRoot = workspace?.uri.fsPath ?? path.dirname(document.uri.fsPath);
-      await runScan({
+      await runScanWithLock({
         targetPath: document.uri.fsPath,
-        workspaceRoot,
-        diagnostics,
-        output,
+        workspaceRoot: workspace?.uri.fsPath ?? path.dirname(document.uri.fsPath),
       });
     }),
   );
@@ -97,17 +361,21 @@ export function activate(context: vscode.ExtensionContext): void {
 
 export function deactivate(): void {}
 
-async function runScan(params: {
-  targetPath: string;
-  workspaceRoot: string;
-  diagnostics: vscode.DiagnosticCollection;
-  output: vscode.OutputChannel;
-}): Promise<void> {
+async function runScan(
+  scanContext: ScanContext,
+  state: {
+    diagnostics: vscode.DiagnosticCollection;
+    output: vscode.OutputChannel;
+    findings: FindingsProvider;
+    lastScanByFile: Map<string, FindingEntry[]>;
+    setLastContext: (context: ScanContext) => void;
+    refreshLens: () => void;
+  },
+): Promise<void> {
   const config = vscode.workspace.getConfiguration("aishield");
   const baseInvocation = parseCliCommand(
     config.get<string>("cliCommand", "cargo run -p aishield-cli --"),
   );
-
   const minSeverity = config.get<string>("minSeverity", "low");
   const extraScanArgs = config.get<string[]>("extraScanArgs", []);
   const useOnnx = config.get<boolean>("useOnnx", false);
@@ -116,7 +384,7 @@ async function runScan(params: {
   const args = [
     ...baseInvocation.args,
     "scan",
-    params.targetPath,
+    scanContext.targetPath,
     "--format",
     "json",
     "--dedup",
@@ -125,20 +393,17 @@ async function runScan(params: {
     minSeverity,
     ...extraScanArgs,
   ];
-
   if (useOnnx && onnxModelPath.length > 0) {
     args.push("--ai-model", "onnx", "--onnx-model", onnxModelPath);
   }
 
-  const commandLabel = `${baseInvocation.command} ${args.join(" ")}`;
-  params.output.appendLine(`[AIShield] Running: ${commandLabel}`);
-
+  state.output.appendLine(`[AIShield] Running: ${baseInvocation.command} ${args.join(" ")}`);
   const started = Date.now();
-  const result = await execCommand(baseInvocation.command, args);
+  const result = await execCommand(baseInvocation.command, args, scanContext.workspaceRoot);
   const elapsedMs = Date.now() - started;
 
   if (result.code !== 0 && result.code !== 2) {
-    params.output.appendLine(`[AIShield] stderr:\n${result.stderr}`);
+    state.output.appendLine(`[AIShield] stderr:\n${result.stderr}`);
     vscode.window.showErrorMessage(
       `AIShield scan failed (exit ${result.code ?? "unknown"}). See AIShield output channel.`,
     );
@@ -147,19 +412,33 @@ async function runScan(params: {
 
   const parsed = tryParseScanJson(result.stdout);
   if (!parsed) {
-    params.output.appendLine("[AIShield] Unable to parse JSON output.");
-    params.output.appendLine(`[AIShield] stdout:\n${result.stdout}`);
+    state.output.appendLine("[AIShield] Unable to parse JSON output.");
+    state.output.appendLine(`[AIShield] stdout:\n${result.stdout}`);
     if (result.stderr.trim().length > 0) {
-      params.output.appendLine(`[AIShield] stderr:\n${result.stderr}`);
+      state.output.appendLine(`[AIShield] stderr:\n${result.stderr}`);
     }
     vscode.window.showErrorMessage("AIShield returned non-JSON output.");
     return;
   }
 
-  publishDiagnostics(parsed.findings ?? [], params.targetPath, params.workspaceRoot, params.diagnostics);
-  const total = parsed.summary?.total ?? (parsed.findings?.length ?? 0);
+  const entries = publishDiagnostics(
+    parsed.findings ?? [],
+    scanContext.targetPath,
+    scanContext.workspaceRoot,
+    state.diagnostics,
+  );
+  state.lastScanByFile.clear();
+  for (const [file, fileEntries] of entries.byFile.entries()) {
+    state.lastScanByFile.set(file, fileEntries);
+  }
+  state.findings.setItems(entries.all);
+  state.setLastContext(scanContext);
+  state.refreshLens();
+
+  const total = parsed.summary?.total ?? entries.all.length;
+  const severityBreakdown = summarizeSeverities(entries.all);
   vscode.window.showInformationMessage(
-    `AIShield: ${total} finding(s) in ${(elapsedMs / 1000).toFixed(2)}s.`,
+    `AIShield: ${total} finding(s) in ${(elapsedMs / 1000).toFixed(2)}s (${severityBreakdown}).`,
   );
 }
 
@@ -168,32 +447,49 @@ function publishDiagnostics(
   targetPath: string,
   workspaceRoot: string,
   collection: vscode.DiagnosticCollection,
-): void {
+): { all: FindingEntry[]; byFile: Map<string, FindingEntry[]> } {
   const byFile = new Map<string, vscode.Diagnostic[]>();
+  const findingByFile = new Map<string, FindingEntry[]>();
+  const all: FindingEntry[] = [];
 
   for (const finding of findings) {
     const filePath = resolveFindingPath(finding.file, targetPath, workspaceRoot);
+    const uri = vscode.Uri.file(filePath);
     const line = Math.max(0, (finding.line || 1) - 1);
     const column = Math.max(0, (finding.column || 1) - 1);
     const range = new vscode.Range(line, column, line, column + 1);
     const severity = mapSeverity(finding.severity);
-    const aiConfidence = finding.ai_confidence ?? 0.0;
-    const riskScore = finding.risk_score ?? 0.0;
-    const message = `[${finding.id}] ${finding.title}\nAI confidence: ${aiConfidence.toFixed(1)} | Risk: ${riskScore.toFixed(1)}\n${finding.snippet}`;
+
+    const message = [
+      `[${finding.id}] ${finding.title}`,
+      `AI confidence: ${(finding.ai_confidence ?? 0).toFixed(1)} | Risk: ${(finding.risk_score ?? 0).toFixed(1)}`,
+      finding.snippet,
+      finding.fix_suggestion ? `Fix: ${finding.fix_suggestion}` : "",
+    ]
+      .filter((segment) => segment && segment.trim().length > 0)
+      .join("\n");
 
     const diagnostic = new vscode.Diagnostic(range, message, severity);
     diagnostic.source = "AIShield";
     diagnostic.code = finding.id;
 
-    const existing = byFile.get(filePath) ?? [];
-    existing.push(diagnostic);
-    byFile.set(filePath, existing);
+    const fileDiags = byFile.get(filePath) ?? [];
+    fileDiags.push(diagnostic);
+    byFile.set(filePath, fileDiags);
+
+    const key = `${filePath}::${finding.id}::${line}:${column}`;
+    const entry: FindingEntry = { finding, uri, range, key };
+    all.push(entry);
+    const fileEntries = findingByFile.get(filePath) ?? [];
+    fileEntries.push(entry);
+    findingByFile.set(filePath, fileEntries);
   }
 
   collection.clear();
   for (const [filePath, diagnostics] of byFile.entries()) {
     collection.set(vscode.Uri.file(filePath), diagnostics);
   }
+  return { all, byFile: findingByFile };
 }
 
 function resolveFindingPath(findingFile: string, targetPath: string, workspaceRoot: string): string {
@@ -210,6 +506,7 @@ function resolveFindingPath(findingFile: string, targetPath: string, workspaceRo
       return path.join(path.dirname(targetPath), findingFile);
     }
   }
+
   return path.join(workspaceRoot, findingFile);
 }
 
@@ -232,10 +529,7 @@ function parseCliCommand(raw: string): CliInvocation {
   if (tokens.length === 0) {
     return { command: "cargo", args: ["run", "-p", "aishield-cli", "--"] };
   }
-  return {
-    command: tokens[0],
-    args: tokens.slice(1),
-  };
+  return { command: tokens[0], args: tokens.slice(1) };
 }
 
 function shellSplit(input: string): string[] {
@@ -276,11 +570,13 @@ function shellSplit(input: string): string[] {
 function execCommand(
   command: string,
   args: string[],
+  cwd: string,
 ): Promise<{ stdout: string; stderr: string; code: number | null }> {
   return new Promise((resolve) => {
-    const child = cp.spawn(command, args, { cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath });
+    const child = cp.spawn(command, args, { cwd });
     let stdout = "";
     let stderr = "";
+
     child.stdout.on("data", (data) => {
       stdout += data.toString();
     });
@@ -288,11 +584,7 @@ function execCommand(
       stderr += data.toString();
     });
     child.on("error", (error) => {
-      resolve({
-        stdout,
-        stderr: `${stderr}\n${error.message}`,
-        code: -1,
-      });
+      resolve({ stdout, stderr: `${stderr}\n${error.message}`, code: -1 });
     });
     child.on("close", (code) => resolve({ stdout, stderr, code }));
   });
@@ -301,7 +593,64 @@ function execCommand(
 function tryParseScanJson(raw: string): AiShieldScanResult | null {
   try {
     return JSON.parse(raw) as AiShieldScanResult;
-  } catch (_error) {
+  } catch {
     return null;
   }
+}
+
+function summarizeSeverities(entries: FindingEntry[]): string {
+  const counts = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+  for (const entry of entries) {
+    const key = (entry.finding.severity || "info").toLowerCase();
+    if (key in counts) {
+      counts[key as keyof typeof counts] += 1;
+    }
+  }
+  return `C:${counts.critical} H:${counts.high} M:${counts.medium} L:${counts.low} I:${counts.info}`;
+}
+
+function severityRank(raw: string): number {
+  switch ((raw || "").toLowerCase()) {
+    case "critical":
+      return 5;
+    case "high":
+      return 4;
+    case "medium":
+      return 3;
+    case "low":
+      return 2;
+    default:
+      return 1;
+  }
+}
+
+function severityLabel(raw: string): string {
+  switch ((raw || "").toLowerCase()) {
+    case "critical":
+      return "CRITICAL";
+    case "high":
+      return "HIGH";
+    case "medium":
+      return "MEDIUM";
+    case "low":
+      return "LOW";
+    default:
+      return "INFO";
+  }
+}
+
+function iconForSeverity(raw: string): vscode.ThemeIcon {
+  switch ((raw || "").toLowerCase()) {
+    case "critical":
+    case "high":
+      return new vscode.ThemeIcon("error");
+    case "medium":
+      return new vscode.ThemeIcon("warning");
+    default:
+      return new vscode.ThemeIcon("info");
+  }
+}
+
+function escapeMarkdown(value: string): string {
+  return value.replace(/[\\`*_{}[\]()#+\-.!]/g, "\\$&");
 }

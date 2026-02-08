@@ -17,6 +17,10 @@
     "onCommand:aishield.scanWorkspace",
     "onCommand:aishield.scanCurrentFile",
     "onCommand:aishield.clearDiagnostics",
+    "onCommand:aishield.refreshFindings",
+    "onCommand:aishield.applyFixForFinding",
+    "onCommand:aishield.openFinding",
+    "onView:aishield.findings",
     "onStartupFinished"
   ],
   "main": "./out/extension.js",
@@ -33,8 +37,47 @@
       {
         "command": "aishield.clearDiagnostics",
         "title": "AIShield: Clear Diagnostics"
+      },
+      {
+        "command": "aishield.refreshFindings",
+        "title": "AIShield: Refresh Findings"
+      },
+      {
+        "command": "aishield.applyFixForFinding",
+        "title": "AIShield: Apply Fix"
+      },
+      {
+        "command": "aishield.openFinding",
+        "title": "AIShield: Open Finding"
       }
     ],
+    "views": {
+      "explorer": [
+        {
+          "id": "aishield.findings",
+          "name": "AIShield Findings"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "aishield.scanWorkspace",
+          "when": "view == aishield.findings",
+          "group": "navigation"
+        },
+        {
+          "command": "aishield.refreshFindings",
+          "when": "view == aishield.findings",
+          "group": "navigation@1"
+        },
+        {
+          "command": "aishield.clearDiagnostics",
+          "when": "view == aishield.findings",
+          "group": "navigation@2"
+        }
+      ]
+    },
     "configuration": {
       "title": "AIShield",
       "properties": {
@@ -77,6 +120,11 @@
           "type": "boolean",
           "default": false,
           "description": "Run AIShield scan on file save."
+        },
+        "aishield.securityLens": {
+          "type": "boolean",
+          "default": false,
+          "description": "Highlight medium/high/critical lines in editors after scan."
         }
       }
     }

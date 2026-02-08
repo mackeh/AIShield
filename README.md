@@ -176,6 +176,7 @@ Current implementation includes:
 - ONNX runtime runner bridge via `models/ai-classifier/onnx_runner.py`
 - optional SAST bridge for Semgrep/Bandit/ESLint
 - VS Code extension bootstrap in `integrations/vscode-extension`
+- VS Code advanced UX beta: hover cards, quick-fix actions, findings panel, security lens
 - hardened SARIF upload and PR annotation workflows across push/PR contexts
 - VitePress documentation site + GitHub Pages deployment workflow
 

@@ -38,6 +38,14 @@ npm run build
 
 See `docs/vscode-extension.md` for commands and settings.
 
+Current extension UX includes:
+
+- diagnostics in Problems panel
+- hover cards with AI/risk context
+- quick-fix code actions via `aishield fix --write`
+- AIShield Findings explorer view
+- optional security-lens line highlighting
+
 ## GitHub Actions
 
 Existing workflows:
