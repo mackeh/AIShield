@@ -1,0 +1,12 @@
+id: AISHIELD-RS-CRYPTO-004
+title: Weak Cipher Usage (DES)
+severity: high
+confidence_that_ai_generated: 0.74
+languages: [rust]
+category: crypto
+pattern:
+  any:
+    - "des::"
+fix:
+  suggestion: Prefer modern authenticated encryption algorithms.
+tags: [crypto, weak-cipher]

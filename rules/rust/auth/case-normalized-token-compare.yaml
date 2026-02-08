@@ -1,0 +1,13 @@
+id: AISHIELD-RS-AUTH-004
+title: Insecure Case-Normalized Token Comparison
+severity: medium
+confidence_that_ai_generated: 0.72
+languages: [rust]
+category: auth
+pattern:
+  all:
+    - "token.to_lowercase()"
+    - "=="
+fix:
+  suggestion: Avoid normalizing secrets and use strict byte-equality checks.
+tags: [auth, token]

@@ -1,0 +1,13 @@
+id: AISHIELD-RS-INJ-004
+title: Potential Path Traversal in File Reads
+severity: high
+confidence_that_ai_generated: 0.75
+languages: [rust]
+category: injection
+pattern:
+  all:
+    - "read_to_string"
+    - "{}"
+fix:
+  suggestion: Validate and normalize user-controlled file paths.
+tags: [injection, path-traversal]

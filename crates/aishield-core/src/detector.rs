@@ -409,9 +409,41 @@ function good(token, expected) {
             .expect("scan fixture suite");
 
         assert!(
-            result.summary.total >= 20,
-            "expected at least 20 findings in fixture suite, got {}",
+            result.summary.total >= 60,
+            "expected at least 60 findings in expanded fixture suite, got {}",
             result.summary.total
+        );
+
+        let go_findings = result
+            .findings
+            .iter()
+            .filter(|finding| finding.id.starts_with("AISHIELD-GO-"))
+            .count();
+        let rust_findings = result
+            .findings
+            .iter()
+            .filter(|finding| finding.id.starts_with("AISHIELD-RS-"))
+            .count();
+        let java_findings = result
+            .findings
+            .iter()
+            .filter(|finding| finding.id.starts_with("AISHIELD-JAVA-"))
+            .count();
+
+        assert!(
+            go_findings >= 15,
+            "expected at least 15 go findings in fixture suite, got {}",
+            go_findings
+        );
+        assert!(
+            rust_findings >= 15,
+            "expected at least 15 rust findings in fixture suite, got {}",
+            rust_findings
+        );
+        assert!(
+            java_findings >= 15,
+            "expected at least 15 java findings in fixture suite, got {}",
+            java_findings
         );
     }
 

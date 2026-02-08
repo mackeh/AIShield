@@ -19,7 +19,8 @@ This repository currently contains a solid foundation for Phase 1:
 
 - Rust workspace with `aishield-core` and `aishield-cli`
 - Rule-driven scanner for Python, JavaScript, Go, Rust, and Java source files
-- 47 foundational rules across crypto, injection, auth, and misconfiguration
+- 90+ foundational rules across crypto, injection, auth, and misconfiguration
+- Expanded Go/Rust/Java rulepacks to phase-2 depth (20 rules each)
 - Severity + composite risk scoring per finding
 - Output formats: `table`, `json`, `sarif`, `github` (PR annotations)
 - Optional SAST bridge for Semgrep, Bandit, and ESLint (parallel orchestration)

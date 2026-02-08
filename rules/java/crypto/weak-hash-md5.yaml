@@ -6,7 +6,7 @@ languages: [java]
 category: crypto
 pattern:
   any:
-    - "messagedigest.getinstance(\"md5\")"
+    - 'messagedigest.getinstance("md5")'
 fix:
   suggestion: Use stronger algorithms and modern password-hashing schemes when handling secrets.
 tags: [crypto, weak-hash]

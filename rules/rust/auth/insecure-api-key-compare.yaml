@@ -1,0 +1,13 @@
+id: AISHIELD-RS-AUTH-002
+title: Timing-Unsafe API Key Comparison
+severity: high
+confidence_that_ai_generated: 0.77
+languages: [rust]
+category: auth
+pattern:
+  all:
+    - "api_key =="
+    - "incoming_api_key"
+fix:
+  suggestion: Use constant-time comparison for API key validation.
+tags: [auth, timing-attack]

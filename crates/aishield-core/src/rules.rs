@@ -469,4 +469,42 @@ pattern:
             ruleset.rules.len()
         );
     }
+
+    #[test]
+    fn repository_rulepack_has_phase_two_language_depth() {
+        let rules_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../rules");
+        let ruleset = RuleSet::load_from_dir(&rules_dir).expect("load repository rules");
+
+        let go_count = ruleset
+            .rules
+            .iter()
+            .filter(|rule| rule.languages.iter().any(|lang| lang == "go"))
+            .count();
+        let rust_count = ruleset
+            .rules
+            .iter()
+            .filter(|rule| rule.languages.iter().any(|lang| lang == "rust"))
+            .count();
+        let java_count = ruleset
+            .rules
+            .iter()
+            .filter(|rule| rule.languages.iter().any(|lang| lang == "java"))
+            .count();
+
+        assert!(
+            go_count >= 20,
+            "expected at least 20 go rules for phase-2 depth, found {}",
+            go_count
+        );
+        assert!(
+            rust_count >= 20,
+            "expected at least 20 rust rules for phase-2 depth, found {}",
+            rust_count
+        );
+        assert!(
+            java_count >= 20,
+            "expected at least 20 java rules for phase-2 depth, found {}",
+            java_count
+        );
+    }
 }

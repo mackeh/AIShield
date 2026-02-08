@@ -6,7 +6,7 @@ languages: [rust]
 category: injection
 pattern:
   all:
-    - "format!(\"select"
+    - 'format!("select'
     - "user_input"
 fix:
   suggestion: Use parameterized queries and bind variables.

@@ -1,0 +1,12 @@
+id: AISHIELD-RS-MISC-005
+title: Debug Flag Enabled in Runtime Path
+severity: low
+confidence_that_ai_generated: 0.66
+languages: [rust]
+category: misconfig
+pattern:
+  any:
+    - "let debug = true"
+fix:
+  suggestion: Disable debug mode by default for production code.
+tags: [misconfig, debug]

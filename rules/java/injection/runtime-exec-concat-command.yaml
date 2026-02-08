@@ -1,0 +1,13 @@
+id: AISHIELD-JAVA-INJ-003
+title: Command Construction from User Input
+severity: high
+confidence_that_ai_generated: 0.82
+languages: [java]
+category: injection
+pattern:
+  all:
+    - "runtime.getruntime().exec("
+    - "+ userinput"
+fix:
+  suggestion: Avoid shell command concatenation and use fixed argument APIs.
+tags: [injection, command-injection]

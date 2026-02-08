@@ -1,0 +1,13 @@
+id: AISHIELD-JAVA-INJ-005
+title: Open Redirect from User Input
+severity: medium
+confidence_that_ai_generated: 0.72
+languages: [java]
+category: injection
+pattern:
+  all:
+    - "sendredirect("
+    - 'getparameter("next")'
+fix:
+  suggestion: Redirect only to allowlisted destinations.
+tags: [injection, open-redirect]

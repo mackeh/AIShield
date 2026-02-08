@@ -6,7 +6,7 @@ languages: [rust]
 category: injection
 pattern:
   any:
-    - "command::new(\"sh\")"
+    - 'command::new("sh")'
 fix:
   suggestion: Avoid shell execution for user input; pass validated arguments directly.
 tags: [injection, command-injection]

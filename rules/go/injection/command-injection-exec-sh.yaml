@@ -6,7 +6,7 @@ languages: [go]
 category: injection
 pattern:
   any:
-    - "exec.command(\"sh\", \"-c\""
+    - 'exec.command("sh", "-c"'
 fix:
   suggestion: Avoid shell invocation with user input; pass validated args directly to exec.Command.
 tags: [injection, command-injection]

@@ -1,0 +1,13 @@
+id: AISHIELD-GO-CRYPTO-005
+title: Weak RSA Key Size
+severity: high
+confidence_that_ai_generated: 0.75
+languages: [go]
+category: crypto
+pattern:
+  all:
+    - "rsa.generatekey("
+    - "1024"
+fix:
+  suggestion: Generate at least 2048-bit RSA keys (or prefer Ed25519/ECDSA as appropriate).
+tags: [crypto, key-management]

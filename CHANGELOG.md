@@ -24,6 +24,9 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - Upgraded `fix --interactive` to a keyboard-driven TUI MVP using ratatui
 - Added TUI search/filter mode, severity badges, and preview diff pane for interactive fixes
 - Upgraded risk scoring with context/exploitability heuristics (sensitive path boosts, sink signals, fixture/test dampening)
+- Expanded Go/Rust/Java rulepacks to 20 rules each with corresponding fixture coverage
+- Strengthened tests to enforce phase-2 rule depth and per-language fixture detection coverage
+- Expanded Go/Rust/Java vulnerable fixtures to exercise new auth/crypto/injection/misconfig rules
 
 ## [0.1.1] - 2026-02-07
 

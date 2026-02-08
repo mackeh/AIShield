@@ -1,0 +1,13 @@
+id: AISHIELD-JAVA-MISC-004
+title: Service Bound to All Interfaces
+severity: medium
+confidence_that_ai_generated: 0.69
+languages: [java]
+category: misconfig
+pattern:
+  all:
+    - "setaddress("
+    - "0.0.0.0"
+fix:
+  suggestion: Bind service listeners to explicit trusted interfaces.
+tags: [misconfig, network]
