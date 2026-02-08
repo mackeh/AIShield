@@ -517,13 +517,13 @@ pattern:
             java_count
         );
         assert!(
-            kotlin_count >= 12,
-            "expected at least 12 kotlin rules as progress toward 20-per-language depth, found {}",
+            kotlin_count >= 20,
+            "expected at least 20 kotlin rules for phase-2 depth, found {}",
             kotlin_count
         );
         assert!(
-            swift_count >= 12,
-            "expected at least 12 swift rules as progress toward 20-per-language depth, found {}",
+            swift_count >= 20,
+            "expected at least 20 swift rules for phase-2 depth, found {}",
             swift_count
         );
     }

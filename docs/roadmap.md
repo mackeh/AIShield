@@ -33,7 +33,7 @@ This page mirrors `project.md` and highlights the current implementation directi
 - [x] Experimental cross-file auth-route heuristics (`--cross-file`)
 - [x] Additional language bootstrap (C#, Ruby, PHP)
 - [x] Additional language ecosystems (Kotlin, Swift)
-- [ ] Expand language rulepack depth toward 20-per-language targets for new ecosystems
+- [x] Expand language rulepack depth toward 20-per-language targets for new ecosystems
 - [x] Infra/IaC scanning bootstrap (Terraform, Kubernetes YAML, Dockerfiles)
 
 ## Milestone Notes
@@ -43,4 +43,4 @@ Near-term focus is reliability and signal quality:
 - reduce duplicate/noisy findings in CI
 - improve remediation coverage and fix confidence
 - harden release and security workflows
-- continue Kotlin/Swift rulepack depth expansion (now 12+ rules each)
+- Kotlin/Swift now at 20 rules each with expanded fixture coverage and regression gates

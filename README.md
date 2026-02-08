@@ -199,7 +199,7 @@ Current implementation includes:
 - VS Code AI paste-detection bootstrap with scan prompt/auto-scan controls
 - local web dashboard and analytics ingestion bootstrap in `dashboard/`
 - C#/Ruby/PHP language ecosystem bootstrap with dedicated rules and fixtures
-- Kotlin/Swift rulepacks expanded with deeper auth/crypto/injection/misconfig coverage (toward 20-per-language target)
+- Kotlin/Swift rulepacks expanded to 20 rules each with broader auth/crypto/injection/misconfig coverage
 - hardened SARIF upload and PR annotation workflows across push/PR contexts
 - VitePress documentation site + GitHub Pages deployment workflow
 

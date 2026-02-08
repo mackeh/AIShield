@@ -1,0 +1,13 @@
+id: AISHIELD-KT-MISC-004
+title: Service Bound to All Interfaces
+severity: medium
+confidence_that_ai_generated: 0.70
+languages: [kotlin]
+category: misconfig
+pattern:
+  all:
+    - "server(\"0.0.0.0"
+    - "8080"
+fix:
+  suggestion: Bind services only to required interfaces and expose via hardened ingress.
+tags: [misconfig, network]

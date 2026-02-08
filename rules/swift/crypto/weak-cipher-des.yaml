@@ -1,0 +1,12 @@
+id: AISHIELD-SW-CRYPTO-004
+title: Weak Cipher Mode (DES)
+severity: high
+confidence_that_ai_generated: 0.77
+languages: [swift]
+category: crypto
+pattern:
+  any:
+    - "kccalgorithmdes"
+fix:
+  suggestion: Use modern authenticated ciphers instead of DES.
+tags: [crypto, weak-cipher]

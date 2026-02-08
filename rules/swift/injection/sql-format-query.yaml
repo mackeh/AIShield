@@ -1,0 +1,12 @@
+id: AISHIELD-SW-INJ-005
+title: SQL Query Built with String(format:)
+severity: high
+confidence_that_ai_generated: 0.77
+languages: [swift]
+category: injection
+pattern:
+  all:
+    - 'string(format: "select * from users where id = %@", userinput)'
+fix:
+  suggestion: Replace formatted SQL with parameterized query APIs.
+tags: [injection, sql-injection]

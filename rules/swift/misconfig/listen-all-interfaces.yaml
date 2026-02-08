@@ -1,0 +1,13 @@
+id: AISHIELD-SW-MISC-005
+title: Service Bound to All Interfaces
+severity: medium
+confidence_that_ai_generated: 0.70
+languages: [swift]
+category: misconfig
+pattern:
+  all:
+    - "http://0.0.0.0"
+    - "8080"
+fix:
+  suggestion: Bind development services to loopback or restricted interfaces.
+tags: [misconfig, network]

@@ -1,0 +1,13 @@
+id: AISHIELD-SW-AUTH-004
+title: Hardcoded Bearer Header Assembly
+severity: medium
+confidence_that_ai_generated: 0.70
+languages: [swift]
+category: auth
+pattern:
+  all:
+    - "authorization: bearer"
+    - "+ userinput"
+fix:
+  suggestion: Build auth headers from runtime credentials and avoid hardcoded bearer patterns.
+tags: [auth, secrets]

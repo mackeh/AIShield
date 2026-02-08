@@ -1,0 +1,12 @@
+id: AISHIELD-KT-INJ-005
+title: SQL Query Built with format()
+severity: high
+confidence_that_ai_generated: 0.77
+languages: [kotlin]
+category: injection
+pattern:
+  all:
+    - '"select * from users where id = %s".format(userinput)'
+fix:
+  suggestion: Use prepared statements and bind parameters rather than formatted SQL strings.
+tags: [injection, sql-injection]
