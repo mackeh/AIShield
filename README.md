@@ -15,6 +15,16 @@ AI coding assistants increase delivery speed, but they also reproduce insecure e
 - practical remediation workflows (`fix`, targeted location fixes, interactive TUI)
 - ecosystem integration for GitHub Actions, GitLab CI, Bitbucket Pipelines, CircleCI, Jenkins, VS Code, and pre-commit
 
+## Known Limitations
+
+**Pattern Matching**: Uses regex and string-based detection (not AST-based with tree-sitter). Adequate for AI vulnerability patterns with excellent performance.
+
+**Analytics**: Local file-based analytics (`.aishield-history.log`). Sufficient for individual developers and single-repo scenarios. Enterprise features requiring ClickHouse (org-wide heatmaps, multi-repo aggregation) are planned for Phase 3.
+
+**SAST Bridge**: Requires manual installation of `semgrep`, `bandit`, and/or `eslint`. Enable with `--bridge all` or specific engines.
+
+See [ARCHITECTURAL_DECISIONS.md](./ARCHITECTURAL_DECISIONS.md) and [COMPLIANCE.md](./COMPLIANCE.md) for details.
+
 ## 60-Second Demo
 
 ```bash
