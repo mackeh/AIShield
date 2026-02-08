@@ -1,0 +1,165 @@
+name: 📝 Rule Proposal
+description: Propose a new security detection rule
+title: "[Rule]: "
+labels: ["rule-proposal", "enhancement"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing a new detection rule!
+        
+        This helps AIShield detect more AI-generated vulnerabilities.
+
+  - type: input
+    id: rule-name
+    attributes:
+      label: Rule Name
+      description: Short, descriptive name for the rule
+      placeholder: "e.g., Timing-unsafe password comparison"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: language
+    attributes:
+      label: Target Language
+      description: Which language(s) should this rule target?
+      multiple: true
+      options:
+        - Python
+        - JavaScript/TypeScript
+        - Go
+        - Rust
+        - Java
+        - C#
+        - Ruby
+        - PHP
+        - Kotlin
+        - Swift
+        - Terraform/HCL
+        - Kubernetes YAML
+        - Dockerfile
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Vulnerability Category
+      options:
+        - Authentication/Authorization
+        - Cryptography
+        - Injection (SQL/Command/Code)
+        - Misconfiguration
+        - Information Disclosure
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Proposed Severity
+      options:
+        - Critical
+        - High
+        - Medium
+        - Low
+        - Info
+    validations:
+      required: true
+
+  - type: textarea
+    id: vulnerable-code
+    attributes:
+      label: Example Vulnerable Code
+      description: Provide code example that should be detected
+      placeholder: |
+        ```python
+        # Example vulnerable code that AI might generate
+        password_match = user_password == stored_password  # Timing attack!
+        ```
+      render: python
+    validations:
+      required: true
+
+  - type: textarea
+    id: why-ai-generates
+    attributes:
+      label: Why AI Generates This Pattern
+      description: Explain why AI coding assistants produce this vulnerable pattern
+      placeholder: |
+        AI tools autocomplete password comparisons with == instead of constant-time comparison because most training examples don't include the security context...
+    validations:
+      required: true
+
+  - type: textarea
+    id: pattern-description
+    attributes:
+      label: Pattern Description
+      description: How should the pattern be detected? (use contains/regex/etc)
+      placeholder: |
+        Pattern to match:
+        - Contains: "== password"
+        - Contains: "== userPassword"
+        
+        Negative patterns (to exclude):
+        - "subtle.ConstantTimeCompare"
+        - "bcrypt"
+    validations:
+      required: true
+
+  - type: textarea
+    id: fix-suggestion
+    attributes:
+      label: Remediation Guidance
+      description: How should developers fix this vulnerability?
+      placeholder: "Use subtle.ConstantTimeCompare() for constant-time comparison"
+    validations:
+      required: true
+
+  - type: input
+    id: confidence
+    attributes:
+      label: AI Confidence (0.0-1.0)
+      description: How common is this pattern in AI-generated code? (0.0 = rare, 1.0 = very common)
+      placeholder: "0.85"
+    validations:
+      required: false
+
+  - type: input
+    id: cwe
+    attributes:
+      label: CWE Number (if applicable)
+      description: "Related CWE from https://cwe.mitre.org/"
+      placeholder: "e.g., CWE-208"
+    validations:
+      required: false
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Links to documentation, blog posts, or examples
+      placeholder: |
+        - https://owasp.org/...
+        - https://cwe.mitre.org/...
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution Intent
+      description: Would you like to implement this rule?
+      options:
+        - label: I would like to implement this rule myself
+        - label: I can help test this rule
+        - label: I have seen AI generate this pattern in real projects
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other information about this rule
