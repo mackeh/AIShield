@@ -25,9 +25,13 @@ request_json() {
   local out_file="$TMP_DIR/$name.json"
 
   local status
-  status="$(curl -sS -o "$out_file" -w "%{http_code}" \
+  if ! status="$(curl -sS -o "$out_file" -w "%{http_code}" \
     -H "x-api-key: $API_KEY" \
-    "$url")"
+    "$url")"; then
+    echo "fail: $name -> request failed"
+    echo "hint: ensure analytics API is running at $BASE_URL"
+    return 1
+  fi
 
   if [[ "$status" != "200" ]]; then
     echo "fail: $name -> HTTP $status"
@@ -50,9 +54,13 @@ request_file() {
   local out_file="$TMP_DIR/$name.out"
 
   local status
-  status="$(curl -sS -o "$out_file" -w "%{http_code}" \
+  if ! status="$(curl -sS -o "$out_file" -w "%{http_code}" \
     -H "x-api-key: $API_KEY" \
-    "$url")"
+    "$url")"; then
+    echo "fail: $name -> request failed"
+    echo "hint: ensure analytics API is running at $BASE_URL"
+    return 1
+  fi
 
   if [[ "$status" != "200" ]]; then
     echo "fail: $name -> HTTP $status"
@@ -76,7 +84,12 @@ echo "org_id:   $ORG_ID"
 echo "days:     $DAYS"
 echo
 
-HEALTH_STATUS="$(curl -sS -o "$TMP_DIR/health.json" -w "%{http_code}" "$BASE_URL/api/health")"
+if ! HEALTH_STATUS="$(curl -sS -o "$TMP_DIR/health.json" -w "%{http_code}" "$BASE_URL/api/health")"; then
+  echo "fail: health -> request failed"
+  echo "hint: start analytics API, then rerun this script"
+  echo "      expected health endpoint: $BASE_URL/api/health"
+  exit 1
+fi
 if [[ "$HEALTH_STATUS" != "200" ]]; then
   echo "fail: health -> HTTP $HEALTH_STATUS"
   cat "$TMP_DIR/health.json"
