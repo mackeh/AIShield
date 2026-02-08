@@ -27,6 +27,7 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - Expanded Go/Rust/Java rulepacks to 20 rules each with corresponding fixture coverage
 - Strengthened tests to enforce phase-2 rule depth and per-language fixture detection coverage
 - Expanded Go/Rust/Java vulnerable fixtures to exercise new auth/crypto/injection/misconfig rules
+- Added heuristic AI-likelihood classifier in core (path/snippet signals) and wired risk scoring to dynamic AI confidence
 
 ## [0.1.1] - 2026-02-07
 

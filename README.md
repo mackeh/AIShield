@@ -9,7 +9,7 @@ It is designed to catch high-risk patterns that look plausible in review but are
 AI coding assistants increase development speed, but they also repeat insecure patterns from public examples and outdated snippets. AIShield adds a dedicated security layer for AI-assisted development by combining:
 
 - Rule-based detection for AI-prone vulnerabilities
-- AI-confidence metadata per rule
+- Heuristic AI-likelihood scoring per finding (rule confidence + path/snippet signals)
 - Context-aware risk scoring (severity + AI confidence + path/sink exploitability heuristics)
 - CLI + CI + pre-commit integration
 

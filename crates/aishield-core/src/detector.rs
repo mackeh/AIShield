@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
+use crate::classifier::estimate_ai_likelihood;
 use crate::rules::{Rule, RuleSet};
 use crate::scanner::collect_source_files;
 use crate::scoring::compute_risk_score;
@@ -145,6 +146,7 @@ impl Analyzer {
                         continue;
                     }
 
+                    let ai_confidence = estimate_ai_likelihood(rule, &file.path, line.trim());
                     findings.push(Finding {
                         id: rule.id.clone(),
                         title: rule.title.clone(),
@@ -153,13 +155,13 @@ impl Analyzer {
                         line: line_no + 1,
                         column,
                         snippet: line.trim().to_string(),
-                        ai_confidence: ((rule.confidence_that_ai_generated * 100.0) * 10.0).round()
-                            / 10.0,
+                        ai_confidence,
                         risk_score: compute_risk_score(
                             rule,
                             rule.severity,
                             &file.path,
                             line.trim(),
+                            ai_confidence,
                         ),
                         category: rule.category.clone(),
                         tags: rule.tags.clone(),

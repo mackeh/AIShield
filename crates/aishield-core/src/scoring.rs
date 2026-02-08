@@ -3,9 +3,15 @@ use std::path::Path;
 use crate::rules::Rule;
 use crate::Severity;
 
-pub fn compute_risk_score(rule: &Rule, severity: Severity, path: &Path, snippet: &str) -> f32 {
+pub fn compute_risk_score(
+    rule: &Rule,
+    severity: Severity,
+    path: &Path,
+    snippet: &str,
+    ai_likelihood_pct: f32,
+) -> f32 {
     let sast_severity = severity_weight(severity) * 100.0;
-    let ai_likelihood = (rule.confidence_that_ai_generated.clamp(0.0, 1.0)) * 100.0;
+    let ai_likelihood = ai_likelihood_pct.clamp(0.0, 100.0);
     let context_risk = context_risk(path, rule, snippet);
     let exploitability = exploitability(rule, path, snippet);
 
@@ -205,12 +211,14 @@ mod tests {
             Severity::High,
             Path::new("src/auth/payment_handler.py"),
             "os.system(user_input)",
+            82.0,
         );
         let low = compute_risk_score(
             &r,
             Severity::High,
             Path::new("tests/fixtures/demo.py"),
             "print('demo')",
+            82.0,
         );
         assert!(high > low);
     }
@@ -223,12 +231,14 @@ mod tests {
             Severity::Critical,
             Path::new("src/auth/login.py"),
             "if token == provided:",
+            75.0,
         );
         let medium = compute_risk_score(
             &r,
             Severity::Medium,
             Path::new("src/auth/login.py"),
             "if token == provided:",
+            75.0,
         );
         assert!(critical > medium);
     }
@@ -241,6 +251,7 @@ mod tests {
             Severity::Critical,
             Path::new("src/api/public_gateway.py"),
             "eval(untrusted)",
+            120.0,
         );
         assert!((0.0..=100.0).contains(&score));
     }
