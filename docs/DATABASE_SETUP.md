@@ -56,7 +56,7 @@ This creates 100 realistic scans across 3 orgs for dashboard testing.
 
 ### 4. Verify
 
-Access **pgAdmin** at http://localhost:5050:
+Access **pgAdmin** at `http://localhost:5050`:
 
 - Email: `admin@aishield.local`
 - Password: `admin`

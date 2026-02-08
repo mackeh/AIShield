@@ -278,10 +278,10 @@ You've made your first contribution! 🎉
 
 ### Resources
 
-- [CONTRIBUTING.md](../../CONTRIBUTING.md) - Full contributor guide
+- [Contributing Guide](../contributing.md) - Full contributor guide
 - [Writing Rules Guide](./writing-your-first-rule.md) - Detailed rule authoring
 - [Testing Guide](./testing-guide.md) - Comprehensive testing documentation
-- [Architecture Overview](../ARCHITECTURE.md) - Understand the codebase
+- [Architecture Overview](../architecture.md) - Understand the codebase
 
 ---
 

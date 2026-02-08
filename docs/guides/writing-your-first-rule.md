@@ -481,7 +481,7 @@ cwe: CWE-89
 
 ## Resources
 
-- [Rule Template](.github/RULE_TEMPLATE.yaml) - Copy this to start
+- [Rule Template](https://github.com/mackeh/AIShield/blob/main/.github/RULE_TEMPLATE.yaml) - Copy this to start
 - [Testing Guide](./testing-guide.md) - Comprehensive testing documentation
 - [CWE Database](https://cwe.mitre.org/) - Find CWE numbers
 - [OWASP Top 10](https://owasp.org/Top10/) - Security risks reference
