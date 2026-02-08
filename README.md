@@ -68,6 +68,9 @@ cargo run -p aishield-cli -- scan . --format sarif --baseline baseline.sarif --o
 # enable experimental cross-file auth-route heuristics
 cargo run -p aishield-cli -- scan . --cross-file
 
+# optional ONNX-backed AI-likelihood scoring (with fallback to heuristic)
+cargo run -p aishield-cli -- scan . --ai-model onnx --onnx-model models/aishield.onnx
+
 # send webhook alert for high+ findings
 cargo run -p aishield-cli -- scan . --notify-webhook https://hooks.example/security --notify-min-severity high
 
@@ -154,6 +157,7 @@ Current implementation includes:
 - expanded Go/Rust/Java rulepacks toward phase-2 target depth
 - infrastructure scanning bootstrap for Terraform, Kubernetes, and Dockerfile misconfig patterns
 - experimental cross-file auth-route heuristics (`--cross-file`)
+- ONNX classifier integration bootstrap (`--ai-model onnx --onnx-model FILE`)
 - optional SAST bridge for Semgrep/Bandit/ESLint
 - hardened SARIF upload and PR annotation workflows across push/PR contexts
 - VitePress documentation site + GitHub Pages deployment workflow

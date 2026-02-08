@@ -9,7 +9,8 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use aishield_core::{
-    AnalysisOptions, Analyzer, Finding, RuleSet, ScanResult, ScanSummary, Severity,
+    AiClassifierMode, AiClassifierOptions, AnalysisOptions, Analyzer, Finding, RuleSet, ScanResult,
+    ScanSummary, Severity,
 };
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
@@ -72,6 +73,8 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     let mut exclude_paths_override = None;
     let mut ai_only_flag = false;
     let mut cross_file_flag = false;
+    let mut ai_model_override = None::<AiClassifierMode>;
+    let mut onnx_model_override = None::<PathBuf>;
     let mut min_ai_confidence_override = None;
     let mut severity_override = None;
     let mut fail_on_findings_flag = false;
@@ -125,6 +128,18 @@ fn run_scan(args: &[String]) -> Result<(), String> {
             }
             "--ai-only" => ai_only_flag = true,
             "--cross-file" => cross_file_flag = true,
+            "--ai-model" => {
+                i += 1;
+                ai_model_override = Some(AiClassifierMode::parse(
+                    args.get(i).ok_or("--ai-model requires a value")?,
+                )?);
+            }
+            "--onnx-model" => {
+                i += 1;
+                onnx_model_override = Some(PathBuf::from(
+                    args.get(i).ok_or("--onnx-model requires a value")?,
+                ));
+            }
             "--min-ai-confidence" => {
                 i += 1;
                 let raw = args.get(i).ok_or("--min-ai-confidence requires a value")?;
@@ -212,6 +227,10 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     }
     let ai_only = ai_only_flag || config.ai_only;
     let cross_file = cross_file_flag || config.cross_file;
+    let ai_model = ai_model_override
+        .or_else(|| onnx_model_override.as_ref().map(|_| AiClassifierMode::Onnx))
+        .unwrap_or(config.ai_model);
+    let onnx_model_path = onnx_model_override.or_else(|| config.onnx_model_path.clone());
     let min_ai_confidence = min_ai_confidence_override.or(config.min_ai_confidence);
     let severity_threshold = severity_override.or(config.severity_threshold);
     let fail_on_findings = fail_on_findings_flag || config.fail_on_findings;
@@ -241,9 +260,11 @@ fn run_scan(args: &[String]) -> Result<(), String> {
 
     let rules_count = ruleset.rules.len();
     let analyzer = Analyzer::new(ruleset);
+    let ai_classifier = resolve_ai_classifier(ai_model, onnx_model_path);
     let options = AnalysisOptions {
         ai_only,
         cross_file,
+        ai_classifier,
         min_ai_confidence,
         categories,
         exclude_paths,
@@ -872,6 +893,8 @@ fn run_bench(args: &[String]) -> Result<(), String> {
     let mut exclude_paths_override = None;
     let mut ai_only_flag = false;
     let mut cross_file_flag = false;
+    let mut ai_model_override = None::<AiClassifierMode>;
+    let mut onnx_model_override = None::<PathBuf>;
     let mut min_ai_confidence_override = None;
     let mut iterations = 5usize;
     let mut warmup = 1usize;
@@ -906,6 +929,18 @@ fn run_bench(args: &[String]) -> Result<(), String> {
             }
             "--ai-only" => ai_only_flag = true,
             "--cross-file" => cross_file_flag = true,
+            "--ai-model" => {
+                i += 1;
+                ai_model_override = Some(AiClassifierMode::parse(
+                    args.get(i).ok_or("--ai-model requires a value")?,
+                )?);
+            }
+            "--onnx-model" => {
+                i += 1;
+                onnx_model_override = Some(PathBuf::from(
+                    args.get(i).ok_or("--onnx-model requires a value")?,
+                ));
+            }
             "--min-ai-confidence" => {
                 i += 1;
                 let raw = args.get(i).ok_or("--min-ai-confidence requires a value")?;
@@ -960,6 +995,10 @@ fn run_bench(args: &[String]) -> Result<(), String> {
     }
     let ai_only = ai_only_flag || config.ai_only;
     let cross_file = cross_file_flag || config.cross_file;
+    let ai_model = ai_model_override
+        .or_else(|| onnx_model_override.as_ref().map(|_| AiClassifierMode::Onnx))
+        .unwrap_or(config.ai_model);
+    let onnx_model_path = onnx_model_override.or_else(|| config.onnx_model_path.clone());
     let min_ai_confidence = min_ai_confidence_override.or(config.min_ai_confidence);
 
     let ruleset = RuleSet::load_from_dir(&rules_dir)
@@ -969,9 +1008,11 @@ fn run_bench(args: &[String]) -> Result<(), String> {
     }
 
     let analyzer = Analyzer::new(ruleset);
+    let ai_classifier = resolve_ai_classifier(ai_model, onnx_model_path);
     let options = AnalysisOptions {
         ai_only,
         cross_file,
+        ai_classifier,
         min_ai_confidence,
         categories,
         exclude_paths,
@@ -1031,6 +1072,54 @@ fn run_bench(args: &[String]) -> Result<(), String> {
     };
 
     write_stdout(&rendered)
+}
+
+fn resolve_ai_classifier(
+    requested_mode: AiClassifierMode,
+    requested_model_path: Option<PathBuf>,
+) -> AiClassifierOptions {
+    if requested_mode != AiClassifierMode::Onnx {
+        return AiClassifierOptions {
+            mode: requested_mode,
+            onnx_model_path: requested_model_path,
+        };
+    }
+
+    if !cfg!(feature = "onnx") {
+        eprintln!(
+            "warning: --ai-model onnx requested but this binary was built without `onnx` feature; falling back to heuristic scoring"
+        );
+        return AiClassifierOptions {
+            mode: AiClassifierMode::Heuristic,
+            onnx_model_path: None,
+        };
+    }
+
+    let Some(model_path) = requested_model_path else {
+        eprintln!(
+            "warning: --ai-model onnx requested but no --onnx-model path was provided; falling back to heuristic scoring"
+        );
+        return AiClassifierOptions {
+            mode: AiClassifierMode::Heuristic,
+            onnx_model_path: None,
+        };
+    };
+
+    if !model_path.exists() {
+        eprintln!(
+            "warning: ONNX model path {} does not exist; falling back to heuristic scoring",
+            model_path.display()
+        );
+        return AiClassifierOptions {
+            mode: AiClassifierMode::Heuristic,
+            onnx_model_path: None,
+        };
+    }
+
+    AiClassifierOptions {
+        mode: AiClassifierMode::Onnx,
+        onnx_model_path: Some(model_path),
+    }
 }
 
 struct BenchMetrics {
@@ -2075,7 +2164,7 @@ fn init_template_writes(
 }
 
 fn init_config_template() -> String {
-    "version: 1\nrules_dir: rules\nformat: table\ndedup_mode: normalized\nbridge_engines: []\nrules: []\nexclude_paths: []\nai_only: false\ncross_file: false\nmin_ai_confidence: 0.70\nseverity_threshold: medium\nfail_on_findings: false\nhistory_file: .aishield-history.log\nrecord_history: true\nnotify_webhook_url: \"\"\nnotify_min_severity: high\n".to_string()
+    "version: 1\nrules_dir: rules\nformat: table\ndedup_mode: normalized\nbridge_engines: []\nrules: []\nexclude_paths: []\nai_only: false\ncross_file: false\nai_model: heuristic\nonnx_model_path: \"\"\nmin_ai_confidence: 0.70\nseverity_threshold: medium\nfail_on_findings: false\nhistory_file: .aishield-history.log\nrecord_history: true\nnotify_webhook_url: \"\"\nnotify_min_severity: high\n".to_string()
 }
 
 fn init_github_actions_template() -> String {
@@ -3292,9 +3381,9 @@ fn render_stats_json(aggregate: &StatsAggregate, days: u64, history_file: &Path)
 fn print_help() {
     println!("AIShield CLI (foundation)\n");
     println!("Usage:");
-    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--cross-file] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--baseline FILE] [--notify-webhook URL] [--notify-min-severity LEVEL] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
+    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--cross-file] [--ai-model heuristic|onnx] [--onnx-model FILE] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--baseline FILE] [--notify-webhook URL] [--notify-min-severity LEVEL] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
     println!("  aishield fix <path[:line[:col]]> [--rules-dir DIR] [--write|--interactive] [--dry-run] [--config FILE] [--no-config]");
-    println!("  aishield bench <path> [--rules-dir DIR] [--iterations N] [--warmup N] [--format table|json] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--cross-file] [--min-ai-confidence N] [--config FILE] [--no-config]");
+    println!("  aishield bench <path> [--rules-dir DIR] [--iterations N] [--warmup N] [--format table|json] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--cross-file] [--ai-model heuristic|onnx] [--onnx-model FILE] [--min-ai-confidence N] [--config FILE] [--no-config]");
     println!("  aishield init [--output PATH] [--templates config,github-actions,gitlab-ci,bitbucket-pipelines,circleci,jenkins,vscode,pre-commit|all] [--force]");
     println!("  aishield create-rule --id ID --title TITLE --language LANG --category CAT [--severity LEVEL] [--pattern-any P] [--pattern-all P] [--pattern-not P] [--tags t1,t2] [--suggestion TEXT] [--out-dir DIR] [--force]");
     println!("  aishield stats [--last Nd] [--history-file FILE] [--format table|json] [--config FILE] [--no-config]");
@@ -4129,6 +4218,8 @@ struct AppConfig {
     exclude_paths: Vec<String>,
     ai_only: bool,
     cross_file: bool,
+    ai_model: AiClassifierMode,
+    onnx_model_path: Option<PathBuf>,
     min_ai_confidence: Option<f32>,
     severity_threshold: Option<SeverityThreshold>,
     fail_on_findings: bool,
@@ -4149,6 +4240,8 @@ impl Default for AppConfig {
             exclude_paths: Vec::new(),
             ai_only: false,
             cross_file: false,
+            ai_model: AiClassifierMode::Heuristic,
+            onnx_model_path: None,
             min_ai_confidence: None,
             severity_threshold: None,
             fail_on_findings: false,
@@ -4197,6 +4290,13 @@ impl AppConfig {
                 "exclude_paths" => config.exclude_paths = parse_list_like(value),
                 "ai_only" => config.ai_only = parse_bool(value)?,
                 "cross_file" => config.cross_file = parse_bool(value)?,
+                "ai_model" => config.ai_model = AiClassifierMode::parse(value)?,
+                "onnx_model_path" => {
+                    let parsed = strip_quotes(value);
+                    if !parsed.trim().is_empty() {
+                        config.onnx_model_path = Some(PathBuf::from(parsed));
+                    }
+                }
                 "min_ai_confidence" => {
                     config.min_ai_confidence = Some(
                         value
@@ -4383,6 +4483,7 @@ impl SeverityThreshold {
 
 #[cfg(test)]
 mod tests {
+    use aishield_core::AiClassifierMode;
     use serde_json::Value;
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -4395,8 +4496,8 @@ mod tests {
         filtered_candidate_indices, init_template_writes, load_baseline_keys,
         maybe_send_webhook_notification, normalize_snippet, parse_fix_target_spec,
         parse_init_templates, percentile, render_github_annotations, render_sarif,
-        resolve_selected_indices, DedupMode, Finding, InitTemplate, OutputSummary, ScanResult,
-        Severity, SeverityThreshold,
+        resolve_ai_classifier, resolve_selected_indices, DedupMode, Finding, InitTemplate,
+        OutputSummary, ScanResult, Severity, SeverityThreshold,
     };
 
     fn finding(
@@ -4791,21 +4892,44 @@ mod tests {
     fn init_config_template_sets_cross_file_disabled_by_default() {
         let template = super::init_config_template();
         assert!(template.contains("cross_file: false"));
+        assert!(template.contains("ai_model: heuristic"));
+        assert!(template.contains("onnx_model_path: \"\""));
     }
 
     #[test]
-    fn app_config_parser_supports_cross_file_flag() {
+    fn app_config_parser_supports_cross_file_and_ai_model_flags() {
         let config = super::AppConfig::parse(
             r#"
 version: 1
 rules_dir: rules
 format: table
 cross_file: true
+ai_model: onnx
+onnx_model_path: models/aishield.onnx
 "#,
         )
         .expect("parse config");
 
         assert!(config.cross_file);
+        assert_eq!(config.ai_model, AiClassifierMode::Onnx);
+        assert_eq!(
+            config.onnx_model_path,
+            Some(PathBuf::from("models/aishield.onnx"))
+        );
+    }
+
+    #[test]
+    fn resolve_ai_classifier_keeps_heuristic_mode() {
+        let resolved = resolve_ai_classifier(AiClassifierMode::Heuristic, None);
+        assert_eq!(resolved.mode, AiClassifierMode::Heuristic);
+        assert_eq!(resolved.onnx_model_path, None);
+    }
+
+    #[test]
+    fn resolve_ai_classifier_falls_back_on_missing_onnx_path() {
+        let resolved = resolve_ai_classifier(AiClassifierMode::Onnx, None);
+        assert_eq!(resolved.mode, AiClassifierMode::Heuristic);
+        assert_eq!(resolved.onnx_model_path, None);
     }
 
     #[test]

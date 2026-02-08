@@ -4,6 +4,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = []
+onnx = ["aishield-core/onnx"]
+
 [dependencies]
 aishield-core = { path = "../aishield-core" }
 serde_json = "1.0"

@@ -17,7 +17,8 @@ This page mirrors `project.md` and highlights the current implementation directi
 - [x] SAST bridge normalization and dedup path
 - [x] Go/Rust/Java rulepacks expanded toward 20-per-language target
 - [x] Interactive fix TUI upgrades (search/filter, badges, preview pane)
-- [ ] ONNX AI-vs-human classifier integration
+- [x] ONNX classifier integration bootstrap (feature-flagged with heuristic fallback)
+- [ ] Full ONNX model runtime integration + trained model distribution
 - [x] Full PR annotation + SARIF workflow hardening across repo contexts
 
 ## Phase 3+: Platform and Ecosystem

@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
-use crate::classifier::estimate_ai_likelihood;
+use crate::classifier::{AiClassifierOptions, AiLikelihoodScorer};
 use crate::rules::{Rule, RuleSet};
 use crate::scanner::collect_source_files;
 use crate::scoring::compute_risk_score;
@@ -75,6 +75,7 @@ pub struct AnalysisOptions {
     pub categories: Vec<String>,
     pub exclude_paths: Vec<String>,
     pub cross_file: bool,
+    pub ai_classifier: AiClassifierOptions,
 }
 
 #[derive(Debug, Clone)]
@@ -105,6 +106,7 @@ impl Analyzer {
         let mut findings = Vec::new();
         let mut dedup = HashSet::new();
         let mut source_slices = Vec::<SourceSlice>::new();
+        let ai_scorer = AiLikelihoodScorer::from_options(&options.ai_classifier);
 
         for file in &files {
             if is_excluded_path(target, &file.path, &options.exclude_paths) {
@@ -166,7 +168,7 @@ impl Analyzer {
                         continue;
                     }
 
-                    let ai_confidence = estimate_ai_likelihood(rule, &file.path, line.trim());
+                    let ai_confidence = ai_scorer.score(rule, &file.path, line.trim());
                     findings.push(Finding {
                         id: rule.id.clone(),
                         title: rule.title.clone(),
