@@ -223,6 +223,49 @@ function clearNode(node) {
   }
 }
 
+function renderMutedMessage(container, text) {
+  clearNode(container);
+  const p = document.createElement('p');
+  p.style.color = 'var(--text-muted)';
+  p.textContent = text;
+  container.appendChild(p);
+}
+
+function renderVizEmpty(container, icon, ...messages) {
+  clearNode(container);
+  const wrap = document.createElement('div');
+  wrap.className = 'viz-empty';
+
+  const iconEl = document.createElement('div');
+  iconEl.className = 'icon';
+  iconEl.textContent = icon;
+  wrap.appendChild(iconEl);
+
+  for (const msg of messages) {
+    const p = document.createElement('p');
+    p.textContent = msg;
+    wrap.appendChild(p);
+  }
+
+  container.appendChild(wrap);
+}
+
+function createTeamMetric(label, value, valueClass = '') {
+  const row = document.createElement('div');
+  row.className = 'team-metric';
+
+  const labelEl = document.createElement('span');
+  labelEl.className = 'team-metric-label';
+  labelEl.textContent = label;
+
+  const valueEl = document.createElement('span');
+  valueEl.className = `team-metric-value${valueClass ? ` ${valueClass}` : ''}`;
+  valueEl.textContent = String(value);
+
+  row.append(labelEl, valueEl);
+  return row;
+}
+
 function renderKPIs(summary) {
   const items = [
     ['Scans', summary.scans],
@@ -575,7 +618,12 @@ async function renderOrgHeatmap() {
     const teams = Object.values(teamMetrics).sort((a, b) => b.total - a.total);
     
     if (teams.length === 0) {
-      container.innerHTML = '<div class="viz-empty"><div class="icon">📊</div><p>No team data available</p><p>Run scans with --team-id to populate this view</p></div>';
+      renderVizEmpty(
+        container,
+        '📊',
+        'No team data available',
+        'Run scans with --team-id to populate this view',
+      );
       return;
     }
     
@@ -583,7 +631,7 @@ async function renderOrgHeatmap() {
     const maxFindings = Math.max(...teams.map(t => t.total), 1);
     
     // Render heatmap rows
-    container.innerHTML = '';
+    clearNode(container);
     teams.forEach(team => {
       const row = document.createElement('div');
       row.className = 'heatmap-row';
@@ -621,7 +669,7 @@ async function renderOrgHeatmap() {
     });
   } catch (error) {
     console.error('Failed to render org heatmap:', error);
-    container.innerHTML = '<div class="viz-empty"><div class="icon">⚠️</div><p>Failed to load heatmap data</p></div>';
+    renderVizEmpty(container, '⚠️', 'Failed to load heatmap data');
   }
 }
 
@@ -669,7 +717,7 @@ async function renderTeamComparison() {
       .slice(0, 8);
     
     if (teams.length === 0) {
-      container.innerHTML = '<div class="viz-empty"><div class="icon">📊</div><p>No team data available</p></div>';
+      renderVizEmpty(container, '📊', 'No team data available');
       return;
     }
     
@@ -680,45 +728,26 @@ async function renderTeamComparison() {
     teams.forEach(team => {
       const card = document.createElement('div');
       card.className = 'team-card';
-      
-      const criticalClass = team.critical > 0 ? 'critical' : team.high > 5 ? 'high' : 'good';
-      
-      card.innerHTML = `
-        <h3>${team.name}</h3>
-        <div class="team-metric">
-          <span class="team-metric-label">Total Findings</span>
-          <span class="team-metric-value">${fmt.format(team.totalFindings)}</span>
-        </div>
-        <div class="team-metric">
-          <span class="team-metric-label">Critical</span>
-          <span class="team-metric-value ${team.critical > 0 ? 'critical' : ''}">${team.critical}</span>
-        </div>
-        <div class="team-metric">
-          <span class="team-metric-label">High</span>
-          <span class="team-metric-value ${team.high > 5 ? 'high' : ''}">${team.high}</span>
-        </div>
-        <div class="team-metric">
-          <span class="team-metric-label">Avg/Scan</span>
-          <span class="team-metric-value">${team.avgFindings}</span>
-        </div>
-        <div class="team-metric">
-          <span class="team-metric-label">AI-Estimated</span>
-          <span class="team-metric-value">${team.aiEstimated}</span>
-        </div>
-        <div class="team-metric">
-          <span class="team-metric-label">Scans</span>
-          <span class="team-metric-value good">${team.scans}</span>
-        </div>
-      `;
+
+      const title = document.createElement('h3');
+      title.textContent = team.name;
+      card.appendChild(title);
+
+      card.appendChild(createTeamMetric('Total Findings', fmt.format(team.totalFindings)));
+      card.appendChild(createTeamMetric('Critical', team.critical, team.critical > 0 ? 'critical' : ''));
+      card.appendChild(createTeamMetric('High', team.high, team.high > 5 ? 'high' : ''));
+      card.appendChild(createTeamMetric('Avg/Scan', team.avgFindings));
+      card.appendChild(createTeamMetric('AI-Estimated', team.aiEstimated));
+      card.appendChild(createTeamMetric('Scans', team.scans, 'good'));
       
       grid.appendChild(card);
     });
     
-    container.innerHTML = '';
+    clearNode(container);
     container.appendChild(grid);
   } catch (error) {
     console.error('Failed to render team comparison:', error);
-    container.innerHTML = '<div class="viz-empty"><div class="icon">⚠️</div><p>Failed to load comparison data</p></div>';
+    renderVizEmpty(container, '⚠️', 'Failed to load comparison data');
   }
 }
 
@@ -758,48 +787,75 @@ async function renderAIMetrics() {
 function renderToolBreakdown(tools) {
   const container = document.getElementById('ai-tool-breakdown');
   if (!tools || tools.length === 0) {
-    container.innerHTML = '<p style="color: var(--text-muted);">No AI-detected findings</p>';
+    renderMutedMessage(container, 'No AI-detected findings');
     return;
   }
 
-  const html = tools.map(tool => `
-    <div class="ai-tool-item">
-      <div>
-        <div class="ai-tool-name">${tool.tool}</div>
-        <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
-          ${tool.findings} findings
-        </div>
-      </div>
-      <div class="ai-tool-stats">
-        <span title="Percentage of AI findings">${tool.percentage.toFixed(1)}%</span>
-        <span title="Average confidence">⭐ ${tool.avg_confidence.toFixed(1)}%</span>
-      </div>
-    </div>
-  `).join('');
+  clearNode(container);
+  for (const tool of tools) {
+    const item = document.createElement('div');
+    item.className = 'ai-tool-item';
 
-  container.innerHTML = html;
+    const left = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'ai-tool-name';
+    name.textContent = tool.tool;
+    const findings = document.createElement('div');
+    findings.style.fontSize = '0.85rem';
+    findings.style.color = 'var(--text-muted)';
+    findings.style.marginTop = '0.25rem';
+    findings.textContent = `${tool.findings} findings`;
+    left.append(name, findings);
+
+    const stats = document.createElement('div');
+    stats.className = 'ai-tool-stats';
+    const pct = document.createElement('span');
+    pct.title = 'Percentage of AI findings';
+    pct.textContent = `${Number(tool.percentage || 0).toFixed(1)}%`;
+    const conf = document.createElement('span');
+    conf.title = 'Average confidence';
+    conf.textContent = `⭐ ${Number(tool.avg_confidence || 0).toFixed(1)}%`;
+    stats.append(pct, conf);
+
+    item.append(left, stats);
+    container.appendChild(item);
+  }
 }
 
 function renderTopAIPatterns(patterns) {
   const container = document.getElementById('ai-top-patterns');
   if (!patterns || patterns.length === 0) {
-    container.innerHTML = '<p style="color: var(--text-muted);">No AI patterns detected</p>';
+    renderMutedMessage(container, 'No AI patterns detected');
     return;
   }
 
-  const html = patterns.slice(0, 5).map(pattern => `
-    <div class="ai-pattern-item">
-      <div class="ai-pattern-id">${pattern.pattern_id}</div>
-      <div class="ai-pattern-desc">${pattern.description.substring(0, 60)}${pattern.description.length > 60 ? '...' : ''}</div>
-      <div class="ai-pattern-meta">
-        <span>Count: ${pattern.count}</span>
-        <span>Tool: ${pattern.tool || 'N/A'}</span>
-        <span>⭐ ${pattern.avg_confidence.toFixed(1)}%</span>
-      </div>
-    </div>
-  `).join('');
+  clearNode(container);
+  for (const pattern of patterns.slice(0, 5)) {
+    const item = document.createElement('div');
+    item.className = 'ai-pattern-item';
 
-  container.innerHTML = html;
+    const id = document.createElement('div');
+    id.className = 'ai-pattern-id';
+    id.textContent = pattern.pattern_id;
+
+    const desc = document.createElement('div');
+    desc.className = 'ai-pattern-desc';
+    const rawDesc = String(pattern.description || '');
+    desc.textContent = rawDesc.length > 60 ? `${rawDesc.substring(0, 60)}...` : rawDesc;
+
+    const meta = document.createElement('div');
+    meta.className = 'ai-pattern-meta';
+    const count = document.createElement('span');
+    count.textContent = `Count: ${pattern.count}`;
+    const tool = document.createElement('span');
+    tool.textContent = `Tool: ${pattern.tool || 'N/A'}`;
+    const conf = document.createElement('span');
+    conf.textContent = `⭐ ${Number(pattern.avg_confidence || 0).toFixed(1)}%`;
+    meta.append(count, tool, conf);
+
+    item.append(id, desc, meta);
+    container.appendChild(item);
+  }
 }
 
 function renderConfidenceDistribution(dist) {
@@ -807,45 +863,46 @@ function renderConfidenceDistribution(dist) {
   const total = dist.high + dist.medium + dist.low;
   
   if (total === 0) {
-    container.innerHTML = '<p style="color: var(--text-muted);">No confidence data available</p>';
+    renderMutedMessage(container, 'No confidence data available');
     return;
   }
 
   const highPct = (dist.high / total * 100).toFixed(1);
   const mediumPct = (dist.medium / total * 100).toFixed(1);
   const lowPct = (dist.low / total * 100).toFixed(1);
+  clearNode(container);
 
-  container.innerHTML = `
-    <div class="confidence-bar">
-      <div class="confidence-label">
-        <span>High (80-100%)</span>
-        <span><strong>${dist.high}</strong> (${highPct}%)</span>
-      </div>
-      <div class="confidence-bar-inner confidence-high" style="width: ${highPct}%">
-        <span>${highPct}%</span>
-      </div>
-    </div>
-    
-    <div class="confidence-bar">
-      <div class="confidence-label">
-        <span>Medium (60-80%)</span>
-        <span><strong>${dist.medium}</strong> (${mediumPct}%)</span>
-      </div>
-      <div class="confidence-bar-inner confidence-medium" style="width: ${mediumPct}%">
-        <span>${mediumPct}%</span>
-      </div>
-    </div>
-    
-    <div class="confidence-bar">
-      <div class="confidence-label">
-        <span>Low (<60%)</span>
-        <span><strong>${dist.low}</strong> (${lowPct}%)</span>
-      </div>
-      <div class="confidence-bar-inner confidence-low" style="width: ${lowPct}%">
-        <span>${lowPct}%</span>
-      </div>
-    </div>
-  `;
+  const rows = [
+    { label: 'High (80-100%)', count: dist.high, pct: highPct, className: 'confidence-high' },
+    { label: 'Medium (60-80%)', count: dist.medium, pct: mediumPct, className: 'confidence-medium' },
+    { label: 'Low (<60%)', count: dist.low, pct: lowPct, className: 'confidence-low' },
+  ];
+
+  for (const row of rows) {
+    const wrap = document.createElement('div');
+    wrap.className = 'confidence-bar';
+
+    const label = document.createElement('div');
+    label.className = 'confidence-label';
+    const left = document.createElement('span');
+    left.textContent = row.label;
+    const right = document.createElement('span');
+    const strong = document.createElement('strong');
+    strong.textContent = String(row.count);
+    right.appendChild(strong);
+    right.append(` (${row.pct}%)`);
+    label.append(left, right);
+
+    const bar = document.createElement('div');
+    bar.className = `confidence-bar-inner ${row.className}`;
+    bar.style.width = `${row.pct}%`;
+    const pctLabel = document.createElement('span');
+    pctLabel.textContent = `${row.pct}%`;
+    bar.appendChild(pctLabel);
+
+    wrap.append(label, bar);
+    container.appendChild(wrap);
+  }
 }
 
 // ============================================================
