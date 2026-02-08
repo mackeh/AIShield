@@ -233,6 +233,9 @@ cargo test -p aishield-analytics
 DATABASE_URL=postgres://user:pass@host/db \
 AISHIELD_API_KEY=test_key \
 PORT=3000 \
+AISHIELD_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:4318 \
+AISHIELD_RATE_LIMIT_REQUESTS=120 \
+AISHIELD_RATE_LIMIT_SECONDS=60 \
 cargo run -p aishield-analytics
 ```
 
@@ -284,9 +287,9 @@ docker run -p 8080:8080 \
 
 - ✅ API key authentication (SHA-256 hashing)
 - ✅ SQL injection protection (sqlx parameterized queries)
-- ⚠️ CORS permissive (restrict in production)
+- ✅ Configurable CORS allowlist (`AISHIELD_ALLOWED_ORIGINS`)
+- ✅ Built-in request rate limiting (`AISHIELD_RATE_LIMIT_REQUESTS` / `AISHIELD_RATE_LIMIT_SECONDS`)
 - ⚠️ HTTPS recommended for production
-- ⚠️ Rate limiting TODO
 
 ## Troubleshooting
 
