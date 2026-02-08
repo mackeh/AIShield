@@ -59,6 +59,8 @@ npm run docs:dev
 npm run docs:build
 ```
 
+Docs are deployed automatically to GitHub Pages from `.github/workflows/docs.yml` on pushes to `main` that change docs or docs tooling files.
+
 ### Key docs pages
 
 - `docs/index.md`: documentation home

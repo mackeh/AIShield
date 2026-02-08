@@ -4,6 +4,8 @@ AIShield includes a workflow at `.github/workflows/aishield.yml` that scans and 
 
 Release automation is defined at `.github/workflows/release.yml` and runs on version tags (`v*.*.*`).
 
+Documentation deployment is defined at `.github/workflows/docs.yml` and publishes the VitePress site to GitHub Pages.
+
 ## What It Does
 
 1. Checks out repository code
@@ -116,3 +118,36 @@ gh run list --workflow aishield.yml --limit 5
 gh run view <RUN_ID> --log
 gh run watch <RUN_ID> --exit-status
 ```
+
+For docs workflow runs:
+
+```bash
+gh run list --workflow docs.yml --limit 5
+gh run watch <RUN_ID> --exit-status
+```
+
+## Docs Site Deployment (GitHub Pages)
+
+The docs workflow builds and publishes `docs/.vitepress/dist` using GitHub Pages Actions.
+
+### Trigger Conditions
+
+- push to `main` affecting:
+  - `docs/**`
+  - `package.json`
+  - `package-lock.json`
+  - `.github/workflows/docs.yml`
+- manual run via `workflow_dispatch`
+
+### Required Repository Setting
+
+In **Settings → Pages**, set source to **GitHub Actions**.
+
+### Workflow Summary
+
+1. Checkout repository
+2. Set up Node.js 20 with npm cache
+3. Run `npm ci`
+4. Run `npm run docs:build`
+5. Upload Pages artifact
+6. Deploy artifact to GitHub Pages environment
