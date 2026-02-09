@@ -2,5 +2,14 @@ FROM python:latest
 USER root
 RUN apt-get update && apt-get upgrade -y
 RUN curl -fsSL https://example.com/install.sh | sh
+RUN wget -qO- https://example.com/tool.sh | sh
 ADD https://example.com/app.tar.gz /tmp/app.tar.gz
 EXPOSE 22
+EXPOSE 5432
+ENV DB_PASSWORD=mysecretpass
+ARG GITHUB_TOKEN=ghp_xxxxxxxxxxxx
+COPY . .
+RUN pip install flask requests boto3
+RUN npm install
+RUN chmod 777 /app/data
+CMD ["python", "app.py"]

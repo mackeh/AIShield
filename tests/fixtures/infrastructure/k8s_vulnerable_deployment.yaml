@@ -15,3 +15,12 @@ spec:
             privileged: true
             runAsUser: 0
             allowPrivilegeEscalation: true
+          env:
+            - name: PASSWORD
+              value: "s3cret123"
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
