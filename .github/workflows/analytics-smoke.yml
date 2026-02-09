@@ -45,6 +45,21 @@ jobs:
       - name: Start analytics stack and run smoke test
         run: ./scripts/start-analytics-stack.sh
 
+      - name: Enforce analytics signal thresholds
+        env:
+          AISHIELD_ANALYTICS_URL: http://localhost:8080
+          AISHIELD_ORG_ID: test_org_1
+        run: |
+          cargo run -p aishield-cli -- analytics summary \
+            --days 30 \
+            --probes 3 \
+            --probe-interval-ms 250 \
+            --max-error-rate-pct 1 \
+            --max-summary-p95-ms 2000 \
+            --max-compliance-p95-ms 2000 \
+            --min-coverage-pct 70 \
+            --fail-on-threshold
+
       - name: Stop analytics stack
         if: always()
         run: ./scripts/stop-analytics-stack.sh
@@ -72,6 +87,21 @@ jobs:
 
       - name: Start hardened analytics stack and run smoke test
         run: ./scripts/start-analytics-stack.sh
+
+      - name: Enforce hardened analytics signal thresholds
+        env:
+          AISHIELD_ANALYTICS_URL: http://localhost:8080
+          AISHIELD_ORG_ID: test_org_1
+        run: |
+          cargo run -p aishield-cli -- analytics summary \
+            --days 30 \
+            --probes 3 \
+            --probe-interval-ms 250 \
+            --max-error-rate-pct 1 \
+            --max-summary-p95-ms 2000 \
+            --max-compliance-p95-ms 2000 \
+            --min-coverage-pct 70 \
+            --fail-on-threshold
 
       - name: Stop analytics stack
         if: always()
