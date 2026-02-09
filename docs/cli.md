@@ -283,8 +283,10 @@ Analytics API utility commands.
 
 ```bash
 aishield analytics migrate-history [--dry-run] [--history-file FILE]
-aishield analytics summary [--days N] [--limit N] [--org-id ID] [--team-id ID] [--repo-id ID] [--format table|json]
+aishield analytics summary [--days N] [--limit N] [--org-id ID] [--team-id ID] [--repo-id ID] [--format table|json] [--probes N] [--probe-interval-ms N] [--max-error-rate-pct N] [--max-summary-p95-ms N] [--max-compliance-p95-ms N] [--min-coverage-pct N] [--fail-on-threshold]
 ```
+
+Threshold options apply CI-style budget gates to observed probe metrics. The command exits non-zero when `--fail-on-threshold` is set and one or more gates fail.
 
 Examples:
 
@@ -297,4 +299,15 @@ cargo run -p aishield-cli -- analytics summary --days 30 --org-id acme --format 
 
 # machine-readable payload for CI/status bots
 cargo run -p aishield-cli -- analytics summary --days 7 --format json
+
+# enforce quality budgets in CI
+cargo run -p aishield-cli -- analytics summary \
+  --days 30 \
+  --probes 3 \
+  --probe-interval-ms 500 \
+  --max-error-rate-pct 1 \
+  --max-summary-p95-ms 1500 \
+  --max-compliance-p95-ms 1500 \
+  --min-coverage-pct 70 \
+  --fail-on-threshold
 ```

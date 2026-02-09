@@ -290,6 +290,19 @@ cargo run -p aishield-cli -- init --templates all
 
 Full reference: [docs/cli.md](docs/cli.md)
 
+Analytics API snapshot with threshold gates:
+
+```bash
+cargo run -p aishield-cli -- analytics summary \
+  --days 30 \
+  --probes 3 \
+  --max-error-rate-pct 1 \
+  --max-summary-p95-ms 1500 \
+  --max-compliance-p95-ms 1500 \
+  --min-coverage-pct 70 \
+  --fail-on-threshold
+```
+
 ---
 
 ## 🛡️ Known Limitations
