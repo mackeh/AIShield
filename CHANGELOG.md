@@ -10,6 +10,18 @@ The format is based on Keep a Changelog and follows semantic versioning.
 
 - No unreleased entries yet.
 
+## [0.3.2] - 2026-02-09
+
+### Added
+
+- Rule model and finding pipeline now support explicit compliance metadata fields (`cwe_id`, `owasp_category`) with backward-compatible aliases (`cwe`, `owasp`)
+- Compliance CSV report now includes per-scan `Top CWE` and `Top OWASP` summary columns for faster triage trends
+
+### Changed
+
+- Backfilled explicit CWE/OWASP metadata across the full rule catalog and updated rule authoring docs/template to use canonical keys
+- Updated analytics smoke/testing documentation to validate the expanded compliance report schema
+
 ## [0.3.1] - 2026-02-08
 
 ### Fixed
@@ -96,7 +108,8 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - Machine-output dedup normalization for JSON/SARIF to reduce CI noise
 - Expanded documentation for CLI, configuration, outputs, and CI
 
-[Unreleased]: https://github.com/mackeh/AIShield/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/mackeh/AIShield/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/mackeh/AIShield/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/mackeh/AIShield/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/mackeh/AIShield/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mackeh/AIShield/compare/v0.1.1...v0.2.0
