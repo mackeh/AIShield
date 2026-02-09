@@ -338,9 +338,11 @@ mod tests {
             languages: vec!["python".to_string()],
             ai_tendency: None,
             category: Some("auth".to_string()),
+            cwe_id: None,
+            owasp_category: None,
             tags: vec!["auth".to_string()],
             fix_suggestion: None,
-            pattern_any: vec!["token == ".to_string()],
+            pattern_any: vec!["secret == ".to_string()],
             pattern_all: Vec::new(),
             pattern_not: Vec::new(),
             negative_patterns: Vec::new(),
@@ -407,7 +409,7 @@ mod tests {
     fn likelihood_penalizes_secure_primitives() {
         let r = rule(0.90);
         let scorer = AiLikelihoodScorer::from_options(&AiClassifierOptions::default());
-        let insecure = scorer.score(&r, Path::new("src/auth/login.py"), "if token == provided:");
+        let insecure = scorer.score(&r, Path::new("src/auth/login.py"), "if secret == provided:");
         let secure = scorer.score(
             &r,
             Path::new("src/auth/login.py"),
@@ -433,14 +435,14 @@ mod tests {
         let r = rule(0.75);
         let default_scorer = AiLikelihoodScorer::from_options(&AiClassifierOptions::default());
         let default_score =
-            default_scorer.score(&r, Path::new("src/auth/login.py"), "if token == provided:");
+            default_scorer.score(&r, Path::new("src/auth/login.py"), "if secret == provided:");
         let onnx_scorer = AiLikelihoodScorer::from_options(&AiClassifierOptions {
             mode: AiClassifierMode::Onnx,
             onnx_model_path: None,
             calibration: AiCalibrationSettings::default(),
         });
         let onnx_score =
-            onnx_scorer.score(&r, Path::new("src/auth/login.py"), "if token == provided:");
+            onnx_scorer.score(&r, Path::new("src/auth/login.py"), "if secret == provided:");
         assert_eq!(default_score, onnx_score);
     }
 
@@ -448,7 +450,7 @@ mod tests {
     fn scorer_builds_from_options() {
         let r = rule(0.80);
         let scorer = AiLikelihoodScorer::from_options(&AiClassifierOptions::default());
-        let score = scorer.score(&r, Path::new("src/auth/login.py"), "if token == provided:");
+        let score = scorer.score(&r, Path::new("src/auth/login.py"), "if secret == provided:");
         assert!((0.0..=100.0).contains(&score));
     }
 

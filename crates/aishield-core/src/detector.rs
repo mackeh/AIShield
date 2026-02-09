@@ -49,6 +49,8 @@ pub struct Finding {
     pub ai_confidence: f32,
     pub risk_score: f32,
     pub category: Option<String>,
+    pub cwe_id: Option<String>,
+    pub owasp_category: Option<String>,
     pub tags: Vec<String>,
     pub ai_tendency: Option<String>,
     pub fix_suggestion: Option<String>,
@@ -186,6 +188,8 @@ impl Analyzer {
                             ai_confidence,
                         ),
                         category: rule.category.clone(),
+                        cwe_id: rule.cwe_id.clone(),
+                        owasp_category: rule.owasp_category.clone(),
                         tags: rule.tags.clone(),
                         ai_tendency: rule.ai_tendency.clone(),
                         fix_suggestion: rule.fix_suggestion.clone(),
@@ -370,6 +374,8 @@ fn detect_js_sensitive_routes_without_auth(source: &SourceSlice) -> Vec<Finding>
             ai_confidence: 58.0,
             risk_score: 70.0,
             category: Some("auth".to_string()),
+            cwe_id: None,
+            owasp_category: None,
             tags: vec![
                 "auth".to_string(),
                 "cross-file".to_string(),
@@ -421,6 +427,8 @@ fn detect_python_sensitive_routes_without_auth(source: &SourceSlice) -> Vec<Find
             ai_confidence: 57.0,
             risk_score: 69.0,
             category: Some("auth".to_string()),
+            cwe_id: None,
+            owasp_category: None,
             tags: vec![
                 "auth".to_string(),
                 "cross-file".to_string(),
@@ -471,6 +479,8 @@ fn detect_java_sensitive_routes_without_auth(source: &SourceSlice) -> Vec<Findin
             ai_confidence: 56.0,
             risk_score: 68.5,
             category: Some("auth".to_string()),
+            cwe_id: None,
+            owasp_category: None,
             tags: vec![
                 "auth".to_string(),
                 "cross-file".to_string(),
@@ -606,8 +616,8 @@ tags: [auth]
 
         fs::write(
             src_dir.join("login.py"),
-            r#"def check(token, provided):
-    return token == provided
+            r#"def check(secret, provided):
+    return secret == provided
 "#,
         )
         .expect("write source");
@@ -643,7 +653,7 @@ languages: [javascript]
 category: auth
 pattern:
   any:
-    - "token === "
+    - "secret === "
     - "apikey === "
   not:
     - "timingsafeequal("
@@ -656,8 +666,8 @@ tags: [auth]
 
         fs::write(
             src_dir.join("auth.js"),
-            r#"function bad(token, expected) {
-  if (token === expected) return true;
+            r#"function bad(secret, expected) {
+  if (secret === expected) return true;
 }
 
 function good(token, expected) {
@@ -828,7 +838,7 @@ languages: [python]
 category: auth
 pattern:
   any:
-    - "token == "
+    - "secret == "
 fix:
   suggestion: use compare_digest
 tags: [auth]
@@ -837,7 +847,7 @@ tags: [auth]
         .expect("write rule");
 
         let file = src_dir.join("single.py");
-        fs::write(&file, "if token == provided:\n    pass\n").expect("write source");
+        fs::write(&file, "if secret == provided:\n    pass\n").expect("write source");
 
         let rules = RuleSet::load_from_dir(root.join("rules").as_path()).expect("load rules");
         let analyzer = Analyzer::new(rules);
@@ -870,7 +880,7 @@ languages: [python]
 category: auth
 pattern:
   any:
-    - "token == "
+    - "secret == "
 fix:
   suggestion: use compare_digest
 tags: [auth]
@@ -881,14 +891,14 @@ tags: [auth]
         fs::write(
             src_dir.join("suppress.py"),
             r#"# aishield:ignore AISHIELD-PY-AUTH-001
-if token == expected:
+if secret == expected:
     pass
 
 # aishield:ignore
-if token == another:
+if secret == another:
     pass
 
-if token == live:
+if secret == live:
     pass
 "#,
         )
@@ -925,7 +935,7 @@ languages: [javascript]
 category: auth
 pattern:
   any:
-    - "token === "
+    - "secret === "
 fix:
   suggestion: use timingSafeEqual
 tags: [auth]
@@ -936,7 +946,7 @@ tags: [auth]
         fs::write(
             src_dir.join("suppressed.js"),
             r#"// aishield:ignore-file AISHIELD-JS-AUTH-001
-if (token === expected) {
+if (secret === expected) {
   return true;
 }
 "#,
@@ -974,7 +984,7 @@ languages: [python]
 category: auth
 pattern:
   any:
-    - "token == "
+    - "secret == "
 fix:
   suggestion: use compare_digest
 tags: [auth]
@@ -982,11 +992,14 @@ tags: [auth]
         )
         .expect("write rule");
 
-        fs::write(src_dir.join("main.py"), "if token == expected:\n    pass\n")
-            .expect("write source");
+        fs::write(
+            src_dir.join("main.py"),
+            "if secret == expected:\n    pass\n",
+        )
+        .expect("write source");
         fs::write(
             vendor_dir.join("lib.py"),
-            "if token == expected:\n    pass\n",
+            "if secret == expected:\n    pass\n",
         )
         .expect("write vendor source");
 

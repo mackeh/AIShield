@@ -12,6 +12,8 @@ pub struct Rule {
     pub languages: Vec<String>,
     pub ai_tendency: Option<String>,
     pub category: Option<String>,
+    pub cwe_id: Option<String>,
+    pub owasp_category: Option<String>,
     pub tags: Vec<String>,
     pub fix_suggestion: Option<String>,
     pub pattern_any: Vec<String>,
@@ -170,6 +172,8 @@ fn parse_rule(content: &str, source: &Path) -> Result<Rule, String> {
     let mut languages = Vec::new();
     let mut ai_tendency = None;
     let mut category = None;
+    let mut cwe_id = None;
+    let mut owasp_category = None;
     let mut tags = Vec::new();
     let mut fix_suggestion = None;
     let mut pattern_any = Vec::new();
@@ -218,6 +222,20 @@ fn parse_rule(content: &str, source: &Path) -> Result<Rule, String> {
             }
             if let Some(v) = parse_kv(trimmed, "category") {
                 category = Some(v);
+                continue;
+            }
+            if let Some(v) = parse_kv(trimmed, "cwe_id").or_else(|| parse_kv(trimmed, "cwe")) {
+                if !v.is_empty() {
+                    cwe_id = Some(v.to_ascii_uppercase());
+                }
+                continue;
+            }
+            if let Some(v) =
+                parse_kv(trimmed, "owasp_category").or_else(|| parse_kv(trimmed, "owasp"))
+            {
+                if !v.is_empty() {
+                    owasp_category = Some(v);
+                }
                 continue;
             }
             if let Some(v) = parse_kv(trimmed, "tags") {
@@ -333,6 +351,8 @@ fn parse_rule(content: &str, source: &Path) -> Result<Rule, String> {
         languages,
         ai_tendency,
         category,
+        cwe_id,
+        owasp_category,
         tags,
         fix_suggestion,
         pattern_any,
@@ -423,9 +443,9 @@ severity: high
 languages: [python]
 pattern:
   any:
-    - "token == "
+    - "secret == "
   all:
-    - "token"
+    - "secret"
     - "=="
   not:
     - "compare_digest("
@@ -433,10 +453,10 @@ pattern:
 
         let rule = parse_rule(yaml, Path::new("inline.yaml")).expect("parse rule");
 
-        assert_eq!(rule.pattern_any, vec!["token == "]);
-        assert_eq!(rule.pattern_all, vec!["token", "=="]);
+        assert_eq!(rule.pattern_any, vec!["secret == "]);
+        assert_eq!(rule.pattern_all, vec!["secret", "=="]);
         assert_eq!(rule.pattern_not, vec!["compare_digest("]);
-        assert!(rule.matches_line("if token == provided:").is_some());
+        assert!(rule.matches_line("if secret == provided:").is_some());
         assert!(rule
             .matches_line("return hmac.compare_digest(token, provided)")
             .is_none());
@@ -457,6 +477,47 @@ pattern:
         assert_eq!(rule.pattern_any, vec!["innerhtml ="]);
         assert!(rule.pattern_all.is_empty());
         assert!(rule.matches_line("node.innerhtml = userinput").is_some());
+    }
+
+    #[test]
+    fn parses_explicit_compliance_metadata_fields() {
+        let yaml = r#"id: AISHIELD-TEST-003
+title: Compliance Metadata
+severity: high
+languages: [python]
+category: injection
+cwe_id: CWE-89
+owasp_category: A03:2021 - Injection
+pattern:
+  contains:
+    - "execute("
+"#;
+
+        let rule = parse_rule(yaml, Path::new("inline.yaml")).expect("parse rule");
+        assert_eq!(rule.cwe_id.as_deref(), Some("CWE-89"));
+        assert_eq!(rule.owasp_category.as_deref(), Some("A03:2021 - Injection"));
+    }
+
+    #[test]
+    fn parses_compliance_metadata_alias_fields() {
+        let yaml = r#"id: AISHIELD-TEST-004
+title: Compliance Metadata Aliases
+severity: medium
+languages: [javascript]
+category: auth
+cwe: cwe-287
+owasp: A07:2021 - Identification and Authentication Failures
+pattern:
+  contains:
+    - "secret=="
+"#;
+
+        let rule = parse_rule(yaml, Path::new("inline.yaml")).expect("parse rule");
+        assert_eq!(rule.cwe_id.as_deref(), Some("CWE-287"));
+        assert_eq!(
+            rule.owasp_category.as_deref(),
+            Some("A07:2021 - Identification and Authentication Failures")
+        );
     }
 
     #[test]

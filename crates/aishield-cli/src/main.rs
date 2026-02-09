@@ -632,6 +632,8 @@ fn run_semgrep_bridge(target: &Path) -> Result<Vec<Finding>, String> {
             ai_confidence: 30.0,
             risk_score: bridge_risk_score(severity),
             category: Some("sast-bridge".to_string()),
+            cwe_id: None,
+            owasp_category: None,
             tags: vec!["sast-bridge".to_string(), "semgrep".to_string()],
             ai_tendency: None,
             fix_suggestion: None,
@@ -711,6 +713,8 @@ fn run_bandit_bridge(target: &Path) -> Result<Vec<Finding>, String> {
             ai_confidence: 30.0,
             risk_score: bridge_risk_score(severity),
             category: Some("sast-bridge".to_string()),
+            cwe_id: None,
+            owasp_category: None,
             tags: vec!["sast-bridge".to_string(), "bandit".to_string()],
             ai_tendency: None,
             fix_suggestion: None,
@@ -784,6 +788,8 @@ fn run_eslint_bridge(target: &Path) -> Result<Vec<Finding>, String> {
                 ai_confidence: 30.0,
                 risk_score: bridge_risk_score(severity),
                 category: Some("sast-bridge".to_string()),
+                cwe_id: None,
+                owasp_category: None,
                 tags: vec!["sast-bridge".to_string(), "eslint".to_string()],
                 ai_tendency: None,
                 fix_suggestion: None,
@@ -3593,8 +3599,8 @@ fn append_history(history_file: &Path, target: &Path, result: &ScanResult) -> Re
 }
 
 fn enrich_finding_compliance_metadata(finding: &Finding) -> (Option<String>, Option<String>) {
-    let mut cwe_id: Option<&'static str> = None;
-    let mut owasp_category: Option<&'static str> = None;
+    let mut cwe_id = finding.cwe_id.clone();
+    let mut owasp_category = finding.owasp_category.clone();
 
     for tag in &finding.tags {
         let normalized = tag.trim().to_ascii_lowercase();
@@ -3602,41 +3608,58 @@ fn enrich_finding_compliance_metadata(finding: &Finding) -> (Option<String>, Opt
             &mut cwe_id,
             &mut owasp_category,
             match normalized.as_str() {
-                "sql-injection" => (Some("CWE-89"), Some("A03:2021 - Injection")),
-                "nosql" => (Some("CWE-943"), Some("A03:2021 - Injection")),
-                "command-injection" | "command" => (Some("CWE-78"), Some("A03:2021 - Injection")),
-                "path-traversal" => (Some("CWE-22"), Some("A01:2021 - Broken Access Control")),
-                "code-execution" => (Some("CWE-94"), Some("A03:2021 - Injection")),
-                "timing-attack" => (
-                    Some("CWE-208"),
-                    Some("A07:2021 - Identification and Authentication Failures"),
+                "sql-injection" => (
+                    Some("CWE-89".to_string()),
+                    Some("A03:2021 - Injection".to_string()),
                 ),
-                "weak-hash" | "crypto" | "key-management" => {
-                    (Some("CWE-327"), Some("A02:2021 - Cryptographic Failures"))
-                }
+                "nosql" => (
+                    Some("CWE-943".to_string()),
+                    Some("A03:2021 - Injection".to_string()),
+                ),
+                "command-injection" | "command" => (
+                    Some("CWE-78".to_string()),
+                    Some("A03:2021 - Injection".to_string()),
+                ),
+                "path-traversal" => (
+                    Some("CWE-22".to_string()),
+                    Some("A01:2021 - Broken Access Control".to_string()),
+                ),
+                "code-execution" => (
+                    Some("CWE-94".to_string()),
+                    Some("A03:2021 - Injection".to_string()),
+                ),
+                "timing-attack" => (
+                    Some("CWE-208".to_string()),
+                    Some("A07:2021 - Identification and Authentication Failures".to_string()),
+                ),
+                "weak-hash" | "crypto" | "key-management" => (
+                    Some("CWE-327".to_string()),
+                    Some("A02:2021 - Cryptographic Failures".to_string()),
+                ),
                 "secrets" => (
-                    Some("CWE-798"),
-                    Some("A07:2021 - Identification and Authentication Failures"),
+                    Some("CWE-798".to_string()),
+                    Some("A07:2021 - Identification and Authentication Failures".to_string()),
                 ),
                 "cors" => (
-                    Some("CWE-942"),
-                    Some("A05:2021 - Security Misconfiguration"),
+                    Some("CWE-942".to_string()),
+                    Some("A05:2021 - Security Misconfiguration".to_string()),
                 ),
                 "debug" => (
-                    Some("CWE-489"),
-                    Some("A05:2021 - Security Misconfiguration"),
+                    Some("CWE-489".to_string()),
+                    Some("A05:2021 - Security Misconfiguration".to_string()),
                 ),
                 "supply-chain" => (
-                    Some("CWE-1104"),
-                    Some("A06:2021 - Vulnerable and Outdated Components"),
+                    Some("CWE-1104".to_string()),
+                    Some("A06:2021 - Vulnerable and Outdated Components".to_string()),
                 ),
                 "auth" | "token" | "identity" => (
-                    Some("CWE-287"),
-                    Some("A07:2021 - Identification and Authentication Failures"),
+                    Some("CWE-287".to_string()),
+                    Some("A07:2021 - Identification and Authentication Failures".to_string()),
                 ),
-                "misconfig" | "hardening" | "network" => {
-                    (Some("CWE-16"), Some("A05:2021 - Security Misconfiguration"))
-                }
+                "misconfig" | "hardening" | "network" => (
+                    Some("CWE-16".to_string()),
+                    Some("A05:2021 - Security Misconfiguration".to_string()),
+                ),
                 _ => (None, None),
             },
         );
@@ -3652,12 +3675,21 @@ fn enrich_finding_compliance_metadata(finding: &Finding) -> (Option<String>, Opt
         &mut owasp_category,
         match category.as_str() {
             "auth" => (
-                Some("CWE-287"),
-                Some("A07:2021 - Identification and Authentication Failures"),
+                Some("CWE-287".to_string()),
+                Some("A07:2021 - Identification and Authentication Failures".to_string()),
             ),
-            "crypto" => (Some("CWE-327"), Some("A02:2021 - Cryptographic Failures")),
-            "injection" => (Some("CWE-74"), Some("A03:2021 - Injection")),
-            "misconfig" => (Some("CWE-16"), Some("A05:2021 - Security Misconfiguration")),
+            "crypto" => (
+                Some("CWE-327".to_string()),
+                Some("A02:2021 - Cryptographic Failures".to_string()),
+            ),
+            "injection" => (
+                Some("CWE-74".to_string()),
+                Some("A03:2021 - Injection".to_string()),
+            ),
+            "misconfig" => (
+                Some("CWE-16".to_string()),
+                Some("A05:2021 - Security Misconfiguration".to_string()),
+            ),
             _ => (None, None),
         },
     );
@@ -3668,30 +3700,36 @@ fn enrich_finding_compliance_metadata(finding: &Finding) -> (Option<String>, Opt
         &mut owasp_category,
         if rule_id.contains("-AUTH-") {
             (
-                Some("CWE-287"),
-                Some("A07:2021 - Identification and Authentication Failures"),
+                Some("CWE-287".to_string()),
+                Some("A07:2021 - Identification and Authentication Failures".to_string()),
             )
         } else if rule_id.contains("-CRYPTO-") {
-            (Some("CWE-327"), Some("A02:2021 - Cryptographic Failures"))
+            (
+                Some("CWE-327".to_string()),
+                Some("A02:2021 - Cryptographic Failures".to_string()),
+            )
         } else if rule_id.contains("-INJ-") {
-            (Some("CWE-74"), Some("A03:2021 - Injection"))
+            (
+                Some("CWE-74".to_string()),
+                Some("A03:2021 - Injection".to_string()),
+            )
         } else if rule_id.contains("-MISC-") || rule_id.contains("-MISCONFIG-") {
-            (Some("CWE-16"), Some("A05:2021 - Security Misconfiguration"))
+            (
+                Some("CWE-16".to_string()),
+                Some("A05:2021 - Security Misconfiguration".to_string()),
+            )
         } else {
             (None, None)
         },
     );
 
-    (
-        cwe_id.map(|value| value.to_string()),
-        owasp_category.map(|value| value.to_string()),
-    )
+    (cwe_id, owasp_category)
 }
 
 fn apply_compliance_mapping(
-    cwe_id: &mut Option<&'static str>,
-    owasp_category: &mut Option<&'static str>,
-    candidate: (Option<&'static str>, Option<&'static str>),
+    cwe_id: &mut Option<String>,
+    owasp_category: &mut Option<String>,
+    candidate: (Option<String>, Option<String>),
 ) {
     if cwe_id.is_none() {
         *cwe_id = candidate.0;
@@ -5161,6 +5199,8 @@ mod tests {
             ai_confidence: 80.0,
             risk_score,
             category: Some("auth".to_string()),
+            cwe_id: None,
+            owasp_category: None,
             tags: vec!["auth".to_string()],
             ai_tendency: None,
             fix_suggestion: None,
@@ -5190,6 +5230,26 @@ mod tests {
         let (cwe_id, owasp_category) = enrich_finding_compliance_metadata(&candidate);
         assert_eq!(cwe_id.as_deref(), Some("CWE-89"));
         assert_eq!(owasp_category.as_deref(), Some("A03:2021 - Injection"));
+    }
+
+    #[test]
+    fn explicit_rule_metadata_takes_precedence_over_heuristics() {
+        let mut candidate = finding(
+            "AISHIELD-GO-INJ-003",
+            Severity::High,
+            "src/db.go",
+            42,
+            "query := \"SELECT * FROM users WHERE id = \" + userInput",
+            85.0,
+        );
+        candidate.category = Some("injection".to_string());
+        candidate.tags = vec!["injection".to_string(), "sql-injection".to_string()];
+        candidate.cwe_id = Some("CWE-999".to_string());
+        candidate.owasp_category = Some("A00:Custom".to_string());
+
+        let (cwe_id, owasp_category) = enrich_finding_compliance_metadata(&candidate);
+        assert_eq!(cwe_id.as_deref(), Some("CWE-999"));
+        assert_eq!(owasp_category.as_deref(), Some("A00:Custom"));
     }
 
     #[test]
@@ -5734,6 +5794,8 @@ ai_calibration: aggressive
             ai_confidence: 30.0,
             risk_score: 65.0,
             category: Some("sast-bridge".to_string()),
+            cwe_id: None,
+            owasp_category: None,
             tags: vec!["sast-bridge".to_string()],
             ai_tendency: None,
             fix_suggestion: None,

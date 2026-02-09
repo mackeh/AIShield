@@ -194,6 +194,8 @@ mod tests {
             languages: vec!["python".to_string()],
             ai_tendency: None,
             category: Some(category.to_string()),
+            cwe_id: None,
+            owasp_category: None,
             tags: tags.iter().map(|t| t.to_string()).collect::<Vec<_>>(),
             fix_suggestion: None,
             pattern_any: vec!["x".to_string()],
@@ -230,14 +232,14 @@ mod tests {
             &r,
             Severity::Critical,
             Path::new("src/auth/login.py"),
-            "if token == provided:",
+            "if secret == provided:",
             75.0,
         );
         let medium = compute_risk_score(
             &r,
             Severity::Medium,
             Path::new("src/auth/login.py"),
-            "if token == provided:",
+            "if secret == provided:",
             75.0,
         );
         assert!(critical > medium);
