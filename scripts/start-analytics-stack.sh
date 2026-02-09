@@ -8,6 +8,31 @@ DB_URL="${DATABASE_URL:-postgres://aishield:aishield_dev_password@localhost:5432
 API_KEY="${AISHIELD_API_KEY:-test_key_e2e_12345}"
 PORT="${PORT:-8080}"
 API_READY_TIMEOUT="${AISHIELD_API_READY_TIMEOUT:-120}"
+BIN_PATH="$ROOT_DIR/target/debug/aishield-analytics"
+
+analytics_binary_is_fresh() {
+  if [[ ! -x "$BIN_PATH" ]]; then
+    return 1
+  fi
+
+  if [[ "${AISHIELD_ANALYTICS_FORCE_REBUILD:-0}" == "1" ]]; then
+    return 1
+  fi
+
+  if [[ -n "$(find "$ROOT_DIR/crates/aishield-analytics/src" -type f -newer "$BIN_PATH" -print -quit 2>/dev/null)" ]]; then
+    return 1
+  fi
+
+  if [[ "$ROOT_DIR/crates/aishield-analytics/Cargo.toml" -nt "$BIN_PATH" ]]; then
+    return 1
+  fi
+
+  if [[ "$ROOT_DIR/Cargo.toml" -nt "$BIN_PATH" ]]; then
+    return 1
+  fi
+
+  return 0
+}
 
 echo "== Starting AIShield Analytics Stack =="
 echo "root:      $ROOT_DIR"
@@ -27,10 +52,13 @@ else
   export PORT
   export RUST_LOG="${RUST_LOG:-info,aishield_analytics=debug}"
 
-  if [[ -x "$ROOT_DIR/target/debug/aishield-analytics" ]]; then
-    nohup "$ROOT_DIR/target/debug/aishield-analytics" > /tmp/aishield-analytics.log 2>&1 &
+  if analytics_binary_is_fresh; then
+    echo "      using existing debug binary"
+    nohup "$BIN_PATH" > /tmp/aishield-analytics.log 2>&1 &
   else
-    nohup cargo run -p aishield-analytics > /tmp/aishield-analytics.log 2>&1 &
+    echo "      rebuilding analytics binary (source is newer or rebuild forced)"
+    cargo build -p aishield-analytics
+    nohup "$BIN_PATH" > /tmp/aishield-analytics.log 2>&1 &
   fi
   echo "      API started (logs: /tmp/aishield-analytics.log)"
 fi

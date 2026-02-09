@@ -37,6 +37,8 @@ validate_staging_env() {
   fi
 }
 
+rollback_started_at="$(date +%s)"
+
 if [[ ! -f "$STATE_FILE" ]]; then
   echo "error: staging state file not found: $STATE_FILE"
   echo "hint: run ./scripts/deploy-analytics-staging.sh at least once first"
@@ -65,20 +67,26 @@ export AISHIELD_SMOKE_ASSERT_CORS="${AISHIELD_SMOKE_ASSERT_CORS:-1}"
 export AISHIELD_SMOKE_ALLOWED_ORIGIN="${AISHIELD_SMOKE_ALLOWED_ORIGIN:-http://localhost:3000}"
 export AISHIELD_SMOKE_DISALLOWED_ORIGIN="${AISHIELD_SMOKE_DISALLOWED_ORIGIN:-https://not-allowed.example}"
 export AISHIELD_SMOKE_ASSERT_RATE_LIMIT="${AISHIELD_SMOKE_ASSERT_RATE_LIMIT:-1}"
-export AISHIELD_SMOKE_RATE_LIMIT_MAX="${AISHIELD_SMOKE_RATE_LIMIT_MAX:-6}"
+export AISHIELD_SMOKE_RATE_LIMIT_MAX="${AISHIELD_SMOKE_RATE_LIMIT_MAX:-$AISHIELD_RATE_LIMIT_REQUESTS}"
 
+current_deployed_commit="${DEPLOYED_COMMIT:-}"
 ./scripts/stop-analytics-stack.sh
 git checkout "$TARGET_COMMIT"
 cargo build -p aishield-analytics
 ./scripts/start-analytics-stack.sh
 
+rollback_duration_seconds="$(( $(date +%s) - rollback_started_at ))"
+
 cat >"$STATE_FILE" <<EOF
-PREVIOUS_COMMIT=$TARGET_COMMIT
+PREVIOUS_COMMIT=${current_deployed_commit:-$TARGET_COMMIT}
 DEPLOYED_COMMIT=$TARGET_COMMIT
 TARGET_REF=rollback
 DEPLOYED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+ROLLBACK_DURATION_SECONDS=$rollback_duration_seconds
+LAST_ACTION=rollback
 EOF
 
 echo
 echo "✅ Rollback succeeded"
 echo "active commit: $TARGET_COMMIT"
+echo "duration:      ${rollback_duration_seconds}s"

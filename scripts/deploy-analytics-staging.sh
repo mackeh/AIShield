@@ -49,6 +49,8 @@ rollback_to_previous() {
   ./scripts/start-analytics-stack.sh
 }
 
+deploy_started_at="$(date +%s)"
+
 echo "== Deploy AIShield Analytics to Staging =="
 echo "target ref: $TARGET_REF"
 echo
@@ -62,7 +64,7 @@ export AISHIELD_SMOKE_ASSERT_CORS="${AISHIELD_SMOKE_ASSERT_CORS:-1}"
 export AISHIELD_SMOKE_ALLOWED_ORIGIN="${AISHIELD_SMOKE_ALLOWED_ORIGIN:-http://localhost:3000}"
 export AISHIELD_SMOKE_DISALLOWED_ORIGIN="${AISHIELD_SMOKE_DISALLOWED_ORIGIN:-https://not-allowed.example}"
 export AISHIELD_SMOKE_ASSERT_RATE_LIMIT="${AISHIELD_SMOKE_ASSERT_RATE_LIMIT:-1}"
-export AISHIELD_SMOKE_RATE_LIMIT_MAX="${AISHIELD_SMOKE_RATE_LIMIT_MAX:-6}"
+export AISHIELD_SMOKE_RATE_LIMIT_MAX="${AISHIELD_SMOKE_RATE_LIMIT_MAX:-$AISHIELD_RATE_LIMIT_REQUESTS}"
 
 PREVIOUS_COMMIT="$(git rev-parse HEAD)"
 git fetch origin
@@ -86,14 +88,19 @@ if ! {
   exit 1
 fi
 
+deploy_duration_seconds="$(( $(date +%s) - deploy_started_at ))"
+
 cat >"$STATE_FILE" <<EOF
 PREVIOUS_COMMIT=$PREVIOUS_COMMIT
 DEPLOYED_COMMIT=$TARGET_COMMIT
 TARGET_REF=$TARGET_REF
 DEPLOYED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+DEPLOY_DURATION_SECONDS=$deploy_duration_seconds
+LAST_ACTION=deploy
 EOF
 
 echo
 echo "✅ Staging deployment succeeded"
 echo "state file: $STATE_FILE"
 echo "rollback:   ./scripts/rollback-analytics-staging.sh"
+echo "duration:   ${deploy_duration_seconds}s"
