@@ -4,3 +4,4 @@ Cargo.lock
 node_modules/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
+.aishield-staging/

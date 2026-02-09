@@ -24,13 +24,14 @@
 ### Next Steps
 1. Deploy stabilized dashboard/API stack to staging
 2. Observe trend quality and compliance report signal in live staging traffic
-3. Add staging deployment automation + rollback notes for analytics stack
+3. Run staged burn-in on latest release and capture rollback timings
 
 ### Week 5 Completed in This Cycle
 - Added deterministic smoke ingestion fixture to validate metadata mapping from ingest -> compliance report (`Top CWE`, `Top OWASP`)
 - Added analytics hardening smoke mode to verify strict CORS allowlist and rate-limit enforcement
 - Added analytics regression unit tests for metadata normalization and compliance score/trend helper logic
 - Added compliance hotspot analytics endpoint (`/api/v1/analytics/compliance-gaps`) and dashboard visualization for top CWE/OWASP gaps with severity mix
+- Added staging deployment + rollback automation scripts with a dedicated runbook (`docs/analytics-staging.md`)
 
 ---
 *For implementation direction, see `project.md` and `docs/roadmap.md`.*

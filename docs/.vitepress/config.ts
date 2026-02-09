@@ -59,6 +59,7 @@ export default defineConfig({
         items: [
           { text: "Integrations", link: "/integrations" },
           { text: "Dashboard", link: "/dashboard" },
+          { text: "Analytics Staging Deploy", link: "/analytics-staging" },
           { text: "VS Code Extension", link: "/vscode-extension" },
           { text: "GitHub Actions", link: "/ci-github-actions" },
           { text: "Releasing", link: "/releasing" },

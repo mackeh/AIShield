@@ -46,6 +46,7 @@ Near-term focus is reliability and signal quality:
 - enforce staged CORS/rate-limit hardening checks in analytics smoke CI
 - keep compliance metadata ingestion/report mappings covered by regression tests
 - expose compliance hotspots (top CWE/OWASP + severity mix) in analytics API/dashboard
+- add staging deploy/rollback automation runbook for analytics stack
 - Kotlin/Swift now at 20 rules each with expanded fixture coverage and regression gates
 - ONNX model manifest + calibration profile support now wired in CLI/config/docs
 - VS Code extension GA polish landed (status bar UX, scan tuning controls, local telemetry summaries)

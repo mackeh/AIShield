@@ -30,5 +30,6 @@ npm run docs:build
 - `output-formats.md`: table/json/sarif/github outputs + dedup behavior
 - `vscode-extension.md`: VS Code extension bootstrap and usage
 - `ci-github-actions.md`: CI integration and troubleshooting
+- `analytics-staging.md`: staging deploy + rollback runbook for analytics stack
 - `releasing.md`: release/tag workflow
 - `rules-authoring.md`: custom rule authoring guide
