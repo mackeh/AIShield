@@ -36,6 +36,10 @@ Optional args:
 Environment-variable equivalents are also supported:
 `AISHIELD_ANALYTICS_URL`, `AISHIELD_API_KEY`, `AISHIELD_ORG_ID`, `AISHIELD_DAYS`.
 
+The smoke test now ingests a deterministic metadata fixture before querying reports, and verifies that the generated CSV includes a row where:
+- `Top CWE = CWE-79`
+- `Top OWASP = A03:2021 - Injection`
+
 ## 1. AI Tool Metrics 🤖
 
 **Objective**: Verify that AI-generated findings are correctly identified, aggregated, and displayed.
@@ -104,6 +108,28 @@ Check that the file is not empty:
 ```bash
 cat report.csv
 ```
+
+## 3. Staged Hardening Checks 🔒
+
+**Objective**: Verify strict CORS allowlist and rate-limit enforcement before staging deploy.
+
+Run smoke in hardening mode:
+
+```bash
+AISHIELD_ALLOWED_ORIGINS=http://localhost:3000 \
+AISHIELD_RATE_LIMIT_REQUESTS=6 \
+AISHIELD_RATE_LIMIT_SECONDS=60 \
+AISHIELD_SMOKE_ASSERT_CORS=1 \
+AISHIELD_SMOKE_ALLOWED_ORIGIN=http://localhost:3000 \
+AISHIELD_SMOKE_DISALLOWED_ORIGIN=https://not-allowed.example \
+AISHIELD_SMOKE_ASSERT_RATE_LIMIT=1 \
+AISHIELD_SMOKE_RATE_LIMIT_MAX=6 \
+./scripts/start-analytics-stack.sh
+```
+
+Expected additional smoke results:
+- `pass: cors -> strict allowlist behavior verified`
+- `pass: rate-limit -> middleware limit enforced`
 
 ---
 

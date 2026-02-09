@@ -11,7 +11,7 @@
 - ✅ **Week 4**: Dashboard Upgrade (100%)
 - 🚧 **Week 5**: API mode stabilization, trend deltas, reporting polish, metadata enrichment (In Progress)
 
-**Overall Completion**: 91% (Core platform shipped, reliability and signal-quality hardening active)
+**Overall Completion**: 93% (Core platform shipped, reliability and signal-quality hardening near completion)
 
 ### Quick Links
 - [⚡ Dashboard Quick Start](dashboard/QUICKSTART.md)
@@ -23,9 +23,13 @@
 
 ### Next Steps
 1. Deploy stabilized dashboard/API stack to staging
-2. Add staged environment checks for CORS allowlist and rate limits
-3. Add analytics regression tests for metadata mapping in ingestion/report views
-4. Deploy stabilized dashboard/API stack to staging and observe trend quality in live traffic
+2. Observe trend quality and compliance report signal in live staging traffic
+3. Add staging deployment automation + rollback notes for analytics stack
+
+### Week 5 Completed in This Cycle
+- Added deterministic smoke ingestion fixture to validate metadata mapping from ingest -> compliance report (`Top CWE`, `Top OWASP`)
+- Added analytics hardening smoke mode to verify strict CORS allowlist and rate-limit enforcement
+- Added analytics regression unit tests for metadata normalization and compliance score/trend helper logic
 
 ---
 *For implementation direction, see `project.md` and `docs/roadmap.md`.*

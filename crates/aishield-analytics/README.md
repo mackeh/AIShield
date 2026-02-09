@@ -243,6 +243,21 @@ cargo build -p aishield-analytics
 
 ```bash
 cargo test -p aishield-analytics
+./scripts/smoke-analytics-api.sh
+```
+
+For staged hardening checks (strict CORS + rate limit assertions):
+
+```bash
+AISHIELD_ALLOWED_ORIGINS=http://localhost:3000 \
+AISHIELD_RATE_LIMIT_REQUESTS=6 \
+AISHIELD_RATE_LIMIT_SECONDS=60 \
+AISHIELD_SMOKE_ASSERT_CORS=1 \
+AISHIELD_SMOKE_ALLOWED_ORIGIN=http://localhost:3000 \
+AISHIELD_SMOKE_DISALLOWED_ORIGIN=https://not-allowed.example \
+AISHIELD_SMOKE_ASSERT_RATE_LIMIT=1 \
+AISHIELD_SMOKE_RATE_LIMIT_MAX=6 \
+./scripts/start-analytics-stack.sh
 ```
 
 ### Run with Custom Config
