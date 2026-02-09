@@ -244,6 +244,20 @@ fn percent_change(current: f64, previous: f64) -> Option<f64> {
     Some(((current - previous) / previous * 1000.0).round() / 10.0)
 }
 
+fn calculate_compliance_score(
+    total: i64,
+    critical: i64,
+    high: i64,
+    medium: i64,
+    low: i64,
+) -> String {
+    if total <= 0 {
+        return "100.0%".to_string();
+    }
+    let penalty = (critical * 10 + high * 5 + medium * 2 + low) as f64;
+    format!("{:.1}%", 100.0 - (penalty / total as f64).min(100.0))
+}
+
 /// GET /api/v1/scans - List scans
 #[derive(Debug, serde::Deserialize)]
 pub struct ScanListQuery {
@@ -664,12 +678,7 @@ pub async fn generate_compliance_report(
 
     for row in rows {
         let (org, team, repo, date, total, critical, high, medium, low, top_cwe, top_owasp) = row;
-        let compliance_score = if total > 0 {
-            let penalty = (critical * 10 + high * 5 + medium * 2 + low * 1) as f64;
-            format!("{:.1}%", (100.0 - (penalty / total as f64).min(100.0)))
-        } else {
-            "100.0%".to_string()
-        };
+        let compliance_score = calculate_compliance_score(total, critical, high, medium, low);
 
         wtr.write_record(&[
             org,
@@ -724,4 +733,36 @@ pub async fn generate_compliance_report(
         data,
     )
         .into_response())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{calculate_compliance_score, percent_change};
+
+    #[test]
+    fn percent_change_handles_zero_baseline() {
+        assert_eq!(percent_change(0.0, 0.0), Some(0.0));
+        assert_eq!(percent_change(10.0, 0.0), None);
+    }
+
+    #[test]
+    fn percent_change_rounds_to_single_decimal() {
+        assert_eq!(percent_change(12.0, 10.0), Some(20.0));
+        assert_eq!(percent_change(10.55, 10.0), Some(5.5));
+    }
+
+    #[test]
+    fn compliance_score_defaults_to_perfect_when_no_findings() {
+        assert_eq!(calculate_compliance_score(0, 1, 1, 1, 1), "100.0%");
+    }
+
+    #[test]
+    fn compliance_score_applies_weighted_penalty() {
+        assert_eq!(calculate_compliance_score(10, 1, 1, 1, 1), "98.2%");
+    }
+
+    #[test]
+    fn compliance_score_clamps_to_zero() {
+        assert_eq!(calculate_compliance_score(1, 20, 0, 0, 0), "0.0%");
+    }
 }

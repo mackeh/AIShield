@@ -4,6 +4,14 @@ use sha2::Digest;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
+fn normalize_optional_text(value: &Option<String>) -> Option<String> {
+    value
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(ToOwned::to_owned)
+}
+
 /// Insert a scan into the database
 pub async fn insert_scan(pool: &PgPool, request: &IngestScanRequest) -> Result<Uuid, sqlx::Error> {
     let scan_id = Uuid::new_v4();
@@ -71,6 +79,8 @@ pub async fn insert_findings(
             finding.rule_id
         );
         let finding_hash = format!("{:x}", sha2::Sha256::digest(hash_input.as_bytes()));
+        let normalized_cwe_id = normalize_optional_text(&finding.cwe_id);
+        let normalized_owasp = normalize_optional_text(&finding.owasp_category);
 
         sqlx::query(
             r#"
@@ -97,8 +107,8 @@ pub async fn insert_findings(
         .bind(finding.ai_confidence)
         .bind(&finding.ai_tendency)
         .bind(&finding.fix_suggestion)
-        .bind(&finding.cwe_id)
-        .bind(&finding.owasp_category)
+        .bind(&normalized_cwe_id)
+        .bind(&normalized_owasp)
         .execute(pool)
         .await?;
     }
@@ -229,6 +239,25 @@ pub async fn get_time_series(
             ai_ratio: row.get("ai_ratio"),
         })
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_optional_text;
+
+    #[test]
+    fn normalize_optional_text_trims_values() {
+        assert_eq!(
+            normalize_optional_text(&Some("  CWE-79 ".to_string())),
+            Some("CWE-79".to_string())
+        );
+    }
+
+    #[test]
+    fn normalize_optional_text_converts_blank_to_none() {
+        assert_eq!(normalize_optional_text(&Some("   ".to_string())), None);
+        assert_eq!(normalize_optional_text(&None), None);
+    }
 }
 
 /// Get top rules
