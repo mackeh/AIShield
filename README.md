@@ -282,6 +282,8 @@ cargo run -p aishield-cli -- init --templates all
 | `fix`          | Print or apply remediations (`--write`, `--dry-run`, `--interactive`) |
 | `bench`        | Benchmark scanner performance                                         |
 | `stats`        | Summarize scan history analytics                                      |
+| `analytics`    | Interact with analytics API (`migrate-history`, `summary`)            |
+| `config`       | Manage analytics config values (`set`, `get`, `show`)                 |
 | `init`         | Scaffold config and CI templates                                      |
 | `create-rule`  | Generate new YAML detection rule from template                        |
 | `hook install` | Install pre-commit scanning hook                                      |

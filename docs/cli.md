@@ -12,6 +12,9 @@ aishield init [options]
 aishield create-rule [options]
 aishield hook install [options]
 aishield stats [options]
+aishield analytics migrate-history [options]
+aishield analytics summary [options]
+aishield config set|get|show [options]
 ```
 
 ## `scan`
@@ -272,4 +275,26 @@ Example:
 
 ```bash
 cargo run -p aishield-cli -- stats --last 30d --format table
+```
+
+## `analytics`
+
+Analytics API utility commands.
+
+```bash
+aishield analytics migrate-history [--dry-run] [--history-file FILE]
+aishield analytics summary [--days N] [--limit N] [--org-id ID] [--team-id ID] [--repo-id ID] [--format table|json]
+```
+
+Examples:
+
+```bash
+# preview local history migration into the analytics API
+cargo run -p aishield-cli -- analytics migrate-history --dry-run
+
+# fetch org-level analytics snapshot from API mode
+cargo run -p aishield-cli -- analytics summary --days 30 --org-id acme --format table
+
+# machine-readable payload for CI/status bots
+cargo run -p aishield-cli -- analytics summary --days 7 --format json
 ```
