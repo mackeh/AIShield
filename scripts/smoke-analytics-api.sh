@@ -236,7 +236,7 @@ assert_strict_cors() {
 }
 
 assert_rate_limit() {
-  local max_requests="${AISHIELD_SMOKE_RATE_LIMIT_MAX:-6}"
+  local max_requests="${AISHIELD_SMOKE_RATE_LIMIT_MAX:-${AISHIELD_RATE_LIMIT_REQUESTS:-6}}"
   local probe_key="smoke-rate-limit-probe-$(date +%s)"
 
   for ((i = 1; i <= max_requests; i++)); do
