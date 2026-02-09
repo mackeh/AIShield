@@ -1,3 +1,0 @@
-[2m2026-02-08T17:02:15.078007Z[0m [32m INFO[0m [2maishield_analytics[0m[2m:[0m Starting AIShield Analytics API
-[2m2026-02-08T17:02:15.078044Z[0m [32m INFO[0m [2maishield_analytics[0m[2m:[0m Connecting to database...
-Error: pool timed out while waiting for an open connection

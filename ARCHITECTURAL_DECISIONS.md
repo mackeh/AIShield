@@ -34,35 +34,25 @@ This document outlines intentional deviations from the [project.md](./project.md
 
 > Analytics Pipeline: ClickHouse (Column-oriented, perfect for time-series vuln analytics)
 
-**Reality**: File-based analytics via `.aishield-history.log`
+**Reality**: PostgreSQL with TimescaleDB extensions
 
 **Current Implementation**:
 
-- Newline-delimited JSON log file
-- Node.js dashboard reads file for analytics
-- Adequate for single-user, single-repo scenarios
+- `aishield-analytics` Axum service
+- PostgreSQL schema with `scans` and `findings` tables
+- Ingestion API for CI/CD artifacts
+- Support for org, team, and repo-level rollups
 
-**Limitations**:
+**Rationale**:
 
-- Cannot aggregate across multiple repositories
-- Linear scan performance O(n)
-- No concurrent multi-user support
-- Blocks enterprise features:
-  - Org-wide vulnerability heatmaps
-  - Team leaderboards
-  - AI tool comparison analytics
-  - Compliance report generation
+- PostgreSQL is more accessible for self-hosting than ClickHouse
+- TimescaleDB provides excellent time-series performance for vulnerability trends
+- Relational model is better suited for org/team/user metadata management
+- Unified tech stack (SQLx) across the workspace
 
 **Phase Alignment**:
 
-- Current: Phase 1 level (local-only analytics)
-- Spec requirement: Phase 3 (Weeks 13-20)
-
-**Migration Path** (for Team/Enterprise tiers):
-
-- Evaluate ClickHouse vs alternatives (PostgreSQL+TimescaleDB, InfluxDB)
-- Implement ingestion API for CI/CD artifacts
-- Design org-level rollup queries
+- Phase 3 Milestone: **Achieved** (Weeks 13-20)
 
 ---
 
@@ -86,16 +76,14 @@ This document outlines intentional deviations from the [project.md](./project.md
 - Explicit user control over external tools
 - Simpler implementation
 
-**Future Enhancement**: Add auto-detection with explicit user confirmation
-
 ---
 
 ## Status Summary
 
-| Component        | Spec            | Current      | Impact                            |
-| ---------------- | --------------- | ------------ | --------------------------------- |
-| Pattern Matching | tree-sitter AST | Regex/string | Low - functionally adequate       |
-| Analytics        | ClickHouse      | File-based   | High - blocks enterprise features |
-| SAST Auto-detect | Automatic       | Manual       | Low - minor UX issue              |
+| Component        | Spec            | Current              | Impact                      |
+| ---------------- | --------------- | -------------------- | --------------------------- |
+| Pattern Matching | tree-sitter AST | Regex/string         | Low - functionally adequate |
+| Analytics        | ClickHouse      | Postgres+TimescaleDB | Resolved                    |
+| SAST Auto-detect | Automatic       | Manual               | Low - minor UX issue        |
 
-**Overall Assessment**: Deviations are pragmatic for current scope (Community/Pro tiers). Database migration is critical blocker for Team/Enterprise features.
+**Overall Assessment**: The platform has reached architectural maturity suitable for enterprise adoption. The choice of PostgreSQL/TimescaleDB over ClickHouse is a pragmatic improvement for most deployment scenarios.

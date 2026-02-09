@@ -5,3 +5,5 @@ node_modules/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
 .aishield-staging/
+backend.log
+dashboard/frontend.log

@@ -10,6 +10,14 @@ The format is based on Keep a Changelog and follows semantic versioning.
 
 - No unreleased entries yet.
 
+## [0.4.1] - 2026-02-09
+
+### Changed
+
+- Updated `COMPLIANCE.md` and `ARCHITECTURAL_DECISIONS.md` to reflect Phase 3/4 completion and analytics stack migration to PostgreSQL/TimescaleDB
+- Added `backend.log` and `frontend.log` to `.gitignore` and removed them from tracked files
+- Updated `PROJECT_STATUS.md` to reflect 99% overall completion
+
 ## [0.4.0] - 2026-02-09
 
 ### Added
@@ -129,7 +137,8 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - Machine-output dedup normalization for JSON/SARIF to reduce CI noise
 - Expanded documentation for CLI, configuration, outputs, and CI
 
-[Unreleased]: https://github.com/mackeh/AIShield/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/mackeh/AIShield/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/mackeh/AIShield/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/mackeh/AIShield/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/mackeh/AIShield/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/mackeh/AIShield/compare/v0.3.0...v0.3.1
