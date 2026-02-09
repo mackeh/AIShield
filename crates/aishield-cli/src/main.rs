@@ -2491,40 +2491,63 @@ fn init_gitlab_ci_template() -> String {
 
 variables:
   CARGO_TERM_COLOR: always
+  AISHIELD_ENABLE_BRIDGE: "false"
+  AISHIELD_BRIDGE_ENGINES: "all"
+  AISHIELD_FAIL_ON_FINDINGS: "true"
+  AISHIELD_SEVERITY: "high"
+
+.aishield-cache: &aishield-cache
+  cache:
+    key: aishield-${CI_COMMIT_REF_SLUG}
+    paths:
+      - target/
 
 scan:aishield:
   stage: scan
   image: rust:1.84
-  before_script:
-    - apt-get update && apt-get install -y python3 python3-pip nodejs npm
-  script:
-    - cargo build --workspace
-    - cargo run -p aishield-cli -- scan . --format sarif --dedup normalized --output aishield.sarif
-  artifacts:
-    when: always
-    paths:
-      - aishield.sarif
-    expire_in: 1 week
-
-# Optional bridge run:
-#   set CI variable AISHIELD_ENABLE_BRIDGE=true
-scan:aishield-bridge:
-  stage: scan
-  image: rust:1.84
+  <<: *aishield-cache
   rules:
-    - if: '$AISHIELD_ENABLE_BRIDGE == "true"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
   before_script:
-    - apt-get update && apt-get install -y python3 python3-pip nodejs npm
-    - python3 -m pip install --upgrade pip
-    - pip3 install semgrep bandit
-    - npm install -g eslint
+    - apt-get update -qq && apt-get install -y -qq python3 python3-pip nodejs npm > /dev/null
+    - |
+      if [ "${AISHIELD_ENABLE_BRIDGE}" = "true" ]; then
+        python3 -m pip install --upgrade pip -q
+        pip3 install semgrep bandit -q
+        npm install -g eslint --silent
+        export BRIDGE_ARGS="--bridge ${AISHIELD_BRIDGE_ENGINES}"
+      else
+        export BRIDGE_ARGS=""
+      fi
   script:
-    - cargo build --workspace
-    - cargo run -p aishield-cli -- scan . --format sarif --dedup normalized --bridge all --output aishield.sarif
+    - cargo build --workspace -q
+    # Full SARIF scan
+    - >-
+      cargo run -q -p aishield-cli -- scan .
+      --format sarif --dedup normalized
+      --severity "${AISHIELD_SEVERITY}"
+      --output aishield.sarif
+      ${BRIDGE_ARGS}
+    # MR diff-only scan with fail gate
+    - |
+      if [ -n "${CI_MERGE_REQUEST_DIFF_BASE_SHA}" ]; then
+        FAIL_FLAG=""
+        if [ "${AISHIELD_FAIL_ON_FINDINGS}" = "true" ]; then
+          FAIL_FLAG="--fail-on-findings"
+        fi
+        cargo run -q -p aishield-cli -- scan . \
+          --format table --dedup normalized \
+          --severity "${AISHIELD_SEVERITY}" \
+          --changed-from "${CI_MERGE_REQUEST_DIFF_BASE_SHA}" \
+          ${FAIL_FLAG} ${BRIDGE_ARGS}
+      fi
   artifacts:
     when: always
     paths:
       - aishield.sarif
+    reports:
+      sast: aishield.sarif
     expire_in: 1 week
 "#
     .to_string()
@@ -2533,29 +2556,74 @@ scan:aishield-bridge:
 fn init_bitbucket_pipelines_template() -> String {
     r#"image: rust:1.84
 
+definitions:
+  caches:
+    cargo: target/
+  steps:
+    - step: &install-bridge
+        name: Install bridge tools
+        script:
+          - apt-get update -qq && apt-get install -y -qq python3 python3-pip nodejs npm > /dev/null
+          - python3 -m pip install --upgrade pip -q
+          - pip3 install semgrep bandit -q
+          - npm install -g eslint --silent
+
 pipelines:
   pull-requests:
     '**':
       - step:
-          name: AIShield scan
+          name: AIShield PR scan
           caches:
             - cargo
           script:
-            - apt-get update && apt-get install -y python3 python3-pip nodejs npm
-            - cargo build --workspace
-            - cargo run -p aishield-cli -- scan . --format json --dedup normalized --output aishield.json
+            - apt-get update -qq && apt-get install -y -qq python3 python3-pip nodejs npm > /dev/null
+            - cargo build --workspace -q
+            # Diff-only scan against PR target branch
+            - >-
+              cargo run -q -p aishield-cli -- scan .
+              --format table --dedup normalized
+              --severity high --fail-on-findings
+              --changed-from "origin/${BITBUCKET_PR_DESTINATION_BRANCH}"
+            # Full SARIF for artifact
+            - >-
+              cargo run -q -p aishield-cli -- scan .
+              --format sarif --dedup normalized
+              --output aishield.sarif
           artifacts:
-            - aishield.json
+            - aishield.sarif
   branches:
     main:
       - step:
-          name: AIShield SARIF
+          name: AIShield full scan
           caches:
             - cargo
           script:
-            - apt-get update && apt-get install -y python3 python3-pip nodejs npm
-            - cargo build --workspace
-            - cargo run -p aishield-cli -- scan . --format sarif --dedup normalized --output aishield.sarif
+            - apt-get update -qq && apt-get install -y -qq python3 python3-pip nodejs npm > /dev/null
+            - cargo build --workspace -q
+            - >-
+              cargo run -q -p aishield-cli -- scan .
+              --format sarif --dedup normalized
+              --severity high
+              --output aishield.sarif
+          artifacts:
+            - aishield.sarif
+
+  # Manual bridge-enabled pipeline (set AISHIELD_ENABLE_BRIDGE=true in repo vars)
+  custom:
+    bridge-scan:
+      - step:
+          <<: *install-bridge
+      - step:
+          name: AIShield bridge scan
+          caches:
+            - cargo
+          script:
+            - cargo build --workspace -q
+            - >-
+              cargo run -q -p aishield-cli -- scan .
+              --format sarif --dedup normalized
+              --severity high --bridge all
+              --output aishield.sarif
           artifacts:
             - aishield.sarif
 "#
@@ -6294,6 +6362,26 @@ mod tests {
         assert!(template.contains("actions/upload-artifact@v4"));
         assert!(template.contains("actions/download-artifact@v4"));
         assert!(template.contains("github/codeql-action/upload-sarif@v4"));
+    }
+
+    #[test]
+    fn gitlab_ci_template_has_cache_sast_report_and_mr_diff_scan() {
+        let template = super::init_gitlab_ci_template();
+        assert!(template.contains("aishield-cache"));
+        assert!(template.contains("sast: aishield.sarif"));
+        assert!(template.contains("CI_MERGE_REQUEST_DIFF_BASE_SHA"));
+        assert!(template.contains("--fail-on-findings"));
+        assert!(template.contains("AISHIELD_ENABLE_BRIDGE"));
+    }
+
+    #[test]
+    fn bitbucket_pipelines_template_has_pr_diff_scan_and_bridge_pipeline() {
+        let template = super::init_bitbucket_pipelines_template();
+        assert!(template.contains("BITBUCKET_PR_DESTINATION_BRANCH"));
+        assert!(template.contains("--fail-on-findings"));
+        assert!(template.contains("bridge-scan:"));
+        assert!(template.contains("--bridge all"));
+        assert!(template.contains("cargo:"));
     }
 
     #[test]

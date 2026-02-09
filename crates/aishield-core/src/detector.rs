@@ -616,8 +616,8 @@ tags: [auth]
 
         fs::write(
             src_dir.join("login.py"),
-            r#"def check(secret, provided):
-    return secret == provided
+            r#"def check(token, provided):
+    return token == provided
 "#,
         )
         .expect("write source");

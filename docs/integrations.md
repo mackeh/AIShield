@@ -71,38 +71,35 @@ cargo run -p aishield-cli -- scan . --format sarif --bridge all --dedup normaliz
 
 ## GitLab CI
 
-Use `.gitlab-ci.yml.example` as a starting point.
-
-Or generate `.gitlab-ci.yml` directly with:
+Generate `.gitlab-ci.yml` with:
 
 ```bash
 cargo run -p aishield-cli -- init --templates gitlab-ci
 ```
 
-Quick-start snippet:
+Features included:
 
-```yaml
-stages: [scan]
-
-scan:aishield:
-  stage: scan
-  image: rust:1.84
-  script:
-    - cargo build --workspace
-    - cargo run -p aishield-cli -- scan . --format sarif --dedup normalized --output aishield.sarif
-  artifacts:
-    paths: [aishield.sarif]
-```
+- Cargo build cache for fast re-runs
+- Automatic MR diff-only scan with `--fail-on-findings` gate
+- Full SARIF scan on push to default branch
+- SARIF uploaded as GitLab SAST report artifact
+- Bridge tools (Semgrep/Bandit/ESLint) enabled via `AISHIELD_ENABLE_BRIDGE` CI variable
+- Configurable severity threshold via `AISHIELD_SEVERITY`
 
 ## Bitbucket Pipelines
 
-Generate a baseline Bitbucket pipeline:
+Generate `bitbucket-pipelines.yml` with:
 
 ```bash
 cargo run -p aishield-cli -- init --templates bitbucket-pipelines
 ```
 
-This writes `bitbucket-pipelines.yml` with PR/main scan jobs and scan artifact publishing.
+Features included:
+
+- PR scan diffs against target branch with `--fail-on-findings`
+- Full SARIF scan on push to main
+- Cargo build cache
+- Bridge-enabled pipeline available as custom trigger (`bridge-scan`)
 
 ## CircleCI
 
