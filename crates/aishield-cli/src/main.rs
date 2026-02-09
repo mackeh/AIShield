@@ -3037,7 +3037,7 @@ fn run_config(args: &[String]) -> Result<(), String> {
 
 fn run_analytics(args: &[String]) -> Result<(), String> {
     if args.is_empty() {
-        return Err("analytics requires a subcommand: migrate-history, summary\nUsage:\n  aishield analytics migrate-history [--dry-run] [--history-file <path>]\n  aishield analytics summary [--days N] [--limit N] [--org-id ID] [--team-id ID] [--repo-id ID] [--format table|json]".to_string());
+        return Err("analytics requires a subcommand: migrate-history, summary\nUsage:\n  aishield analytics migrate-history [--dry-run] [--history-file <path>]\n  aishield analytics summary [--days N] [--limit N] [--org-id ID] [--team-id ID] [--repo-id ID] [--format table|json] [--probes N] [--probe-interval-ms N] [--max-error-rate-pct N] [--max-summary-p95-ms N] [--max-compliance-p95-ms N] [--min-coverage-pct N] [--fail-on-threshold]".to_string());
     }
 
     match args[0].as_str() {
@@ -3172,6 +3172,10 @@ fn run_analytics(args: &[String]) -> Result<(), String> {
             let mut team_id_override = None::<String>;
             let mut repo_id_override = None::<String>;
             let mut format = AnalyticsOutputFormat::Table;
+            let mut probes: usize = 1;
+            let mut probe_interval_ms: u64 = 0;
+            let mut fail_on_threshold = false;
+            let mut thresholds = AnalyticsThresholds::default();
 
             let mut i = 1;
             while i < args.len() {
@@ -3219,9 +3223,75 @@ fn run_analytics(args: &[String]) -> Result<(), String> {
                             args.get(i).ok_or("--format requires a value")?,
                         )?;
                     }
+                    "--probes" => {
+                        i += 1;
+                        probes = args
+                            .get(i)
+                            .ok_or("--probes requires a value")?
+                            .parse::<usize>()
+                            .map_err(|_| "--probes must be a positive integer".to_string())?;
+                        if probes == 0 {
+                            return Err("--probes must be greater than 0".to_string());
+                        }
+                    }
+                    "--probe-interval-ms" => {
+                        i += 1;
+                        probe_interval_ms = args
+                            .get(i)
+                            .ok_or("--probe-interval-ms requires a value")?
+                            .parse::<u64>()
+                            .map_err(|_| {
+                                "--probe-interval-ms must be a non-negative integer".to_string()
+                            })?;
+                    }
+                    "--max-error-rate-pct" => {
+                        i += 1;
+                        thresholds.max_error_rate_pct = Some(
+                            args.get(i)
+                                .ok_or("--max-error-rate-pct requires a value")?
+                                .parse::<f64>()
+                                .map_err(|_| "--max-error-rate-pct must be a number".to_string())?,
+                        );
+                    }
+                    "--max-summary-p95-ms" => {
+                        i += 1;
+                        thresholds.max_summary_p95_ms = Some(
+                            args.get(i)
+                                .ok_or("--max-summary-p95-ms requires a value")?
+                                .parse::<f64>()
+                                .map_err(|_| "--max-summary-p95-ms must be a number".to_string())?,
+                        );
+                    }
+                    "--max-compliance-p95-ms" => {
+                        i += 1;
+                        thresholds.max_compliance_p95_ms = Some(
+                            args.get(i)
+                                .ok_or("--max-compliance-p95-ms requires a value")?
+                                .parse::<f64>()
+                                .map_err(|_| {
+                                    "--max-compliance-p95-ms must be a number".to_string()
+                                })?,
+                        );
+                    }
+                    "--min-coverage-pct" => {
+                        i += 1;
+                        thresholds.min_coverage_pct = Some(
+                            args.get(i)
+                                .ok_or("--min-coverage-pct requires a value")?
+                                .parse::<f64>()
+                                .map_err(|_| "--min-coverage-pct must be a number".to_string())?,
+                        );
+                    }
+                    "--fail-on-threshold" => fail_on_threshold = true,
                     other => return Err(format!("unknown option `{}`", other)),
                 }
                 i += 1;
+            }
+
+            if fail_on_threshold && !thresholds.has_any_threshold() {
+                return Err(
+                    "--fail-on-threshold requires at least one threshold option".to_string()
+                );
             }
 
             let config = config::Config::load()
@@ -3251,19 +3321,41 @@ fn run_analytics(args: &[String]) -> Result<(), String> {
             let runtime = tokio::runtime::Runtime::new()
                 .map_err(|e| format!("Failed to create async runtime: {}", e))?;
 
-            let summary = runtime.block_on(client.fetch_summary(&query))?;
-            let compliance_gaps = runtime.block_on(client.fetch_compliance_gaps(&query))?;
+            let (summary, compliance_gaps, probe_metrics) = runtime.block_on(
+                fetch_analytics_probe_metrics(&client, &query, probes, probe_interval_ms),
+            )?;
 
             let rendered = match format {
-                AnalyticsOutputFormat::Table => {
-                    render_analytics_summary_table(&summary, &compliance_gaps, &query)
-                }
-                AnalyticsOutputFormat::Json => {
-                    render_analytics_summary_json(&summary, &compliance_gaps, &query)
-                }
+                AnalyticsOutputFormat::Table => render_analytics_summary_table(
+                    &summary,
+                    &compliance_gaps,
+                    &query,
+                    &probe_metrics,
+                    &thresholds,
+                ),
+                AnalyticsOutputFormat::Json => render_analytics_summary_json(
+                    &summary,
+                    &compliance_gaps,
+                    &query,
+                    &probe_metrics,
+                    &thresholds,
+                ),
             };
 
-            write_stdout(&rendered)
+            write_stdout(&rendered)?;
+
+            if fail_on_threshold {
+                let violations =
+                    evaluate_analytics_thresholds(&probe_metrics, &compliance_gaps, &thresholds);
+                if !violations.is_empty() {
+                    return Err(format!(
+                        "analytics thresholds failed: {}",
+                        violations.join("; ")
+                    ));
+                }
+            }
+
+            Ok(())
         }
         other => Err(format!(
             "unknown analytics subcommand `{}`\nAvailable: migrate-history, summary",
@@ -3323,6 +3415,185 @@ fn run_stats(args: &[String]) -> Result<(), String> {
     };
 
     write_stdout(&rendered)
+}
+
+#[derive(Debug, Default, Clone)]
+struct AnalyticsThresholds {
+    max_error_rate_pct: Option<f64>,
+    max_summary_p95_ms: Option<f64>,
+    max_compliance_p95_ms: Option<f64>,
+    min_coverage_pct: Option<f64>,
+}
+
+impl AnalyticsThresholds {
+    fn has_any_threshold(&self) -> bool {
+        self.max_error_rate_pct.is_some()
+            || self.max_summary_p95_ms.is_some()
+            || self.max_compliance_p95_ms.is_some()
+            || self.min_coverage_pct.is_some()
+    }
+}
+
+#[derive(Debug, Clone)]
+struct AnalyticsProbeMetrics {
+    probe_count: usize,
+    total_requests: usize,
+    failed_requests: usize,
+    error_rate_pct: f64,
+    summary_p95_ms: Option<f64>,
+    compliance_p95_ms: Option<f64>,
+}
+
+async fn fetch_analytics_probe_metrics(
+    client: &analytics_client::AnalyticsClient,
+    query: &analytics_client::AnalyticsQuery,
+    probes: usize,
+    probe_interval_ms: u64,
+) -> Result<(Value, Value, AnalyticsProbeMetrics), String> {
+    let mut summary_last = None::<Value>;
+    let mut compliance_last = None::<Value>;
+    let mut summary_latencies = Vec::<f64>::new();
+    let mut compliance_latencies = Vec::<f64>::new();
+    let mut failed_requests = 0usize;
+    let total_requests = probes.saturating_mul(2);
+    let mut last_summary_err = None::<String>;
+    let mut last_compliance_err = None::<String>;
+
+    for probe_idx in 0..probes {
+        let summary_started = Instant::now();
+        match client.fetch_summary(query).await {
+            Ok(payload) => {
+                summary_latencies.push(summary_started.elapsed().as_secs_f64() * 1000.0);
+                summary_last = Some(payload);
+            }
+            Err(err) => {
+                failed_requests += 1;
+                last_summary_err = Some(err);
+            }
+        }
+
+        let compliance_started = Instant::now();
+        match client.fetch_compliance_gaps(query).await {
+            Ok(payload) => {
+                compliance_latencies.push(compliance_started.elapsed().as_secs_f64() * 1000.0);
+                compliance_last = Some(payload);
+            }
+            Err(err) => {
+                failed_requests += 1;
+                last_compliance_err = Some(err);
+            }
+        }
+
+        if probe_idx + 1 < probes && probe_interval_ms > 0 {
+            tokio::time::sleep(Duration::from_millis(probe_interval_ms)).await;
+        }
+    }
+
+    let summary = summary_last.ok_or_else(|| {
+        format!(
+            "failed to fetch analytics summary from API across {} probe(s): {}",
+            probes,
+            last_summary_err.unwrap_or_else(|| "unknown error".to_string())
+        )
+    })?;
+
+    let compliance_gaps = compliance_last.ok_or_else(|| {
+        format!(
+            "failed to fetch analytics compliance-gaps from API across {} probe(s): {}",
+            probes,
+            last_compliance_err.unwrap_or_else(|| "unknown error".to_string())
+        )
+    })?;
+
+    let error_rate_pct = if total_requests == 0 {
+        0.0
+    } else {
+        (failed_requests as f64 / total_requests as f64) * 100.0
+    };
+
+    let summary_p95_ms = if summary_latencies.is_empty() {
+        None
+    } else {
+        Some(percentile(&summary_latencies, 0.95))
+    };
+    let compliance_p95_ms = if compliance_latencies.is_empty() {
+        None
+    } else {
+        Some(percentile(&compliance_latencies, 0.95))
+    };
+
+    Ok((
+        summary,
+        compliance_gaps,
+        AnalyticsProbeMetrics {
+            probe_count: probes,
+            total_requests,
+            failed_requests,
+            error_rate_pct,
+            summary_p95_ms,
+            compliance_p95_ms,
+        },
+    ))
+}
+
+fn evaluate_analytics_thresholds(
+    probe_metrics: &AnalyticsProbeMetrics,
+    compliance_gaps: &Value,
+    thresholds: &AnalyticsThresholds,
+) -> Vec<String> {
+    let mut violations = Vec::<String>::new();
+
+    if let Some(max_error_rate_pct) = thresholds.max_error_rate_pct {
+        if probe_metrics.error_rate_pct > max_error_rate_pct {
+            violations.push(format!(
+                "error_rate_pct {:.2}% > max_error_rate_pct {:.2}%",
+                probe_metrics.error_rate_pct, max_error_rate_pct
+            ));
+        }
+    }
+
+    if let Some(max_summary_p95_ms) = thresholds.max_summary_p95_ms {
+        match probe_metrics.summary_p95_ms {
+            Some(observed) if observed > max_summary_p95_ms => violations.push(format!(
+                "summary_p95_ms {:.3} > max_summary_p95_ms {:.3}",
+                observed, max_summary_p95_ms
+            )),
+            None => violations
+                .push("summary_p95_ms is unavailable (no successful summary probe)".to_string()),
+            _ => {}
+        }
+    }
+
+    if let Some(max_compliance_p95_ms) = thresholds.max_compliance_p95_ms {
+        match probe_metrics.compliance_p95_ms {
+            Some(observed) if observed > max_compliance_p95_ms => violations.push(format!(
+                "compliance_p95_ms {:.3} > max_compliance_p95_ms {:.3}",
+                observed, max_compliance_p95_ms
+            )),
+            None => violations.push(
+                "compliance_p95_ms is unavailable (no successful compliance probe)".to_string(),
+            ),
+            _ => {}
+        }
+    }
+
+    if let Some(min_coverage_pct) = thresholds.min_coverage_pct {
+        let observed_coverage = compliance_gaps
+            .pointer("/summary/coverage_pct")
+            .and_then(Value::as_f64);
+
+        match observed_coverage {
+            Some(observed) if observed < min_coverage_pct => violations.push(format!(
+                "coverage_pct {:.2}% < min_coverage_pct {:.2}%",
+                observed, min_coverage_pct
+            )),
+            None => violations
+                .push("coverage_pct is unavailable in compliance-gaps response".to_string()),
+            _ => {}
+        }
+    }
+
+    violations
 }
 
 fn run_hook(args: &[String]) -> Result<(), String> {
@@ -4151,6 +4422,8 @@ fn render_analytics_summary_table(
     summary: &Value,
     compliance_gaps: &Value,
     query: &analytics_client::AnalyticsQuery,
+    probe_metrics: &AnalyticsProbeMetrics,
+    thresholds: &AnalyticsThresholds,
 ) -> String {
     let mut out = String::new();
 
@@ -4241,6 +4514,8 @@ fn render_analytics_summary_table(
     let org_scope = query.org_id.as_deref().unwrap_or("all");
     let team_scope = query.team_id.as_deref().unwrap_or("all");
     let repo_scope = query.repo_id.as_deref().unwrap_or("all");
+    let threshold_violations =
+        evaluate_analytics_thresholds(probe_metrics, compliance_gaps, thresholds);
 
     let _ = writeln!(
         out,
@@ -4286,6 +4561,59 @@ fn render_analytics_summary_table(
         "Top OWASP:      {} ({} finding(s))",
         top_owasp, top_owasp_count
     );
+    let _ = writeln!(
+        out,
+        "Probe metrics:  probes={} requests={} failed={} error_rate={:.2}% summary_p95={}ms compliance_p95={}ms",
+        probe_metrics.probe_count,
+        probe_metrics.total_requests,
+        probe_metrics.failed_requests,
+        probe_metrics.error_rate_pct,
+        format_optional_ms(probe_metrics.summary_p95_ms),
+        format_optional_ms(probe_metrics.compliance_p95_ms)
+    );
+
+    if thresholds.has_any_threshold() {
+        out.push('\n');
+        let _ = writeln!(out, "Thresholds:");
+        if let Some(max_error_rate_pct) = thresholds.max_error_rate_pct {
+            let _ = writeln!(
+                out,
+                "  max_error_rate_pct: <= {:.2}% (observed {:.2}%)",
+                max_error_rate_pct, probe_metrics.error_rate_pct
+            );
+        }
+        if let Some(max_summary_p95_ms) = thresholds.max_summary_p95_ms {
+            let _ = writeln!(
+                out,
+                "  max_summary_p95_ms: <= {:.2} (observed {} ms)",
+                max_summary_p95_ms,
+                format_optional_ms(probe_metrics.summary_p95_ms)
+            );
+        }
+        if let Some(max_compliance_p95_ms) = thresholds.max_compliance_p95_ms {
+            let _ = writeln!(
+                out,
+                "  max_compliance_p95_ms: <= {:.2} (observed {} ms)",
+                max_compliance_p95_ms,
+                format_optional_ms(probe_metrics.compliance_p95_ms)
+            );
+        }
+        if let Some(min_coverage_pct) = thresholds.min_coverage_pct {
+            let _ = writeln!(
+                out,
+                "  min_coverage_pct: >= {:.2}% (observed {:.2}%)",
+                min_coverage_pct, coverage_pct
+            );
+        }
+        if threshold_violations.is_empty() {
+            out.push_str("  result: PASS\n");
+        } else {
+            out.push_str("  result: FAIL\n");
+            for violation in threshold_violations {
+                let _ = writeln!(out, "    - {}", violation);
+            }
+        }
+    }
     out
 }
 
@@ -4293,7 +4621,11 @@ fn render_analytics_summary_json(
     summary: &Value,
     compliance_gaps: &Value,
     query: &analytics_client::AnalyticsQuery,
+    probe_metrics: &AnalyticsProbeMetrics,
+    thresholds: &AnalyticsThresholds,
 ) -> String {
+    let threshold_violations =
+        evaluate_analytics_thresholds(probe_metrics, compliance_gaps, thresholds);
     let payload = serde_json::json!({
         "query": {
             "org_id": query.org_id,
@@ -4301,6 +4633,22 @@ fn render_analytics_summary_json(
             "repo_id": query.repo_id,
             "days": query.days,
             "limit": query.limit,
+        },
+        "probe_metrics": {
+            "probe_count": probe_metrics.probe_count,
+            "total_requests": probe_metrics.total_requests,
+            "failed_requests": probe_metrics.failed_requests,
+            "error_rate_pct": probe_metrics.error_rate_pct,
+            "summary_p95_ms": probe_metrics.summary_p95_ms,
+            "compliance_p95_ms": probe_metrics.compliance_p95_ms,
+        },
+        "thresholds": {
+            "max_error_rate_pct": thresholds.max_error_rate_pct,
+            "max_summary_p95_ms": thresholds.max_summary_p95_ms,
+            "max_compliance_p95_ms": thresholds.max_compliance_p95_ms,
+            "min_coverage_pct": thresholds.min_coverage_pct,
+            "result": if threshold_violations.is_empty() { "pass" } else { "fail" },
+            "violations": threshold_violations,
         },
         "summary": summary,
         "compliance_gaps": compliance_gaps,
@@ -4319,6 +4667,13 @@ fn format_optional_delta(delta: Option<f64>) -> String {
     }
 }
 
+fn format_optional_ms(ms: Option<f64>) -> String {
+    match ms {
+        Some(value) => format!("{:.3}", value),
+        None => "n/a".to_string(),
+    }
+}
+
 fn print_help() {
     println!("AIShield CLI (foundation)\n");
     println!("Usage:");
@@ -4330,7 +4685,7 @@ fn print_help() {
     println!("  aishield stats [--last Nd] [--history-file FILE] [--format table|json] [--config FILE] [--no-config]");
     println!("  aishield hook install [--severity LEVEL] [--path TARGET] [--all-files]");
     println!("  aishield analytics migrate-history [--dry-run] [--history-file FILE]");
-    println!("  aishield analytics summary [--days N] [--limit N] [--org-id ID] [--team-id ID] [--repo-id ID] [--format table|json]");
+    println!("  aishield analytics summary [--days N] [--limit N] [--org-id ID] [--team-id ID] [--repo-id ID] [--format table|json] [--probes N] [--probe-interval-ms N] [--max-error-rate-pct N] [--max-summary-p95-ms N] [--max-compliance-p95-ms N] [--min-coverage-pct N] [--fail-on-threshold]");
     println!("  aishield config set|get|show ...");
 }
 
@@ -6169,12 +6524,61 @@ ai_calibration: aggressive
             days: 30,
             limit: 5,
         };
+        let probe_metrics = super::AnalyticsProbeMetrics {
+            probe_count: 2,
+            total_requests: 4,
+            failed_requests: 0,
+            error_rate_pct: 0.0,
+            summary_p95_ms: Some(20.0),
+            compliance_p95_ms: Some(15.0),
+        };
+        let thresholds = super::AnalyticsThresholds {
+            max_error_rate_pct: Some(1.0),
+            max_summary_p95_ms: Some(100.0),
+            max_compliance_p95_ms: Some(100.0),
+            min_coverage_pct: Some(80.0),
+        };
 
-        let rendered = super::render_analytics_summary_table(&summary, &gaps, &query);
+        let rendered = super::render_analytics_summary_table(
+            &summary,
+            &gaps,
+            &query,
+            &probe_metrics,
+            &thresholds,
+        );
         assert!(rendered.contains("Scope: org=acme team=platform repo=all"));
         assert!(rendered.contains("Top CWE:        CWE-79"));
         assert!(rendered.contains("Top OWASP:      A03:2021 - Injection"));
         assert!(rendered.contains("Coverage:       92.5% (11/12) classified"));
+        assert!(rendered.contains("Thresholds:"));
+        assert!(rendered.contains("result: PASS"));
+    }
+
+    #[test]
+    fn analytics_thresholds_report_coverage_violation() {
+        let gaps = serde_json::json!({
+            "summary": {
+                "coverage_pct": 62.0
+            }
+        });
+        let probe_metrics = super::AnalyticsProbeMetrics {
+            probe_count: 1,
+            total_requests: 2,
+            failed_requests: 0,
+            error_rate_pct: 0.0,
+            summary_p95_ms: Some(10.0),
+            compliance_p95_ms: Some(12.0),
+        };
+        let thresholds = super::AnalyticsThresholds {
+            max_error_rate_pct: Some(1.0),
+            max_summary_p95_ms: Some(100.0),
+            max_compliance_p95_ms: Some(100.0),
+            min_coverage_pct: Some(70.0),
+        };
+
+        let violations = super::evaluate_analytics_thresholds(&probe_metrics, &gaps, &thresholds);
+        assert_eq!(violations.len(), 1);
+        assert!(violations[0].contains("coverage_pct"));
     }
 
     #[test]
