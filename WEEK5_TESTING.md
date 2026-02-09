@@ -85,8 +85,10 @@ curl -s -H "x-api-key: $API_KEY" "http://localhost:8080/api/v1/analytics/ai-metr
 
 ### Step 2: Verify CSV Content
 
-Open the downloaded CSV and check specifically for the **Compliance Score** column (last column).
-It should be a percentage (e.g., `85.5%`).
+Open the downloaded CSV and check specifically for:
+- `Top CWE`
+- `Top OWASP`
+- `Compliance Score` (last column, e.g. `85.5%`)
 
 ### Step 3: Backend Verification via CLI
 

@@ -591,13 +591,33 @@ pub async fn generate_compliance_report(
             COUNT(f.id) FILTER (WHERE f.severity = 'critical') as critical,
             COUNT(f.id) FILTER (WHERE f.severity = 'high') as high,
             COUNT(f.id) FILTER (WHERE f.severity = 'medium') as medium,
-            COUNT(f.id) FILTER (WHERE f.severity = 'low') as low
+            COUNT(f.id) FILTER (WHERE f.severity = 'low') as low,
+            COALESCE((
+                SELECT f2.cwe_id
+                FROM findings f2
+                WHERE f2.scan_id = s.scan_id
+                    AND f2.cwe_id IS NOT NULL
+                    AND f2.cwe_id <> ''
+                GROUP BY f2.cwe_id
+                ORDER BY COUNT(*) DESC, f2.cwe_id ASC
+                LIMIT 1
+            ), 'N/A') as top_cwe,
+            COALESCE((
+                SELECT f3.owasp_category
+                FROM findings f3
+                WHERE f3.scan_id = s.scan_id
+                    AND f3.owasp_category IS NOT NULL
+                    AND f3.owasp_category <> ''
+                GROUP BY f3.owasp_category
+                ORDER BY COUNT(*) DESC, f3.owasp_category ASC
+                LIMIT 1
+            ), 'N/A') as top_owasp
         FROM scans s
         LEFT JOIN findings f ON s.scan_id = f.scan_id
         WHERE s.org_id = $1
             AND s.timestamp >= $2::date
             AND s.timestamp <= $3::date + INTERVAL '1 day'
-        GROUP BY s.org_id, s.team_id, s.repo_id, s.timestamp
+        GROUP BY s.scan_id, s.org_id, s.team_id, s.repo_id, s.timestamp
         ORDER BY s.timestamp DESC
     "#;
 
@@ -611,6 +631,8 @@ pub async fn generate_compliance_report(
         i64,
         i64,
         i64,
+        String,
+        String,
     )> = sqlx::query_as(query)
         .bind(&params.org_id)
         .bind(&start_date)
@@ -631,6 +653,8 @@ pub async fn generate_compliance_report(
         "High",
         "Medium",
         "Low",
+        "Top CWE",
+        "Top OWASP",
         "Compliance Score",
     ])
     .map_err(|e| ApiError {
@@ -639,7 +663,7 @@ pub async fn generate_compliance_report(
     })?;
 
     for row in rows {
-        let (org, team, repo, date, total, critical, high, medium, low) = row;
+        let (org, team, repo, date, total, critical, high, medium, low, top_cwe, top_owasp) = row;
         let compliance_score = if total > 0 {
             let penalty = (critical * 10 + high * 5 + medium * 2 + low * 1) as f64;
             format!("{:.1}%", (100.0 - (penalty / total as f64).min(100.0)))
@@ -657,6 +681,8 @@ pub async fn generate_compliance_report(
             high.to_string(),
             medium.to_string(),
             low.to_string(),
+            top_cwe,
+            top_owasp,
             compliance_score,
         ])
         .map_err(|e| ApiError {

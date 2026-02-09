@@ -75,6 +75,16 @@ request_file() {
     return 1
   fi
 
+  if [[ "$name" == "compliance-report" ]]; then
+    local header
+    header="$(head -n 1 "$out_file" || true)"
+    if [[ "$header" != *"Top CWE"* || "$header" != *"Top OWASP"* || "$header" != *"Compliance Score"* ]]; then
+      echo "fail: $name -> expected CSV header columns missing"
+      echo "header: $header"
+      return 1
+    fi
+  fi
+
   echo "pass: $name -> HTTP 200, non-empty body"
 }
 
