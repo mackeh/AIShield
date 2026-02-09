@@ -1,0 +1,17 @@
+id: AISHIELD-TF-MISC-010
+title: Security Group Allows SSH from Any IP
+severity: high
+confidence_that_ai_generated: 0.82
+languages: [terraform]
+category: misconfig
+cwe_id: CWE-284
+owasp_category: A01:2021 - Broken Access Control
+ai_tendency: AI-generated security groups often open port 22 to 0.0.0.0/0 for convenience.
+pattern:
+  all:
+    - "from_port"
+    - "22"
+    - "0.0.0.0/0"
+fix:
+  suggestion: Restrict SSH access to specific trusted CIDR ranges or use a bastion host.
+tags: [terraform, ssh, network, misconfig]

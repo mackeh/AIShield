@@ -1,0 +1,16 @@
+id: AISHIELD-DOCKER-MISC-011
+title: COPY Entire Build Context into Image
+severity: medium
+confidence_that_ai_generated: 0.79
+languages: [dockerfile]
+category: misconfig
+cwe_id: CWE-538
+owasp_category: A05:2021 - Security Misconfiguration
+ai_tendency: AI-generated Dockerfiles often use COPY . . without .dockerignore, leaking secrets and source.
+pattern:
+  any:
+    - "copy . ."
+    - "copy . /"
+fix:
+  suggestion: Use a .dockerignore file and copy only required files. Prefer multi-stage builds.
+tags: [dockerfile, copy, secrets, misconfig]

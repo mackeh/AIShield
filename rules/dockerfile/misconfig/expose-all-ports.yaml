@@ -1,0 +1,17 @@
+id: AISHIELD-DOCKER-MISC-010
+title: Exposing Database Port Directly
+severity: medium
+confidence_that_ai_generated: 0.77
+languages: [dockerfile]
+category: misconfig
+cwe_id: CWE-668
+owasp_category: A05:2021 - Security Misconfiguration
+ai_tendency: AI-generated Dockerfiles may expose database ports (3306, 5432, 27017) directly.
+pattern:
+  any:
+    - "expose 3306"
+    - "expose 5432"
+    - "expose 27017"
+fix:
+  suggestion: Only expose application ports. Access databases through internal Docker networks.
+tags: [dockerfile, network, misconfig]

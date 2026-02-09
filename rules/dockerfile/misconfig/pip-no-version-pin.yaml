@@ -1,0 +1,18 @@
+id: AISHIELD-DOCKER-MISC-012
+title: Pip Install Without Version Pinning
+severity: medium
+confidence_that_ai_generated: 0.78
+languages: [dockerfile]
+category: misconfig
+cwe_id: CWE-1104
+owasp_category: A06:2021 - Vulnerable and Outdated Components
+ai_tendency: AI-generated Dockerfiles install packages without pinned versions, risking supply chain attacks.
+pattern:
+  all:
+    - "pip install"
+  not:
+    - "=="
+    - "requirements"
+fix:
+  suggestion: Pin package versions or use a requirements.txt with hashes (pip install -r requirements.txt).
+tags: [dockerfile, pip, supply-chain, misconfig]

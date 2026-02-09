@@ -1,0 +1,15 @@
+id: AISHIELD-CS-MISC-002
+title: CORS Wildcard Origin Allowed
+severity: high
+confidence_that_ai_generated: 0.83
+languages: [csharp]
+category: misconfig
+cwe_id: CWE-942
+owasp_category: A05:2021 - Security Misconfiguration
+pattern:
+  all:
+    - '"access-control-allow-origin"'
+    - '"*"'
+fix:
+  suggestion: Restrict CORS to specific trusted origins instead of using a wildcard that allows any domain.
+tags: [misconfig, cors]

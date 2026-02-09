@@ -1,0 +1,17 @@
+id: AISHIELD-K8S-MISC-009
+title: Container Missing Readiness Probe
+severity: medium
+confidence_that_ai_generated: 0.77
+languages: [kubernetes]
+category: misconfig
+cwe_id: CWE-693
+owasp_category: A05:2021 - Security Misconfiguration
+ai_tendency: AI-generated deployments often omit readiness probes, sending traffic to unready pods.
+pattern:
+  all:
+    - "containers"
+  not:
+    - "readinessprobe"
+fix:
+  suggestion: Add a readinessProbe (HTTP, TCP, or exec) to each container spec.
+tags: [kubernetes, probes, misconfig]

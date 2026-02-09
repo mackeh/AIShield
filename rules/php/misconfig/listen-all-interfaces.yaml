@@ -1,0 +1,14 @@
+id: AISHIELD-PHP-MISC-004
+title: Server Listening on All Interfaces
+severity: medium
+confidence_that_ai_generated: 0.77
+languages: [php]
+category: misconfig
+cwe_id: CWE-668
+owasp_category: A05:2021 - Security Misconfiguration
+pattern:
+  any:
+    - '"0.0.0.0"'
+fix:
+  suggestion: Bind to a specific interface such as 127.0.0.1 instead of 0.0.0.0.
+tags: [misconfig, network-exposure]

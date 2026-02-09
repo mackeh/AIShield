@@ -1,0 +1,15 @@
+id: AISHIELD-PHP-MISC-003
+title: Display Errors Enabled in Production
+severity: medium
+confidence_that_ai_generated: 0.76
+languages: [php]
+category: misconfig
+cwe_id: CWE-209
+owasp_category: A05:2021 - Security Misconfiguration
+pattern:
+  all:
+    - "display_errors"
+    - "on"
+fix:
+  suggestion: Disable display_errors in production and log errors to a file instead using error_log.
+tags: [misconfig, error-disclosure]

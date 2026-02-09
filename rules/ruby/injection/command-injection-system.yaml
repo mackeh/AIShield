@@ -1,0 +1,14 @@
+id: AISHIELD-RB-INJ-003
+title: Command Injection via System Call
+severity: critical
+confidence_that_ai_generated: 0.85
+languages: [ruby]
+category: injection
+cwe_id: CWE-78
+owasp_category: A03:2021 - Injection
+pattern:
+  any:
+    - "system("
+fix:
+  suggestion: Avoid passing user input to system commands. Use parameterized APIs or Shellwords.escape.
+tags: [injection, command-injection]

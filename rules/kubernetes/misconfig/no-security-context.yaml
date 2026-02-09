@@ -1,0 +1,18 @@
+id: AISHIELD-K8S-MISC-015
+title: Pod Missing Security Context
+severity: medium
+confidence_that_ai_generated: 0.79
+languages: [kubernetes]
+category: misconfig
+cwe_id: CWE-250
+owasp_category: A05:2021 - Security Misconfiguration
+ai_tendency: AI-generated pod specs often omit securityContext entirely, running with default privileges.
+pattern:
+  all:
+    - "containers"
+    - "image:"
+  not:
+    - "securitycontext"
+fix:
+  suggestion: Add a securityContext with runAsNonRoot, readOnlyRootFilesystem, and capability drops.
+tags: [kubernetes, security-context, misconfig]

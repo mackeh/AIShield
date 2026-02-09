@@ -1,0 +1,15 @@
+id: AISHIELD-CS-INJ-003
+title: Path Traversal via File Read with User Input
+severity: high
+confidence_that_ai_generated: 0.84
+languages: [csharp]
+category: injection
+cwe_id: CWE-22
+owasp_category: A01:2021 - Broken Access Control
+pattern:
+  all:
+    - "file.readalltext("
+    - "+ userinput"
+fix:
+  suggestion: Validate and sanitize file paths using Path.GetFullPath and ensure the resolved path stays within an allowed directory.
+tags: [injection, path-traversal]

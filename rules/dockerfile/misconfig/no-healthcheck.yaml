@@ -1,0 +1,17 @@
+id: AISHIELD-DOCKER-MISC-009
+title: Dockerfile Missing HEALTHCHECK Instruction
+severity: low
+confidence_that_ai_generated: 0.75
+languages: [dockerfile]
+category: misconfig
+cwe_id: CWE-693
+owasp_category: A05:2021 - Security Misconfiguration
+ai_tendency: AI-generated Dockerfiles rarely include HEALTHCHECK instructions.
+pattern:
+  all:
+    - "cmd"
+  not:
+    - "healthcheck"
+fix:
+  suggestion: Add a HEALTHCHECK instruction to detect unhealthy containers.
+tags: [dockerfile, healthcheck, misconfig]

@@ -1,0 +1,17 @@
+id: AISHIELD-K8S-MISC-011
+title: Container Writable Root Filesystem
+severity: medium
+confidence_that_ai_generated: 0.78
+languages: [kubernetes]
+category: misconfig
+cwe_id: CWE-732
+owasp_category: A05:2021 - Security Misconfiguration
+ai_tendency: AI-generated manifests omit readOnlyRootFilesystem, allowing attackers to write malicious files.
+pattern:
+  all:
+    - "securitycontext"
+  not:
+    - "readonlyrootfilesystem"
+fix:
+  suggestion: Set securityContext.readOnlyRootFilesystem = true and mount writable volumes where needed.
+tags: [kubernetes, filesystem, misconfig]

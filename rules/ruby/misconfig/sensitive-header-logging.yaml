@@ -1,0 +1,15 @@
+id: AISHIELD-RB-MISC-005
+title: Sensitive Authorization Header Logged
+severity: high
+confidence_that_ai_generated: 0.84
+languages: [ruby]
+category: misconfig
+cwe_id: CWE-532
+owasp_category: A09:2021 - Security Logging and Monitoring Failures
+pattern:
+  all:
+    - "logger"
+    - "authorization"
+fix:
+  suggestion: Redact or mask sensitive headers such as Authorization before writing to logs.
+tags: [misconfig, logging]

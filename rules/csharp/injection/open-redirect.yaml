@@ -1,0 +1,15 @@
+id: AISHIELD-CS-INJ-004
+title: Open Redirect via User-Controlled URL
+severity: medium
+confidence_that_ai_generated: 0.76
+languages: [csharp]
+category: injection
+cwe_id: CWE-601
+owasp_category: A01:2021 - Broken Access Control
+pattern:
+  all:
+    - "redirect("
+    - "request.query"
+fix:
+  suggestion: Validate redirect URLs against an allowlist of trusted domains and use relative paths where possible.
+tags: [injection, open-redirect]

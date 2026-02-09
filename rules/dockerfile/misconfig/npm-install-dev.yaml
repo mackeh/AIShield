@@ -1,0 +1,19 @@
+id: AISHIELD-DOCKER-MISC-013
+title: NPM Install Includes Dev Dependencies in Production Image
+severity: low
+confidence_that_ai_generated: 0.76
+languages: [dockerfile]
+category: misconfig
+cwe_id: CWE-1104
+owasp_category: A06:2021 - Vulnerable and Outdated Components
+ai_tendency: AI-generated Dockerfiles run npm install without --production, bloating the attack surface.
+pattern:
+  all:
+    - "npm install"
+  not:
+    - "--production"
+    - "--omit=dev"
+    - "ci"
+fix:
+  suggestion: Use npm ci --omit=dev for production images to exclude dev dependencies.
+tags: [dockerfile, npm, supply-chain, misconfig]

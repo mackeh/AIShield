@@ -1,0 +1,16 @@
+id: AISHIELD-PHP-INJ-003
+title: Command Injection via Shell Execution
+severity: critical
+confidence_that_ai_generated: 0.85
+languages: [php]
+category: injection
+cwe_id: CWE-78
+owasp_category: A03:2021 - Injection
+pattern:
+  any:
+    - "shell_exec("
+    - "exec($"
+    - "system($"
+fix:
+  suggestion: Avoid passing user input to shell functions. Use escapeshellarg() and escapeshellcmd() for sanitization.
+tags: [injection, command-injection]

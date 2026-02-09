@@ -1,0 +1,16 @@
+id: AISHIELD-CS-MISC-005
+title: Sensitive Header Value Logged
+severity: high
+confidence_that_ai_generated: 0.81
+languages: [csharp]
+category: misconfig
+cwe_id: CWE-532
+owasp_category: A09:2021 - Security Logging and Monitoring Failures
+pattern:
+  all:
+    - "log"
+    - "authorization"
+    - "header"
+fix:
+  suggestion: Redact or mask sensitive header values such as Authorization before writing them to log output.
+tags: [misconfig, sensitive-logging]

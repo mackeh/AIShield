@@ -1,0 +1,14 @@
+id: AISHIELD-CS-CRYPTO-003
+title: Weak Cipher Algorithm (DES)
+severity: high
+confidence_that_ai_generated: 0.83
+languages: [csharp]
+category: crypto
+cwe_id: CWE-327
+owasp_category: A02:2021 - Cryptographic Failures
+pattern:
+  any:
+    - "descryptoserviceprovider"
+fix:
+  suggestion: Replace DES with AES-256 using Aes.Create() for symmetric encryption.
+tags: [crypto, weak-cipher]

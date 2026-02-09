@@ -1,0 +1,14 @@
+id: AISHIELD-RB-CRYPTO-004
+title: Predictable Random Number Generator
+severity: medium
+confidence_that_ai_generated: 0.76
+languages: [ruby]
+category: crypto
+cwe_id: CWE-330
+owasp_category: A02:2021 - Cryptographic Failures
+pattern:
+  any:
+    - "rand("
+fix:
+  suggestion: Use SecureRandom.hex or SecureRandom.random_bytes for security-sensitive randomness.
+tags: [crypto, predictable-random]

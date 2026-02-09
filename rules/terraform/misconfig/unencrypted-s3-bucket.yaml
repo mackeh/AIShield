@@ -1,0 +1,17 @@
+id: AISHIELD-TF-MISC-007
+title: S3 Bucket Missing Server-Side Encryption
+severity: high
+confidence_that_ai_generated: 0.80
+languages: [terraform]
+category: misconfig
+cwe_id: CWE-311
+owasp_category: A02:2021 - Cryptographic Failures
+ai_tendency: AI-generated S3 bucket resources often omit server_side_encryption_configuration blocks.
+pattern:
+  all:
+    - "aws_s3_bucket"
+  not:
+    - "server_side_encryption"
+fix:
+  suggestion: Add an aws_s3_bucket_server_side_encryption_configuration resource with AES256 or aws:kms.
+tags: [terraform, s3, encryption, misconfig]

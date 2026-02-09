@@ -1,0 +1,17 @@
+id: AISHIELD-K8S-MISC-012
+title: Container Not Dropping Linux Capabilities
+severity: medium
+confidence_that_ai_generated: 0.77
+languages: [kubernetes]
+category: misconfig
+cwe_id: CWE-250
+owasp_category: A05:2021 - Security Misconfiguration
+ai_tendency: AI-generated manifests rarely drop capabilities, leaving unnecessary kernel privileges.
+pattern:
+  all:
+    - "securitycontext"
+  not:
+    - "drop"
+fix:
+  suggestion: Add securityContext.capabilities.drop = ["ALL"] and only add required capabilities.
+tags: [kubernetes, capabilities, misconfig]

@@ -1,0 +1,15 @@
+id: AISHIELD-DOCKER-MISC-014
+title: chmod 777 in Dockerfile
+severity: high
+confidence_that_ai_generated: 0.80
+languages: [dockerfile]
+category: misconfig
+cwe_id: CWE-732
+owasp_category: A01:2021 - Broken Access Control
+ai_tendency: AI-generated Dockerfiles use chmod 777 to resolve permission errors during build.
+pattern:
+  any:
+    - "chmod 777"
+fix:
+  suggestion: Use specific permissions (e.g., chmod 755 or chmod 644) and appropriate USER/GROUP ownership.
+tags: [dockerfile, permissions, misconfig]

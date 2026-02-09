@@ -1,0 +1,17 @@
+id: AISHIELD-K8S-MISC-010
+title: Namespace Without NetworkPolicy
+severity: medium
+confidence_that_ai_generated: 0.76
+languages: [kubernetes]
+category: misconfig
+cwe_id: CWE-284
+owasp_category: A01:2021 - Broken Access Control
+ai_tendency: AI-generated manifests rarely include NetworkPolicy resources, leaving pods open to lateral movement.
+pattern:
+  all:
+    - "kind: deployment"
+  not:
+    - "networkpolicy"
+fix:
+  suggestion: Create a NetworkPolicy to restrict ingress/egress traffic to required sources.
+tags: [kubernetes, network, misconfig]

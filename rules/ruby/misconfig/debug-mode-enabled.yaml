@@ -1,0 +1,14 @@
+id: AISHIELD-RB-MISC-003
+title: Debug Mode Enabled in Configuration
+severity: medium
+confidence_that_ai_generated: 0.78
+languages: [ruby]
+category: misconfig
+cwe_id: CWE-489
+owasp_category: A05:2021 - Security Misconfiguration
+pattern:
+  any:
+    - "debug = true"
+fix:
+  suggestion: Disable debug mode in production environments to prevent information leakage.
+tags: [misconfig, debug]

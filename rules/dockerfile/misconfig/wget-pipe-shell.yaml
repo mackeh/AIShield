@@ -1,0 +1,16 @@
+id: AISHIELD-DOCKER-MISC-008
+title: Wget Pipe to Shell in Build Step
+severity: high
+confidence_that_ai_generated: 0.78
+languages: [dockerfile]
+category: misconfig
+cwe_id: CWE-829
+owasp_category: A08:2021 - Software and Data Integrity Failures
+ai_tendency: AI-generated Dockerfiles use wget piped to sh for tool installation without verification.
+pattern:
+  all:
+    - "wget"
+    - "| sh"
+fix:
+  suggestion: Download with checksum verification before execution.
+tags: [dockerfile, supply-chain, execution]

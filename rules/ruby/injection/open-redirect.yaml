@@ -1,0 +1,15 @@
+id: AISHIELD-RB-INJ-005
+title: Open Redirect via User-Controlled Parameter
+severity: medium
+confidence_that_ai_generated: 0.77
+languages: [ruby]
+category: injection
+cwe_id: CWE-601
+owasp_category: A01:2021 - Broken Access Control
+pattern:
+  all:
+    - "redirect_to"
+    - "params["
+fix:
+  suggestion: Validate redirect URLs against an allowlist of trusted domains before redirecting.
+tags: [injection, open-redirect]

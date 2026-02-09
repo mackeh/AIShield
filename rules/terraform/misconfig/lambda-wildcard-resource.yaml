@@ -1,0 +1,17 @@
+id: AISHIELD-TF-MISC-011
+title: Lambda IAM Role with Wildcard Resource
+severity: medium
+confidence_that_ai_generated: 0.78
+languages: [terraform]
+category: misconfig
+cwe_id: CWE-732
+owasp_category: A01:2021 - Broken Access Control
+ai_tendency: AI often grants Resource = "*" to Lambda roles to avoid debugging permission errors.
+pattern:
+  all:
+    - '"resource"'
+    - '"*"'
+    - "aws_iam_role_policy"
+fix:
+  suggestion: Scope Resource to the specific ARNs the Lambda function needs to access.
+tags: [terraform, iam, lambda, misconfig]

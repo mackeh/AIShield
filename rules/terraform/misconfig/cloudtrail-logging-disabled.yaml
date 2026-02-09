@@ -1,0 +1,17 @@
+id: AISHIELD-TF-MISC-009
+title: CloudTrail Logging Disabled
+severity: high
+confidence_that_ai_generated: 0.77
+languages: [terraform]
+category: misconfig
+cwe_id: CWE-778
+owasp_category: A09:2021 - Security Logging and Monitoring Failures
+ai_tendency: AI-generated infrastructure may omit CloudTrail or disable logging to reduce complexity.
+pattern:
+  all:
+    - "aws_cloudtrail"
+    - "enable_logging"
+    - "false"
+fix:
+  suggestion: Set enable_logging = true on the aws_cloudtrail resource.
+tags: [terraform, logging, cloudtrail, misconfig]

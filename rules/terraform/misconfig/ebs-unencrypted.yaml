@@ -1,0 +1,17 @@
+id: AISHIELD-TF-MISC-012
+title: EBS Volume Missing Encryption
+severity: medium
+confidence_that_ai_generated: 0.76
+languages: [terraform]
+category: misconfig
+cwe_id: CWE-311
+owasp_category: A02:2021 - Cryptographic Failures
+ai_tendency: AI-generated EC2 instances often omit EBS encryption settings.
+pattern:
+  all:
+    - "aws_ebs_volume"
+    - "encrypted"
+    - "false"
+fix:
+  suggestion: Set encrypted = true on aws_ebs_volume and consider using a KMS key.
+tags: [terraform, ebs, encryption, misconfig]

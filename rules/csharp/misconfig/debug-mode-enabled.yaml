@@ -1,0 +1,14 @@
+id: AISHIELD-CS-MISC-003
+title: Debug Mode Left Enabled
+severity: medium
+confidence_that_ai_generated: 0.77
+languages: [csharp]
+category: misconfig
+cwe_id: CWE-489
+owasp_category: A05:2021 - Security Misconfiguration
+pattern:
+  any:
+    - "debug = true"
+fix:
+  suggestion: Disable debug mode in production builds to prevent information leakage and reduce attack surface.
+tags: [misconfig, debug]

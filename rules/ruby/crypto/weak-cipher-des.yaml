@@ -1,0 +1,14 @@
+id: AISHIELD-RB-CRYPTO-003
+title: Weak Cipher Algorithm (DES)
+severity: high
+confidence_that_ai_generated: 0.81
+languages: [ruby]
+category: crypto
+cwe_id: CWE-327
+owasp_category: A02:2021 - Cryptographic Failures
+pattern:
+  any:
+    - 'cipher.new("des'
+fix:
+  suggestion: Replace DES with AES-256-GCM or AES-256-CBC for symmetric encryption.
+tags: [crypto, weak-cipher]

@@ -1,0 +1,14 @@
+id: AISHIELD-RB-CRYPTO-005
+title: Weak RSA Key Size (1024-bit)
+severity: high
+confidence_that_ai_generated: 0.83
+languages: [ruby]
+category: crypto
+cwe_id: CWE-326
+owasp_category: A02:2021 - Cryptographic Failures
+pattern:
+  any:
+    - "rsa.new(1024)"
+fix:
+  suggestion: Use a minimum RSA key size of 2048 bits, preferably 4096 bits.
+tags: [crypto, weak-key]

@@ -1,0 +1,17 @@
+id: AISHIELD-TF-MISC-008
+title: RDS Instance Missing Storage Encryption
+severity: high
+confidence_that_ai_generated: 0.78
+languages: [terraform]
+category: misconfig
+cwe_id: CWE-311
+owasp_category: A02:2021 - Cryptographic Failures
+ai_tendency: AI-generated RDS resources frequently omit storage_encrypted = true.
+pattern:
+  all:
+    - "aws_db_instance"
+    - "storage_encrypted"
+    - "false"
+fix:
+  suggestion: Set storage_encrypted = true on the aws_db_instance resource.
+tags: [terraform, rds, encryption, misconfig]
