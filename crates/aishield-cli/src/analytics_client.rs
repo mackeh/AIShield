@@ -2,6 +2,7 @@ use crate::config::AnalyticsConfig;
 use crate::git_utils::RepoMetadata;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::time::Duration;
 
 /// Metadata for a scan
@@ -54,6 +55,15 @@ pub struct AnalyticsClient {
     http_client: Client,
     base_url: String,
     api_key: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct AnalyticsQuery {
+    pub org_id: Option<String>,
+    pub team_id: Option<String>,
+    pub repo_id: Option<String>,
+    pub days: i32,
+    pub limit: i32,
 }
 
 impl AnalyticsClient {
@@ -176,6 +186,67 @@ impl AnalyticsClient {
 
             Err(format!("API error ({}): {}", status, error_body))
         }
+    }
+
+    pub async fn fetch_summary(&self, query: &AnalyticsQuery) -> Result<Value, String> {
+        let url = self.build_url_with_query("/api/v1/analytics/summary", query)?;
+        self.get_json(&url).await
+    }
+
+    pub async fn fetch_compliance_gaps(&self, query: &AnalyticsQuery) -> Result<Value, String> {
+        let url = self.build_url_with_query("/api/v1/analytics/compliance-gaps", query)?;
+        self.get_json(&url).await
+    }
+
+    fn build_url_with_query(
+        &self,
+        endpoint: &str,
+        query: &AnalyticsQuery,
+    ) -> Result<reqwest::Url, String> {
+        let base = self.base_url.trim_end_matches('/');
+        let mut url = reqwest::Url::parse(&format!("{base}{endpoint}"))
+            .map_err(|e| format!("Invalid analytics URL: {}", e))?;
+
+        {
+            let mut pairs = url.query_pairs_mut();
+            pairs.append_pair("days", &query.days.to_string());
+            pairs.append_pair("limit", &query.limit.to_string());
+            if let Some(org_id) = query.org_id.as_deref() {
+                pairs.append_pair("org_id", org_id);
+            }
+            if let Some(team_id) = query.team_id.as_deref() {
+                pairs.append_pair("team_id", team_id);
+            }
+            if let Some(repo_id) = query.repo_id.as_deref() {
+                pairs.append_pair("repo_id", repo_id);
+            }
+        }
+
+        Ok(url)
+    }
+
+    async fn get_json(&self, url: &reqwest::Url) -> Result<Value, String> {
+        let response = self
+            .http_client
+            .get(url.as_str())
+            .header("x-api-key", &self.api_key)
+            .send()
+            .await
+            .map_err(|e| format!("Network error: {}", e))?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(format!("API error ({}): {}", status, error_body));
+        }
+
+        response
+            .json::<Value>()
+            .await
+            .map_err(|e| format!("Failed to parse response: {}", e))
     }
 }
 

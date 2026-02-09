@@ -3037,7 +3037,7 @@ fn run_config(args: &[String]) -> Result<(), String> {
 
 fn run_analytics(args: &[String]) -> Result<(), String> {
     if args.is_empty() {
-        return Err("analytics requires a subcommand: migrate-history\nUsage:\n  aishield analytics migrate-history [--dry-run] [--history-file <path>]".to_string());
+        return Err("analytics requires a subcommand: migrate-history, summary\nUsage:\n  aishield analytics migrate-history [--dry-run] [--history-file <path>]\n  aishield analytics summary [--days N] [--limit N] [--org-id ID] [--team-id ID] [--repo-id ID] [--format table|json]".to_string());
     }
 
     match args[0].as_str() {
@@ -3165,8 +3165,108 @@ fn run_analytics(args: &[String]) -> Result<(), String> {
 
             Ok(())
         }
+        "summary" => {
+            let mut days = 30i32;
+            let mut limit = 5i32;
+            let mut org_id_override = None::<String>;
+            let mut team_id_override = None::<String>;
+            let mut repo_id_override = None::<String>;
+            let mut format = AnalyticsOutputFormat::Table;
+
+            let mut i = 1;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--days" => {
+                        i += 1;
+                        days = args
+                            .get(i)
+                            .ok_or("--days requires a value")?
+                            .parse::<i32>()
+                            .map_err(|_| "--days must be a positive integer".to_string())?;
+                        if days <= 0 {
+                            return Err("--days must be greater than 0".to_string());
+                        }
+                    }
+                    "--limit" => {
+                        i += 1;
+                        limit = args
+                            .get(i)
+                            .ok_or("--limit requires a value")?
+                            .parse::<i32>()
+                            .map_err(|_| "--limit must be a positive integer".to_string())?;
+                        if limit <= 0 {
+                            return Err("--limit must be greater than 0".to_string());
+                        }
+                    }
+                    "--org-id" => {
+                        i += 1;
+                        org_id_override =
+                            Some(args.get(i).ok_or("--org-id requires a value")?.to_string());
+                    }
+                    "--team-id" => {
+                        i += 1;
+                        team_id_override =
+                            Some(args.get(i).ok_or("--team-id requires a value")?.to_string());
+                    }
+                    "--repo-id" => {
+                        i += 1;
+                        repo_id_override =
+                            Some(args.get(i).ok_or("--repo-id requires a value")?.to_string());
+                    }
+                    "--format" => {
+                        i += 1;
+                        format = AnalyticsOutputFormat::parse(
+                            args.get(i).ok_or("--format requires a value")?,
+                        )?;
+                    }
+                    other => return Err(format!("unknown option `{}`", other)),
+                }
+                i += 1;
+            }
+
+            let config = config::Config::load()
+                .map_err(|e| format!("Failed to load config: {}", e))?
+                .merge_with_env();
+
+            if config.analytics.url.is_none() {
+                return Err(
+                    "Analytics URL not configured\nRun: aishield config set analytics.url <url>"
+                        .to_string(),
+                );
+            }
+
+            if config.analytics.api_key.is_none() {
+                return Err("Analytics API key not configured\nRun: aishield config set analytics.api_key <key>".to_string());
+            }
+
+            let query = analytics_client::AnalyticsQuery {
+                org_id: org_id_override.or(config.analytics.org_id.clone()),
+                team_id: team_id_override.or(config.analytics.team_id.clone()),
+                repo_id: repo_id_override,
+                days,
+                limit,
+            };
+
+            let client = analytics_client::AnalyticsClient::new(&config.analytics)?;
+            let runtime = tokio::runtime::Runtime::new()
+                .map_err(|e| format!("Failed to create async runtime: {}", e))?;
+
+            let summary = runtime.block_on(client.fetch_summary(&query))?;
+            let compliance_gaps = runtime.block_on(client.fetch_compliance_gaps(&query))?;
+
+            let rendered = match format {
+                AnalyticsOutputFormat::Table => {
+                    render_analytics_summary_table(&summary, &compliance_gaps, &query)
+                }
+                AnalyticsOutputFormat::Json => {
+                    render_analytics_summary_json(&summary, &compliance_gaps, &query)
+                }
+            };
+
+            write_stdout(&rendered)
+        }
         other => Err(format!(
-            "unknown analytics subcommand `{}`\nAvailable: migrate-history",
+            "unknown analytics subcommand `{}`\nAvailable: migrate-history, summary",
             other
         )),
     }
@@ -4047,6 +4147,178 @@ fn render_stats_json(aggregate: &StatsAggregate, days: u64, history_file: &Path)
     out
 }
 
+fn render_analytics_summary_table(
+    summary: &Value,
+    compliance_gaps: &Value,
+    query: &analytics_client::AnalyticsQuery,
+) -> String {
+    let mut out = String::new();
+
+    let total_scans = summary
+        .pointer("/summary/total_scans")
+        .and_then(Value::as_i64)
+        .unwrap_or(0);
+    let total_findings = summary
+        .pointer("/summary/total_findings")
+        .and_then(Value::as_i64)
+        .unwrap_or(0);
+    let critical = summary
+        .pointer("/summary/critical")
+        .and_then(Value::as_i64)
+        .unwrap_or(0);
+    let high = summary
+        .pointer("/summary/high")
+        .and_then(Value::as_i64)
+        .unwrap_or(0);
+    let medium = summary
+        .pointer("/summary/medium")
+        .and_then(Value::as_i64)
+        .unwrap_or(0);
+    let low = summary
+        .pointer("/summary/low")
+        .and_then(Value::as_i64)
+        .unwrap_or(0);
+    let ai_ratio = summary
+        .pointer("/summary/ai_ratio")
+        .and_then(Value::as_f64)
+        .unwrap_or(0.0)
+        * 100.0;
+
+    let findings_delta = format_optional_delta(
+        summary
+            .pointer("/trend/findings_delta_pct")
+            .and_then(Value::as_f64),
+    );
+    let ai_ratio_delta = format_optional_delta(
+        summary
+            .pointer("/trend/ai_ratio_delta_pct")
+            .and_then(Value::as_f64),
+    );
+    let scans_delta = format_optional_delta(
+        summary
+            .pointer("/trend/scans_delta_pct")
+            .and_then(Value::as_f64),
+    );
+
+    let top_rule_id = summary
+        .pointer("/top_rules/0/rule_id")
+        .and_then(Value::as_str)
+        .unwrap_or("n/a");
+    let top_rule_count = summary
+        .pointer("/top_rules/0/count")
+        .and_then(Value::as_i64)
+        .unwrap_or(0);
+
+    let coverage_pct = compliance_gaps
+        .pointer("/summary/coverage_pct")
+        .and_then(Value::as_f64)
+        .unwrap_or(0.0);
+    let classified_findings = compliance_gaps
+        .pointer("/summary/classified_findings")
+        .and_then(Value::as_i64)
+        .unwrap_or(0);
+    let gap_total_findings = compliance_gaps
+        .pointer("/summary/total_findings")
+        .and_then(Value::as_i64)
+        .unwrap_or(0);
+    let top_cwe = compliance_gaps
+        .pointer("/top_cwe/0/key")
+        .and_then(Value::as_str)
+        .unwrap_or("n/a");
+    let top_cwe_count = compliance_gaps
+        .pointer("/top_cwe/0/count")
+        .and_then(Value::as_i64)
+        .unwrap_or(0);
+    let top_owasp = compliance_gaps
+        .pointer("/top_owasp/0/key")
+        .and_then(Value::as_str)
+        .unwrap_or("n/a");
+    let top_owasp_count = compliance_gaps
+        .pointer("/top_owasp/0/count")
+        .and_then(Value::as_i64)
+        .unwrap_or(0);
+
+    let org_scope = query.org_id.as_deref().unwrap_or("all");
+    let team_scope = query.team_id.as_deref().unwrap_or("all");
+    let repo_scope = query.repo_id.as_deref().unwrap_or("all");
+
+    let _ = writeln!(
+        out,
+        "AIShield analytics summary for last {} day(s)",
+        query.days
+    );
+    let _ = writeln!(
+        out,
+        "Scope: org={} team={} repo={}",
+        org_scope, team_scope, repo_scope
+    );
+    out.push('\n');
+
+    let _ = writeln!(out, "Scans:          {}", total_scans);
+    let _ = writeln!(
+        out,
+        "Findings:       {} (critical={}, high={}, medium={}, low={})",
+        total_findings, critical, high, medium, low
+    );
+    let _ = writeln!(out, "AI ratio:       {:.1}%", ai_ratio);
+    let _ = writeln!(
+        out,
+        "Trend deltas:   findings={} scans={} ai_ratio={}",
+        findings_delta, scans_delta, ai_ratio_delta
+    );
+    let _ = writeln!(
+        out,
+        "Top rule:       {} ({} finding(s))",
+        top_rule_id, top_rule_count
+    );
+    let _ = writeln!(
+        out,
+        "Coverage:       {:.1}% ({}/{}) classified",
+        coverage_pct, classified_findings, gap_total_findings
+    );
+    let _ = writeln!(
+        out,
+        "Top CWE:        {} ({} finding(s))",
+        top_cwe, top_cwe_count
+    );
+    let _ = writeln!(
+        out,
+        "Top OWASP:      {} ({} finding(s))",
+        top_owasp, top_owasp_count
+    );
+    out
+}
+
+fn render_analytics_summary_json(
+    summary: &Value,
+    compliance_gaps: &Value,
+    query: &analytics_client::AnalyticsQuery,
+) -> String {
+    let payload = serde_json::json!({
+        "query": {
+            "org_id": query.org_id,
+            "team_id": query.team_id,
+            "repo_id": query.repo_id,
+            "days": query.days,
+            "limit": query.limit,
+        },
+        "summary": summary,
+        "compliance_gaps": compliance_gaps,
+    });
+
+    match serde_json::to_string_pretty(&payload) {
+        Ok(serialized) => format!("{serialized}\n"),
+        Err(_) => "{\"error\":\"failed to serialize analytics summary\"}\n".to_string(),
+    }
+}
+
+fn format_optional_delta(delta: Option<f64>) -> String {
+    match delta {
+        Some(value) => format!("{:+.1}%", value),
+        None => "n/a".to_string(),
+    }
+}
+
 fn print_help() {
     println!("AIShield CLI (foundation)\n");
     println!("Usage:");
@@ -4057,6 +4329,9 @@ fn print_help() {
     println!("  aishield create-rule --id ID --title TITLE --language LANG --category CAT [--severity LEVEL] [--pattern-any P] [--pattern-all P] [--pattern-not P] [--tags t1,t2] [--suggestion TEXT] [--out-dir DIR] [--force]");
     println!("  aishield stats [--last Nd] [--history-file FILE] [--format table|json] [--config FILE] [--no-config]");
     println!("  aishield hook install [--severity LEVEL] [--path TARGET] [--all-files]");
+    println!("  aishield analytics migrate-history [--dry-run] [--history-file FILE]");
+    println!("  aishield analytics summary [--days N] [--limit N] [--org-id ID] [--team-id ID] [--repo-id ID] [--format table|json]");
+    println!("  aishield config set|get|show ...");
 }
 
 fn recompute_summary(result: &ScanResult) -> aishield_core::ScanSummary {
@@ -5099,6 +5374,22 @@ impl StatsOutputFormat {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+enum AnalyticsOutputFormat {
+    Table,
+    Json,
+}
+
+impl AnalyticsOutputFormat {
+    fn parse(raw: &str) -> Result<Self, String> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "table" => Ok(Self::Table),
+            "json" => Ok(Self::Json),
+            _ => Err("analytics format must be table or json".to_string()),
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 enum BenchOutputFormat {
     Table,
@@ -5176,8 +5467,8 @@ mod tests {
         filter_findings_against_baseline, filtered_candidate_indices, init_template_writes,
         load_baseline_keys, load_onnx_manifest, maybe_send_webhook_notification, normalize_snippet,
         parse_fix_target_spec, parse_init_templates, percentile, render_github_annotations,
-        render_sarif, resolve_ai_classifier, resolve_selected_indices, DedupMode, Finding,
-        InitTemplate, OutputSummary, ScanResult, Severity, SeverityThreshold,
+        render_sarif, resolve_ai_classifier, resolve_selected_indices, AnalyticsOutputFormat,
+        DedupMode, Finding, InitTemplate, OutputSummary, ScanResult, Severity, SeverityThreshold,
     };
 
     fn finding(
@@ -5817,6 +6108,73 @@ ai_calibration: aggressive
         let p95 = percentile(&samples, 0.95);
         assert!((p50 - 25.0).abs() < f64::EPSILON);
         assert!((p95 - 38.5).abs() < 0.0001);
+    }
+
+    #[test]
+    fn analytics_output_format_parser_supports_table_and_json() {
+        assert!(matches!(
+            AnalyticsOutputFormat::parse("table"),
+            Ok(AnalyticsOutputFormat::Table)
+        ));
+        assert!(matches!(
+            AnalyticsOutputFormat::parse("json"),
+            Ok(AnalyticsOutputFormat::Json)
+        ));
+    }
+
+    #[test]
+    fn analytics_output_format_parser_rejects_invalid_values() {
+        let err = AnalyticsOutputFormat::parse("yaml").expect_err("should reject invalid format");
+        assert!(err.contains("analytics format"));
+    }
+
+    #[test]
+    fn analytics_summary_table_renders_hotspot_and_coverage_fields() {
+        let summary = serde_json::json!({
+            "summary": {
+                "total_scans": 3,
+                "total_findings": 12,
+                "critical": 1,
+                "high": 4,
+                "medium": 5,
+                "low": 2,
+                "ai_ratio": 0.5
+            },
+            "trend": {
+                "findings_delta_pct": 12.0,
+                "scans_delta_pct": 8.0,
+                "ai_ratio_delta_pct": -2.5
+            },
+            "top_rules": [
+                { "rule_id": "AISHIELD-PY-CRYPTO-001", "count": 4 }
+            ]
+        });
+        let gaps = serde_json::json!({
+            "summary": {
+                "coverage_pct": 92.5,
+                "classified_findings": 11,
+                "total_findings": 12
+            },
+            "top_cwe": [
+                { "key": "CWE-79", "count": 5 }
+            ],
+            "top_owasp": [
+                { "key": "A03:2021 - Injection", "count": 5 }
+            ]
+        });
+        let query = super::analytics_client::AnalyticsQuery {
+            org_id: Some("acme".to_string()),
+            team_id: Some("platform".to_string()),
+            repo_id: None,
+            days: 30,
+            limit: 5,
+        };
+
+        let rendered = super::render_analytics_summary_table(&summary, &gaps, &query);
+        assert!(rendered.contains("Scope: org=acme team=platform repo=all"));
+        assert!(rendered.contains("Top CWE:        CWE-79"));
+        assert!(rendered.contains("Top OWASP:      A03:2021 - Injection"));
+        assert!(rendered.contains("Coverage:       92.5% (11/12) classified"));
     }
 
     #[test]
