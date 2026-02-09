@@ -10,6 +10,27 @@ The format is based on Keep a Changelog and follows semantic versioning.
 
 - No unreleased entries yet.
 
+## [0.4.0] - 2026-02-09
+
+### Added
+
+- Expanded rule catalog from 169 to 237 rules across 13 languages
+- C# rulepack expanded to 20 rules covering auth, crypto, injection, misconfig categories
+- Ruby rulepack expanded to 20 rules covering auth, crypto, injection, misconfig categories
+- PHP rulepack expanded to 20 rules covering auth, crypto, injection, misconfig categories
+- Terraform rules expanded from 6 to 15 (S3, RDS, CloudTrail, IAM, EBS, ALB, ECR, Secrets Manager)
+- Kubernetes rules expanded from 7 to 15 (RBAC, network policies, resource limits, image tags, probes)
+- Dockerfile rules expanded from 6 to 15 (secrets in ENV/ARG, wget pipe, chmod 777, unpinned packages)
+- Expanded test fixtures for all new rules with intentionally vulnerable code samples
+- Analytics CI threshold gating wired into smoke and hardening workflows
+
+### Changed
+
+- GitLab CI template upgraded: cargo cache, MR diff-only scan with fail gate, SARIF as SAST report, bridge variable gating
+- Bitbucket Pipelines template upgraded: PR diff scan against target branch, fail gate, bridge custom pipeline, proper cache definitions
+- Updated integrations documentation to reflect new CI template features
+- Fixed pre-existing detector test for Python token compare pattern
+
 ## [0.3.2] - 2026-02-09
 
 ### Added
@@ -108,7 +129,8 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - Machine-output dedup normalization for JSON/SARIF to reduce CI noise
 - Expanded documentation for CLI, configuration, outputs, and CI
 
-[Unreleased]: https://github.com/mackeh/AIShield/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/mackeh/AIShield/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/mackeh/AIShield/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/mackeh/AIShield/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/mackeh/AIShield/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/mackeh/AIShield/compare/v0.2.0...v0.3.0

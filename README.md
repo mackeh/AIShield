@@ -5,7 +5,7 @@
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/mackeh/AIShield)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange)](https://www.rust-lang.org)
-[![Rules](https://img.shields.io/badge/rules-169-blue)](#)
+[![Rules](https://img.shields.io/badge/rules-237-blue)](#)
 [![Languages](https://img.shields.io/badge/languages-13-blue)](#)
 
 **Blazing-fast security scanner for AI-generated code vulnerabilities**
@@ -55,7 +55,7 @@ cargo run -p aishield-cli -- fix . --interactive
 
 ### 🔍 **AI-Focused Detection**
 
-- **169 rules** across 13 languages detecting AI-prone vulnerability patterns
+- **237 rules** across 13 languages detecting AI-prone vulnerability patterns
 - **AI confidence scoring**: Estimates likelihood each finding came from AI autocomplete
 - **Context-aware risk scoring**: Prioritizes findings based on severity and exploitability
 
@@ -202,9 +202,9 @@ cargo run -p aishield-cli -- scan tests/fixtures
 **Example output**:
 
 ```text
-AIShield scan complete: 96 findings across 7 files (169 rules loaded)
-Summary: critical=6 high=66 medium=19 low=5 info=0
-AI-Generated (estimated): 27 of 96 findings (28%)
+AIShield scan complete: 142 findings across 13 files (237 rules loaded)
+Summary: critical=8 high=98 medium=28 low=8 info=0
+AI-Generated (estimated): 41 of 142 findings (29%)
 
 Top findings:
   [CRITICAL] SQL injection via string concatenation (vulnerable.py:23)
@@ -425,22 +425,24 @@ More troubleshooting: [docs/troubleshooting.md](docs/troubleshooting.md) _(comin
 
 ## 📋 Project Status
 
-**Current Version**: 0.2.0
+**Current Version**: 0.4.0
 
 **Phase Completion**:
 
 - ✅ Phase 1 (Foundation): Complete
-- ✅ Phase 2 (Intelligence): Core deliverables complete
-- ☑️ Phase 3+ (Platform/Ecosystem): Core integrations shipped, reliability hardening in progress
+- ✅ Phase 2 (Intelligence): Complete
+- ✅ Phase 3 (Platform/Ecosystem Core): Complete
+- 🚧 Phase 4 (Ecosystem Expansion): In Progress
 
 **Recent Additions**:
 
-- 169 rules across 13 languages
-- Analytics API + dashboard (AI metrics and compliance reporting)
-- VS Code extension GA polish (security lens, quick fixes, telemetry)
+- 237 rules across 13 languages (all application languages at 20 rules, IaC at 15 each)
+- Production-grade CI templates for GitHub Actions, GitLab CI, Bitbucket, CircleCI, Jenkins
+- C#/Ruby/PHP rulepacks expanded to full 20-rule coverage
+- IaC rules expanded: Terraform 15, Kubernetes 15, Dockerfile 15
+- Analytics API + dashboard with compliance reporting and threshold gating
+- VS Code extension GA (security lens, quick fixes, telemetry)
 - ONNX classifier model path with heuristic fallback
-- Expanded Kotlin/Swift rulepacks (20 rules each)
-- VitePress documentation site and week-by-week testing guides
 
 Tracking docs: [PROJECT_STATUS.md](PROJECT_STATUS.md) | [WEEK5_TESTING.md](WEEK5_TESTING.md) | [docs/roadmap.md](docs/roadmap.md)
 

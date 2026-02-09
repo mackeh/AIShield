@@ -22,7 +22,7 @@ This page mirrors `project.md` and highlights the current implementation directi
 - [x] Trained model distribution and calibration tuning
 - [x] Full PR annotation + SARIF workflow hardening across repo contexts
 
-## Phase 3+: Platform and Ecosystem
+## Phase 3: Platform and Ecosystem Core
 
 - [x] VS Code extension bootstrap (scan commands + diagnostics)
 - [x] Advanced VS Code UX beta (hover cards, quick fixes, findings panel, security lens)
@@ -36,19 +36,25 @@ This page mirrors `project.md` and highlights the current implementation directi
 - [x] Expand language rulepack depth toward 20-per-language targets for new ecosystems
 - [x] Infra/IaC scanning bootstrap (Terraform, Kubernetes YAML, Dockerfiles)
 
+## Phase 4: Ecosystem Expansion
+
+- [x] C#/Ruby/PHP rulepacks expanded to 20 rules each (auth, crypto, injection, misconfig)
+- [x] IaC rules expanded to 15 each (Terraform, Kubernetes, Dockerfile)
+- [x] Production-grade GitLab CI template (cache, MR diff scan, SAST report, bridge gating)
+- [x] Production-grade Bitbucket Pipelines template (PR diff scan, fail gate, bridge pipeline)
+- [x] Expanded test fixtures for all new rules
+- [x] Analytics CI threshold gating
+- [ ] Enterprise multi-repo aggregation
+- [ ] Custom rule marketplace/sharing
+- [ ] Team-level analytics dashboards
+
 ## Milestone Notes
 
-Near-term focus is reliability and signal quality:
+Rule catalog: 237 rules across 13 languages (all application languages at 20 rules, IaC at 15 each).
 
-- reduce duplicate/noisy findings in CI
-- improve remediation coverage and fix confidence
-- harden release and security workflows
-- enforce staged CORS/rate-limit hardening checks in analytics smoke CI
-- keep compliance metadata ingestion/report mappings covered by regression tests
-- expose compliance hotspots (top CWE/OWASP + severity mix) in analytics API/dashboard
-- add staging deploy/rollback automation runbook for analytics stack
-- add staging signal-observation burn-in script with SLO gates
-- add CLI analytics summary pull mode for fast operator snapshots
-- Kotlin/Swift now at 20 rules each with expanded fixture coverage and regression gates
-- ONNX model manifest + calibration profile support now wired in CLI/config/docs
-- VS Code extension GA polish landed (status bar UX, scan tuning controls, local telemetry summaries)
+CI/CD templates: GitHub Actions, GitLab CI, Bitbucket Pipelines, CircleCI, Jenkins all production-ready with `aishield init --templates all`.
+
+Near-term focus:
+- enterprise multi-repo features
+- custom rule sharing and marketplace
+- team-level analytics and RBAC
