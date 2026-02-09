@@ -109,6 +109,19 @@ Check that the file is not empty:
 cat report.csv
 ```
 
+### Step 4: Compliance Gaps Endpoint Verification
+
+```bash
+API_KEY="test_key_e2e_12345"
+curl -s -H "x-api-key: $API_KEY" \
+  "http://localhost:8080/api/v1/analytics/compliance-gaps?org_id=test_org_1&days=30&limit=5" | jq
+```
+
+Expected shape:
+- `summary.coverage_pct` is present
+- `top_cwe` includes `key`, `count`, and severity mix fields
+- `top_owasp` includes `key`, `count`, and severity mix fields
+
 ## 3. Staged Hardening Checks 🔒
 
 **Objective**: Verify strict CORS allowlist and rate-limit enforcement before staging deploy.

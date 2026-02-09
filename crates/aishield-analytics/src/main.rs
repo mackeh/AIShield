@@ -22,7 +22,10 @@ mod db;
 mod handlers;
 mod models;
 
-use handlers::{get_analytics_summary, get_top_rules, get_trends, health_check, ingest_scan};
+use handlers::{
+    get_analytics_summary, get_compliance_gaps, get_top_rules, get_trends, health_check,
+    ingest_scan,
+};
 use models::AppState;
 
 #[derive(Debug)]
@@ -105,6 +108,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/v1/scans/ingest", post(ingest_scan))
         .route("/api/v1/scans", get(handlers::list_scans))
         .route("/api/v1/analytics/summary", get(get_analytics_summary))
+        .route(
+            "/api/v1/analytics/compliance-gaps",
+            get(get_compliance_gaps),
+        )
         .route("/api/v1/analytics/ai-metrics", get(handlers::ai_metrics))
         .route(
             "/api/v1/reports/compliance",

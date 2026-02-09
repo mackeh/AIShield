@@ -96,6 +96,17 @@ export class AnalyticsAPIClient {
     return this.request(url);
   }
 
+  async fetchComplianceGaps(filters = {}) {
+    const params = new URLSearchParams();
+    if (filters.org_id) params.append('org_id', filters.org_id);
+    if (filters.team_id) params.append('team_id', filters.team_id);
+    if (filters.repo_id) params.append('repo_id', filters.repo_id);
+    if (filters.days) params.append('days', filters.days);
+    if (filters.limit) params.append('limit', filters.limit);
+
+    return this.request(`/api/v1/analytics/compliance-gaps?${params}`);
+  }
+
   /**
    * Generate compliance report
    */

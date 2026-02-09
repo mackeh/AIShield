@@ -296,6 +296,9 @@ request_json "top-rules" \
 request_json "ai-metrics" \
   "$BASE_URL/api/v1/analytics/ai-metrics?org_id=$ORG_ID&days=$DAYS"
 
+request_json "compliance-gaps" \
+  "$BASE_URL/api/v1/analytics/compliance-gaps?org_id=$ORG_ID&days=$DAYS&limit=10"
+
 request_file "compliance-report" \
   "$BASE_URL/api/v1/reports/compliance?org_id=$ORG_ID&format=csv"
 

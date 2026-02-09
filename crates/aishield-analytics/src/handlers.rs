@@ -234,6 +234,153 @@ pub async fn get_top_rules(
     Ok(Json(top_rules))
 }
 
+#[derive(Debug, serde::Serialize)]
+pub struct ComplianceGapSummary {
+    pub total_findings: i64,
+    pub classified_findings: i64,
+    pub coverage_pct: f64,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct ComplianceGapItem {
+    pub key: String,
+    pub count: i64,
+    pub critical: i64,
+    pub high: i64,
+    pub medium: i64,
+    pub low: i64,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct ComplianceGapResponse {
+    pub summary: ComplianceGapSummary,
+    pub top_cwe: Vec<ComplianceGapItem>,
+    pub top_owasp: Vec<ComplianceGapItem>,
+}
+
+/// GET /api/v1/analytics/compliance-gaps - Top compliance hotspots
+pub async fn get_compliance_gaps(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(query): Query<AnalyticsQuery>,
+) -> Result<Json<ComplianceGapResponse>, ApiError> {
+    verify_auth(&headers, &state.api_key_hash)?;
+
+    let summary_query = r#"
+        SELECT
+            COUNT(*) as total_findings,
+            COUNT(*) FILTER (
+                WHERE (f.cwe_id IS NOT NULL AND f.cwe_id <> '')
+                    OR (f.owasp_category IS NOT NULL AND f.owasp_category <> '')
+            ) as classified_findings
+        FROM findings f
+        INNER JOIN scans s ON f.scan_id = s.scan_id
+        WHERE s.timestamp > NOW() - $1 * INTERVAL '1 day'
+            AND ($2::TEXT IS NULL OR s.org_id = $2)
+            AND ($3::TEXT IS NULL OR s.team_id = $3)
+            AND ($4::TEXT IS NULL OR s.repo_id = $4)
+    "#;
+
+    let (total_findings, classified_findings): (i64, i64) = sqlx::query_as(summary_query)
+        .bind(query.days)
+        .bind(query.org_id.as_deref())
+        .bind(query.team_id.as_deref())
+        .bind(query.repo_id.as_deref())
+        .fetch_one(&state.db_pool)
+        .await?;
+
+    let coverage_pct = if total_findings > 0 {
+        (classified_findings as f64 / total_findings as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    let top_cwe_query = r#"
+        SELECT
+            f.cwe_id as key,
+            COUNT(*) as count,
+            COUNT(*) FILTER (WHERE f.severity = 'critical') as critical,
+            COUNT(*) FILTER (WHERE f.severity = 'high') as high,
+            COUNT(*) FILTER (WHERE f.severity = 'medium') as medium,
+            COUNT(*) FILTER (WHERE f.severity = 'low') as low
+        FROM findings f
+        INNER JOIN scans s ON f.scan_id = s.scan_id
+        WHERE s.timestamp > NOW() - $1 * INTERVAL '1 day'
+            AND ($2::TEXT IS NULL OR s.org_id = $2)
+            AND ($3::TEXT IS NULL OR s.team_id = $3)
+            AND ($4::TEXT IS NULL OR s.repo_id = $4)
+            AND f.cwe_id IS NOT NULL
+            AND f.cwe_id <> ''
+        GROUP BY f.cwe_id
+        ORDER BY count DESC, f.cwe_id ASC
+        LIMIT $5
+    "#;
+
+    let top_cwe_rows: Vec<(String, i64, i64, i64, i64, i64)> = sqlx::query_as(top_cwe_query)
+        .bind(query.days)
+        .bind(query.org_id.as_deref())
+        .bind(query.team_id.as_deref())
+        .bind(query.repo_id.as_deref())
+        .bind(query.limit.max(1))
+        .fetch_all(&state.db_pool)
+        .await?;
+
+    let top_owasp_query = r#"
+        SELECT
+            f.owasp_category as key,
+            COUNT(*) as count,
+            COUNT(*) FILTER (WHERE f.severity = 'critical') as critical,
+            COUNT(*) FILTER (WHERE f.severity = 'high') as high,
+            COUNT(*) FILTER (WHERE f.severity = 'medium') as medium,
+            COUNT(*) FILTER (WHERE f.severity = 'low') as low
+        FROM findings f
+        INNER JOIN scans s ON f.scan_id = s.scan_id
+        WHERE s.timestamp > NOW() - $1 * INTERVAL '1 day'
+            AND ($2::TEXT IS NULL OR s.org_id = $2)
+            AND ($3::TEXT IS NULL OR s.team_id = $3)
+            AND ($4::TEXT IS NULL OR s.repo_id = $4)
+            AND f.owasp_category IS NOT NULL
+            AND f.owasp_category <> ''
+        GROUP BY f.owasp_category
+        ORDER BY count DESC, f.owasp_category ASC
+        LIMIT $5
+    "#;
+
+    let top_owasp_rows: Vec<(String, i64, i64, i64, i64, i64)> = sqlx::query_as(top_owasp_query)
+        .bind(query.days)
+        .bind(query.org_id.as_deref())
+        .bind(query.team_id.as_deref())
+        .bind(query.repo_id.as_deref())
+        .bind(query.limit.max(1))
+        .fetch_all(&state.db_pool)
+        .await?;
+
+    let to_items = |rows: Vec<(String, i64, i64, i64, i64, i64)>| -> Vec<ComplianceGapItem> {
+        rows.into_iter()
+            .map(
+                |(key, count, critical, high, medium, low)| ComplianceGapItem {
+                    key,
+                    count,
+                    critical,
+                    high,
+                    medium,
+                    low,
+                },
+            )
+            .collect()
+    };
+
+    Ok(Json(ComplianceGapResponse {
+        summary: ComplianceGapSummary {
+            total_findings,
+            classified_findings,
+            coverage_pct,
+        },
+        top_cwe: to_items(top_cwe_rows),
+        top_owasp: to_items(top_owasp_rows),
+    }))
+}
+
 fn percent_change(current: f64, previous: f64) -> Option<f64> {
     if previous <= 0.0 {
         if current <= 0.0 {

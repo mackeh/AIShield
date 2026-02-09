@@ -11,7 +11,7 @@
 - ✅ **Week 4**: Dashboard Upgrade (100%)
 - 🚧 **Week 5**: API mode stabilization, trend deltas, reporting polish, metadata enrichment (In Progress)
 
-**Overall Completion**: 93% (Core platform shipped, reliability and signal-quality hardening near completion)
+**Overall Completion**: 94% (Core platform shipped, reliability and signal-quality hardening near completion)
 
 ### Quick Links
 - [⚡ Dashboard Quick Start](dashboard/QUICKSTART.md)
@@ -30,6 +30,7 @@
 - Added deterministic smoke ingestion fixture to validate metadata mapping from ingest -> compliance report (`Top CWE`, `Top OWASP`)
 - Added analytics hardening smoke mode to verify strict CORS allowlist and rate-limit enforcement
 - Added analytics regression unit tests for metadata normalization and compliance score/trend helper logic
+- Added compliance hotspot analytics endpoint (`/api/v1/analytics/compliance-gaps`) and dashboard visualization for top CWE/OWASP gaps with severity mix
 
 ---
 *For implementation direction, see `project.md` and `docs/roadmap.md`.*

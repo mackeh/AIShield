@@ -207,6 +207,42 @@ Headers: x-api-key: YOUR_API_KEY
 ]
 ```
 
+### Get Compliance Gaps
+
+```bash
+GET /api/v1/analytics/compliance-gaps?org_id=github/acme-corp&days=30&limit=5
+Headers: x-api-key: YOUR_API_KEY
+
+# Response
+{
+  "summary": {
+    "total_findings": 1847,
+    "classified_findings": 1730,
+    "coverage_pct": 93.7
+  },
+  "top_cwe": [
+    {
+      "key": "CWE-79",
+      "count": 412,
+      "critical": 2,
+      "high": 133,
+      "medium": 211,
+      "low": 66
+    }
+  ],
+  "top_owasp": [
+    {
+      "key": "A03:2021 - Injection",
+      "count": 501,
+      "critical": 4,
+      "high": 210,
+      "medium": 230,
+      "low": 57
+    }
+  ]
+}
+```
+
 ## Query Parameters
 
 | Parameter | Type    | Default | Description               |

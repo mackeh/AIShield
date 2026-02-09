@@ -21,6 +21,10 @@ const teamFilter = document.getElementById('team-filter');
 const repoFilter = document.getElementById('repo-filter');
 const filterGroup = document.getElementById('filter-group');
 const aiMetricsPanel = document.getElementById('ai-metrics-panel');
+const complianceGapsPanel = document.getElementById('compliance-gaps-panel');
+const complianceCoverage = document.getElementById('compliance-coverage');
+const cweGapList = document.getElementById('cwe-gap-list');
+const owaspGapList = document.getElementById('owasp-gap-list');
 
 const fmt = new Intl.NumberFormat();
 
@@ -173,6 +177,7 @@ async function load() {
       
       renderDashboard(payload);
       await renderAIMetrics();
+      await renderComplianceGaps(filters);
       return;
     } catch (error) {
       console.warn('API fetch failed, falling back to file-based mode:', error.message);
@@ -192,6 +197,9 @@ async function load() {
   renderDashboard(payload);
   if (aiMetricsPanel) {
     aiMetricsPanel.style.display = 'none';
+  }
+  if (complianceGapsPanel) {
+    complianceGapsPanel.style.display = 'none';
   }
 }
 
@@ -902,6 +910,63 @@ function renderConfidenceDistribution(dist) {
 
     wrap.append(label, bar);
     container.appendChild(wrap);
+  }
+}
+
+function renderComplianceGapList(container, rows, kindLabel) {
+  clearNode(container);
+  if (!rows || rows.length === 0) {
+    addNoneRow(container);
+    return;
+  }
+
+  for (const row of rows) {
+    const item = document.createElement('li');
+    const left = document.createElement('span');
+    left.textContent = row.key;
+    left.appendChild(makeChip(kindLabel));
+
+    const mix = `C:${row.critical} H:${row.high} M:${row.medium} L:${row.low}`;
+    left.appendChild(makeChip(mix));
+
+    const value = document.createElement('strong');
+    value.textContent = fmt.format(row.count);
+
+    item.append(left, value);
+    container.appendChild(item);
+  }
+}
+
+async function renderComplianceGaps(baseFilters = {}) {
+  if (!complianceGapsPanel || !complianceCoverage || !cweGapList || !owaspGapList) {
+    return;
+  }
+
+  if (!apiClient.isConfigured()) {
+    complianceGapsPanel.style.display = 'none';
+    return;
+  }
+
+  try {
+    const filters = {
+      ...baseFilters,
+      days: Number(daysSelect.value || 30),
+      limit: 5,
+    };
+
+    const data = await apiClient.fetchComplianceGaps(filters);
+    const summary = data.summary || {};
+    const coverage = Number(summary.coverage_pct || 0).toFixed(1);
+    const classified = Number(summary.classified_findings || 0);
+    const total = Number(summary.total_findings || 0);
+
+    complianceCoverage.textContent = `${coverage}% coverage (${classified}/${total})`;
+    renderComplianceGapList(cweGapList, data.top_cwe || [], 'CWE');
+    renderComplianceGapList(owaspGapList, data.top_owasp || [], 'OWASP');
+    complianceGapsPanel.style.display = 'block';
+  } catch (error) {
+    console.error('[Compliance Gaps] Error:', error);
+    complianceGapsPanel.style.display = 'none';
   }
 }
 

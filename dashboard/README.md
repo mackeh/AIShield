@@ -7,6 +7,7 @@ Local web dashboard + analytics pipeline bootstrap for AIShield scan history.
 - timeline analytics from `.aishield-history.log`
 - KPI and trend views for findings, severity, and AI-estimated ratio
 - top rules and top targets to highlight recurring hotspots
+- API mode enterprise panels (AI metrics + compliance hotspot breakdown by CWE/OWASP)
 - ingestion utility for AIShield JSON/SARIF reports from CI artifacts
 
 ## Run locally
