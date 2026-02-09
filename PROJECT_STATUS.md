@@ -11,7 +11,7 @@
 - ✅ **Week 4**: Dashboard Upgrade (100%)
 - 🚧 **Week 5**: API mode stabilization, trend deltas, reporting polish, metadata enrichment (In Progress)
 
-**Overall Completion**: 94% (Core platform shipped, reliability and signal-quality hardening near completion)
+**Overall Completion**: 95% (Core platform shipped, reliability and signal-quality hardening near completion)
 
 ### Quick Links
 - [⚡ Dashboard Quick Start](dashboard/QUICKSTART.md)
@@ -33,6 +33,7 @@
 - Added compliance hotspot analytics endpoint (`/api/v1/analytics/compliance-gaps`) and dashboard visualization for top CWE/OWASP gaps with severity mix
 - Added staging deployment + rollback automation scripts with a dedicated runbook (`docs/analytics-staging.md`)
 - Added staged signal-observation burn-in script with latency/error/coverage SLO reporting (`scripts/observe-analytics-signal.sh`)
+- Added CLI analytics pull command (`aishield analytics summary`) for table/JSON snapshots from API mode
 
 ---
 *For implementation direction, see `project.md` and `docs/roadmap.md`.*
