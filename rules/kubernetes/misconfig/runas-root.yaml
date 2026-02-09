@@ -4,7 +4,9 @@ severity: high
 confidence_that_ai_generated: 0.76
 languages: [kubernetes]
 category: misconfig
-ai_tendency: Generated securityContext blocks may set runAsUser to 0 for convenience.
+cwe_id: CWE-16
+owasp_category: A05:2021 - Security Misconfiguration
+ai_tendency: Generated securityContext blocks may default to root UID for convenience.
 pattern:
   all:
     - "runasuser"

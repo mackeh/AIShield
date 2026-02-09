@@ -4,7 +4,9 @@ severity: high
 confidence_that_ai_generated: 0.75
 languages: [kubernetes]
 category: misconfig
-ai_tendency: AI-generated manifests often keep allowPrivilegeEscalation true by default.
+cwe_id: CWE-16
+owasp_category: A05:2021 - Security Misconfiguration
+ai_tendency: AI-generated manifests often keep escalation permissions enabled by default.
 pattern:
   all:
     - "allowprivilegeescalation"

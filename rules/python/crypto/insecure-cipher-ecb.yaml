@@ -4,6 +4,8 @@ severity: high
 confidence_that_ai_generated: 0.81
 languages: [python]
 category: crypto
+cwe_id: CWE-327
+owasp_category: A02:2021 - Cryptographic Failures
 ai_tendency: AI-generated crypto examples often default to ECB due older examples.
 pattern:
   all:

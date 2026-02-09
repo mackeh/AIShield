@@ -4,6 +4,8 @@ severity: high
 confidence_that_ai_generated: 0.74
 languages: [java]
 category: misconfig
+cwe_id: CWE-16
+owasp_category: A05:2021 - Security Misconfiguration
 pattern:
   any:
     - "sethostnameverifier((h,s) -> true)"

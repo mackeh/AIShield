@@ -52,11 +52,14 @@ negative_patterns:
 fix:
   suggestion: Use hmac.compare_digest for constant-time secret checks.
 tags: [auth, timing-attack]
+cwe_id: CWE-208
+owasp_category: A07:2021 - Identification and Authentication Failures
 ```
 
 - `negative_patterns`: global suppressions checked against line and full file
 - `fix.suggestion`: remediation text shown in `aishield fix`
 - `tags`: used for filtering (`--rules auth,crypto`)
+- `cwe_id` / `owasp_category`: explicit compliance metadata used in analytics and reporting
 
 ## Example
 

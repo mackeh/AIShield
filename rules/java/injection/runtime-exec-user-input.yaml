@@ -4,6 +4,8 @@ severity: high
 confidence_that_ai_generated: 0.83
 languages: [java]
 category: injection
+cwe_id: CWE-74
+owasp_category: A03:2021 - Injection
 pattern:
   any:
     - "runtime.getruntime().exec("

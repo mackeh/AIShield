@@ -4,6 +4,8 @@ severity: high
 confidence_that_ai_generated: 0.75
 languages: [go]
 category: crypto
+cwe_id: CWE-327
+owasp_category: A02:2021 - Cryptographic Failures
 pattern:
   all:
     - "rsa.generatekey("

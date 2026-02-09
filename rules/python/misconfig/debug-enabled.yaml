@@ -4,6 +4,8 @@ severity: medium
 confidence_that_ai_generated: 0.74
 languages: [python]
 category: misconfig
+cwe_id: CWE-16
+owasp_category: A05:2021 - Security Misconfiguration
 ai_tendency: Generated starter code often leaves DEBUG enabled in production-like code.
 pattern:
   contains:

@@ -35,9 +35,11 @@ negative_patterns:
 fix:
   suggestion: How to remediate this vulnerability
 tags: [tag1, tag2]
-cwe: CWE-XXX # Optional
-owasp: A01:2021 # Optional
+cwe_id: CWE-XXX # Optional
+owasp_category: A01:2021 - Broken Access Control # Optional
 ```
+
+`cwe` and `owasp` are still accepted as legacy aliases, but new rules should use `cwe_id` and `owasp_category`.
 
 ---
 
@@ -225,8 +227,8 @@ fix:
 
 ```yaml
 tags: [auth, timing-attack, owasp-top10]
-cwe: CWE-208 # Observable Timing Discrepancy
-owasp: A07:2021 # Identification and Authentication Failures
+cwe_id: CWE-208 # Observable Timing Discrepancy
+owasp_category: A07:2021 - Identification and Authentication Failures
 ```
 
 **Useful tags**:
@@ -261,8 +263,8 @@ negative_patterns:
 fix:
   suggestion: Use subtle.ConstantTimeCompare() for constant-time comparison
 tags: [auth, timing-attack, owasp-top10]
-cwe: CWE-208
-owasp: A07:2021
+cwe_id: CWE-208
+owasp_category: A07:2021 - Identification and Authentication Failures
 ```
 
 **Save to**: `rules/go/auth/timing-unsafe-password-compare.yaml`
@@ -412,7 +414,7 @@ Before submitting:
 - [ ] Pattern matches vulnerable code
 - [ ] Negative patterns prevent false positives
 - [ ] Fix suggestion is actionable
-- [ ] Tags and CWE are accurate
+- [ ] Tags, CWE, and OWASP metadata are accurate
 - [ ] Tested with fixtures (vulnerable + safe variants)
 - [ ] Documented why AI generates this
 
@@ -462,7 +464,8 @@ negative_patterns:
 fix:
   suggestion: Use parameterized queries with placeholders (e.g., db.query("SELECT * FROM users WHERE id = ?", [userId]))
 tags: [injection, sql-injection, owasp-top10]
-cwe: CWE-89
+cwe_id: CWE-89
+owasp_category: A03:2021 - Injection
 ```
 
 **Why it's good**: Uses regex for template literal syntax, high AI confidence (very common pattern), critical severity.

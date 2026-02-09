@@ -4,6 +4,8 @@ severity: medium
 confidence_that_ai_generated: 0.70
 languages: [kotlin]
 category: misconfig
+cwe_id: CWE-16
+owasp_category: A05:2021 - Security Misconfiguration
 pattern:
   all:
     - "access-control-allow-origin"

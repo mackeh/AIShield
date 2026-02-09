@@ -4,6 +4,8 @@ severity: high
 confidence_that_ai_generated: 0.78
 languages: [kubernetes]
 category: misconfig
+cwe_id: CWE-16
+owasp_category: A05:2021 - Security Misconfiguration
 ai_tendency: AI-generated manifests may enable privileged mode to bypass permission errors.
 pattern:
   all:

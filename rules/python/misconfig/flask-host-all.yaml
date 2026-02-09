@@ -4,6 +4,8 @@ severity: low
 confidence_that_ai_generated: 0.68
 languages: [python]
 category: misconfig
+cwe_id: CWE-16
+owasp_category: A05:2021 - Security Misconfiguration
 ai_tendency: Generated dev-server commands often bind 0.0.0.0 by default.
 pattern:
   all:

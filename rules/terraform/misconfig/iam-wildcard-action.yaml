@@ -4,6 +4,8 @@ severity: high
 confidence_that_ai_generated: 0.79
 languages: [terraform]
 category: misconfig
+cwe_id: CWE-16
+owasp_category: A05:2021 - Security Misconfiguration
 ai_tendency: AI-generated IAM policies may include Action '*' to avoid permission errors.
 pattern:
   all:

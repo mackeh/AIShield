@@ -4,6 +4,8 @@ severity: low
 confidence_that_ai_generated: 0.67
 languages: [kotlin]
 category: misconfig
+cwe_id: CWE-16
+owasp_category: A05:2021 - Security Misconfiguration
 pattern:
   any:
     - "val debug = true"

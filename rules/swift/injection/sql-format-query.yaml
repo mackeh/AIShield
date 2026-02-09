@@ -4,6 +4,8 @@ severity: high
 confidence_that_ai_generated: 0.77
 languages: [swift]
 category: injection
+cwe_id: CWE-74
+owasp_category: A03:2021 - Injection
 pattern:
   all:
     - 'string(format: "select * from users where id = %@", userinput)'

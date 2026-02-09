@@ -130,12 +130,12 @@ tags: [tag1, tag2, tag3]
 # CWE (Common Weakness Enumeration) number
 # Find at: https://cwe.mitre.org/
 # Example: CWE-89 (SQL Injection), CWE-327 (Weak Crypto)
-cwe: CWE-XXX
+cwe_id: CWE-XXX
 
 # OWASP Top 10 mapping
 # Find at: https://owasp.org/Top10/
 # Example: A03:2021 (Injection), A07:2021 (Auth Failures)
-owasp: AXX:2021
+owasp_category: AXX:2021 - [Category Name]
 
 # =============================================================================
 # EXAMPLES
@@ -162,7 +162,7 @@ owasp: AXX:2021
 # fix:
 #   suggestion: Use sha256 for integrity checks and bcrypt/argon2id for password hashing.
 # tags: [crypto, owasp-top10]
-# cwe: CWE-327
+# cwe_id: CWE-327
 
 # Example 2: SQL Injection (JavaScript)
 # ---
@@ -181,8 +181,8 @@ owasp: AXX:2021
 # fix:
 #   suggestion: Use parameterized queries with placeholders (e.g., db.query("SELECT * FROM users WHERE id = ?", [userId]))
 # tags: [injection, sql-injection, owasp-top10]
-# cwe: CWE-89
-# owasp: A03:2021
+# cwe_id: CWE-89
+# owasp_category: A03:2021 - Injection
 
 # =============================================================================
 # NEXT STEPS

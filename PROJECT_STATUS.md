@@ -2,7 +2,7 @@
 
 ## Current Status: Week 5 Reliability Hardening + Metadata Enrichment 🚧
 
-**Last Updated**: February 8, 2026
+**Last Updated**: February 9, 2026
 
 ### Progress Overview
 - ✅ **Week 1**: Database Infrastructure (100%)
@@ -11,7 +11,7 @@
 - ✅ **Week 4**: Dashboard Upgrade (100%)
 - 🚧 **Week 5**: API mode stabilization, trend deltas, reporting polish, metadata enrichment (In Progress)
 
-**Overall Completion**: 88% (Core platform shipped, reliability and signal-quality hardening active)
+**Overall Completion**: 91% (Core platform shipped, reliability and signal-quality hardening active)
 
 ### Quick Links
 - [⚡ Dashboard Quick Start](dashboard/QUICKSTART.md)
@@ -24,8 +24,8 @@
 ### Next Steps
 1. Deploy stabilized dashboard/API stack to staging
 2. Add staged environment checks for CORS allowlist and rate limits
-3. Expand explicit per-rule CWE/OWASP metadata in YAML rulesets
-4. Add analytics regression tests for metadata mapping in ingestion/report views
+3. Add analytics regression tests for metadata mapping in ingestion/report views
+4. Deploy stabilized dashboard/API stack to staging and observe trend quality in live traffic
 
 ---
 *For implementation direction, see `project.md` and `docs/roadmap.md`.*

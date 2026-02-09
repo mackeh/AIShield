@@ -4,6 +4,8 @@ severity: high
 confidence_that_ai_generated: 0.85
 languages: [javascript]
 category: auth
+cwe_id: CWE-287
+owasp_category: A07:2021 - Identification and Authentication Failures
 ai_tendency: AI may include permissive jwt.verify options to bypass validation issues.
 pattern:
   all:

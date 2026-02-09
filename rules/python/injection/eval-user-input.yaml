@@ -4,6 +4,8 @@ severity: critical
 confidence_that_ai_generated: 0.8
 languages: [python]
 category: injection
+cwe_id: CWE-74
+owasp_category: A03:2021 - Injection
 ai_tendency: AI can suggest eval for expression parsing in unsafe contexts.
 pattern:
   any:

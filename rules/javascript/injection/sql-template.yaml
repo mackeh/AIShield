@@ -4,6 +4,8 @@ severity: high
 confidence_that_ai_generated: 0.80
 languages: [javascript]
 category: injection
+cwe_id: CWE-74
+owasp_category: A03:2021 - Injection
 ai_tendency: AI frequently uses interpolation for SQL because it reads naturally.
 pattern:
   contains:

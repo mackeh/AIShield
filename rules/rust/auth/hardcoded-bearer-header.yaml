@@ -4,6 +4,8 @@ severity: medium
 confidence_that_ai_generated: 0.70
 languages: [rust]
 category: auth
+cwe_id: CWE-287
+owasp_category: A07:2021 - Identification and Authentication Failures
 pattern:
   all:
     - "authorization"

@@ -4,6 +4,8 @@ severity: low
 confidence_that_ai_generated: 0.66
 languages: [dockerfile]
 category: misconfig
+cwe_id: CWE-16
+owasp_category: A05:2021 - Security Misconfiguration
 ai_tendency: AI-generated Dockerfiles may include broad apt upgrade commands by default.
 pattern:
   all:
