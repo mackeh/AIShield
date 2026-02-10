@@ -36,3 +36,4 @@ indicatif = "0.17"
 # TUI (existing code)
 ratatui = "0.28"
 crossterm = "0.28"
+zip = "0.6"

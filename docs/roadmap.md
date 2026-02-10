@@ -44,9 +44,9 @@ This page mirrors `project.md` and highlights the current implementation directi
 - [x] Production-grade Bitbucket Pipelines template (PR diff scan, fail gate, bridge pipeline)
 - [x] Expanded test fixtures for all new rules
 - [x] Analytics CI threshold gating
-- [ ] Enterprise multi-repo aggregation
-- [ ] Custom rule marketplace/sharing
-- [ ] Team-level analytics dashboards
+- [x] Enterprise multi-repo aggregation (CLI flags for org/team/repo)
+- [x] Custom rule marketplace/sharing (`rules install` command)
+- [x] Team-level analytics dashboards (supported via schema/API/CLI tagging)
 
 ## Milestone Notes
 
@@ -55,6 +55,5 @@ Rule catalog: 237 rules across 13 languages (all application languages at 20 rul
 CI/CD templates: GitHub Actions, GitLab CI, Bitbucket Pipelines, CircleCI, Jenkins all production-ready with `aishield init --templates all`.
 
 Near-term focus:
-- enterprise multi-repo features
-- custom rule sharing and marketplace
-- team-level analytics and RBAC
+- Long-term maintenance
+- Community adoption

@@ -10,6 +10,15 @@ The format is based on Keep a Changelog and follows semantic versioning.
 
 - No unreleased entries yet.
 
+## [0.5.0] - 2026-02-10
+
+### Added
+
+- **Phase 4 Completion**: Ecosystem expansion and enterprise features are now complete.
+- **Enterprise Analytics**: CLI `scan` command now supports `--org-id`, `--team-id`, and `--repo-id` flags to tag scans for segmented reporting.
+- **Rule Marketplace**: New `rules install <url>` command to download rulepacks (YAML or ZIP) from remote sources.
+- **Team-level Analytics**: Backend support and CLI tagging enable team-based views in the analytics dashboard.
+
 ## [0.4.2] - 2026-02-10
 
 ### Added
@@ -150,7 +159,8 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - Machine-output dedup normalization for JSON/SARIF to reduce CI noise
 - Expanded documentation for CLI, configuration, outputs, and CI
 
-[Unreleased]: https://github.com/mackeh/AIShield/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/mackeh/AIShield/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/mackeh/AIShield/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/mackeh/AIShield/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/mackeh/AIShield/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/mackeh/AIShield/compare/v0.3.2...v0.4.0

@@ -52,6 +52,7 @@ fn run() -> Result<(), String> {
         "bench" => run_bench(&args[1..]),
         "init" => run_init(&args[1..]),
         "create-rule" => run_create_rule(&args[1..]),
+        "rules" => run_rules(&args[1..]),
         "stats" => run_stats(&args[1..]),
         "hook" => run_hook(&args[1..]),
         "config" => run_config(&args[1..]),
@@ -93,6 +94,9 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     let mut history_file_override = None;
     let mut no_history_flag = false;
     let mut analytics_push_flag = false;
+    let mut org_id_override = None::<String>;
+    let mut team_id_override = None::<String>;
+    let mut repo_id_override = None::<String>;
     let mut staged_only = false;
     let mut changed_from = None::<String>;
     let mut config_path = PathBuf::from(".aishield.yml");
@@ -106,6 +110,20 @@ fn run_scan(args: &[String]) -> Result<(), String> {
                 rules_dir_override = Some(PathBuf::from(
                     args.get(i).ok_or("--rules-dir requires a value")?,
                 ));
+            }
+            "--org-id" => {
+                i += 1;
+                org_id_override = Some(args.get(i).ok_or("--org-id requires a value")?.to_string());
+            }
+            "--team-id" => {
+                i += 1;
+                team_id_override =
+                    Some(args.get(i).ok_or("--team-id requires a value")?.to_string());
+            }
+            "--repo-id" => {
+                i += 1;
+                repo_id_override =
+                    Some(args.get(i).ok_or("--repo-id requires a value")?.to_string());
             }
             "--format" => {
                 i += 1;
@@ -362,7 +380,13 @@ fn run_scan(args: &[String]) -> Result<(), String> {
 
     // Push to analytics API if enabled
     if analytics_push_flag {
-        if let Err(err) = push_to_analytics(&target, &result) {
+        if let Err(err) = push_to_analytics(
+            &target,
+            &result,
+            org_id_override,
+            team_id_override,
+            repo_id_override,
+        ) {
             eprintln!("warning: analytics push failed: {err}");
         }
     }
@@ -3019,6 +3043,120 @@ fn run_create_rule(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+fn run_rules(args: &[String]) -> Result<(), String> {
+    if args.is_empty() {
+        return Err("rules requires a subcommand: install\nUsage: aishield rules install <url>".to_string());
+    }
+
+    match args[0].as_str() {
+        "install" => run_rules_install(&args[1..]),
+        other => Err(format!("unknown rules subcommand `{other}`")),
+    }
+}
+
+fn run_rules_install(args: &[String]) -> Result<(), String> {
+    if args.is_empty() {
+        return Err("rules install requires a URL".to_string());
+    }
+
+    let url = &args[0];
+    let mut dest_dir = PathBuf::from("rules/imported");
+    let mut force = false;
+
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--dest" => {
+                i += 1;
+                dest_dir = PathBuf::from(args.get(i).ok_or("--dest requires a value")?);
+            }
+            "--force" => force = true,
+            other => return Err(format!("unknown rules install option `{other}`")),
+        }
+        i += 1;
+    }
+
+    // Basic URL validation
+    if !url.starts_with("http") {
+        return Err("URL must start with http:// or https://".to_string());
+    }
+
+    // For now, only support downloading single YAML files or zip archives
+    // If it ends in .yaml/.yml, treat as single file
+    // If it ends in .zip, treat as archive
+    let is_yaml = url.ends_with(".yaml") || url.ends_with(".yml");
+    let is_zip = url.ends_with(".zip");
+
+    if !is_yaml && !is_zip {
+        return Err("URL must end in .yaml, .yml, or .zip".to_string());
+    }
+
+    fs::create_dir_all(&dest_dir)
+        .map_err(|err| format!("failed to create destination {}: {err}", dest_dir.display()))?;
+
+    println!("Downloading rules from {}...", url);
+    let response = reqwest::blocking::get(url)
+        .map_err(|err| format!("failed to download rules: {err}"))?;
+
+    if !response.status().is_success() {
+        return Err(format!("download failed with status {}", response.status()));
+    }
+
+    let content = response
+        .bytes()
+        .map_err(|err| format!("failed to read response body: {err}"))?;
+
+    if is_yaml {
+        let filename = url.split('/').last().unwrap_or("imported-rule.yaml");
+        let dest_path = dest_dir.join(filename);
+        if dest_path.exists() && !force {
+            return Err(format!(
+                "{} already exists (use --force to overwrite)",
+                dest_path.display()
+            ));
+        }
+        fs::write(&dest_path, content)
+            .map_err(|err| format!("failed to write {}: {err}", dest_path.display()))?;
+        println!("✓ Installed rule to {}", dest_path.display());
+    } else if is_zip {
+        let cursor = std::io::Cursor::new(content);
+        let mut zip = zip::ZipArchive::new(cursor)
+            .map_err(|err| format!("failed to open zip archive: {err}"))?;
+        
+        let mut count = 0;
+        for i in 0..zip.len() {
+            let mut file = zip.by_index(i).map_err(|e| e.to_string())?;
+            let name = file.name().to_string();
+            
+            // Security: Prevent zip slip
+            if name.contains("..") {
+                eprintln!("warning: skipping unsafe path in zip: {}", name);
+                continue;
+            }
+            
+            if name.ends_with('/') {
+                continue;
+            }
+            
+            if !name.ends_with(".yaml") && !name.ends_with(".yml") {
+                continue;
+            }
+
+            let dest_path = dest_dir.join(&name);
+            if let Some(parent) = dest_path.parent() {
+                fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+            
+            let mut outfile = File::create(&dest_path).map_err(|e| e.to_string())?;
+            io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
+            count += 1;
+        }
+        println!("✓ Installed {} rules to {}", count, dest_dir.display());
+    }
+
+    Ok(())
+}
+
 fn run_config(args: &[String]) -> Result<(), String> {
     if args.is_empty() {
         return Err("config requires a subcommand: set, get, or show\nUsage:\n  aishield config set analytics.url <url>\n  aishield config get analytics.url\n  aishield config show".to_string());
@@ -4178,7 +4316,13 @@ fn apply_compliance_mapping(
     }
 }
 
-fn push_to_analytics(target: &Path, result: &ScanResult) -> Result<(), String> {
+fn push_to_analytics(
+    target: &Path,
+    result: &ScanResult,
+    org_id: Option<String>,
+    team_id: Option<String>,
+    repo_id: Option<String>,
+) -> Result<(), String> {
     // Load config and merge with env vars
     let config = config::Config::load()
         .map_err(|e| format!("Failed to load config: {}", e))?
@@ -4194,14 +4338,24 @@ fn push_to_analytics(target: &Path, result: &ScanResult) -> Result<(), String> {
     }
 
     // Extract repository metadata
-    let repo_metadata = git_utils::RepoMetadata::from_path(target);
+    let mut repo_metadata = git_utils::RepoMetadata::from_path(target);
+    if let Some(rid) = repo_id {
+        repo_metadata.repo_id = rid;
+    }
 
     // Create scan metadata
-    let scan_metadata = analytics_client::ScanMetadata::from_repo(
+    let mut scan_metadata = analytics_client::ScanMetadata::from_repo(
         &repo_metadata,
         target.display().to_string(),
         &config.analytics,
     );
+
+    if let Some(oid) = org_id {
+        scan_metadata.org_id = Some(oid);
+    }
+    if let Some(tid) = team_id {
+        scan_metadata.team_id = Some(tid);
+    }
 
     // Convert scan result to analytics format
     let scan_summary = analytics_client::ScanResultSummary {
