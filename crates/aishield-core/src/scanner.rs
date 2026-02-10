@@ -77,7 +77,9 @@ fn language_from_path(path: &Path) -> Option<&'static str> {
         "swift" => Some("swift"),
         "tf" | "hcl" => Some("terraform"),
         "yaml" | "yml" => {
-            if looks_like_kubernetes_manifest(path) {
+            if looks_like_github_workflow(path) {
+                Some("github-actions")
+            } else if looks_like_kubernetes_manifest(path) {
                 Some("kubernetes")
             } else {
                 None
@@ -85,6 +87,11 @@ fn language_from_path(path: &Path) -> Option<&'static str> {
         }
         _ => None,
     }
+}
+
+fn looks_like_github_workflow(path: &Path) -> bool {
+    let lower = path.to_string_lossy().to_ascii_lowercase();
+    lower.contains(".github/workflows") || lower.contains(".github\\workflows")
 }
 
 fn looks_like_kubernetes_manifest(path: &Path) -> bool {
@@ -162,6 +169,12 @@ mod tests {
             "apiVersion: apps/v1\nkind: Deployment\n",
         )
         .expect("write kubernetes yaml");
+        fs::create_dir_all(root.join(".github/workflows")).expect("create github workflows");
+        fs::write(
+            root.join(".github/workflows/ci.yml"),
+            "name: CI\non: push\n",
+        )
+        .expect("write github actions yaml");
         fs::write(root.join("app-config.yaml"), "name: app\n").expect("write generic yaml");
 
         let files = collect_source_files(&root);
@@ -171,7 +184,15 @@ mod tests {
             .collect::<Vec<_>>();
         languages.sort_unstable();
 
-        assert_eq!(languages, vec!["dockerfile", "kubernetes", "terraform"]);
+        assert_eq!(
+            languages,
+            vec![
+                "dockerfile",
+                "github-actions",
+                "kubernetes",
+                "terraform"
+            ]
+        );
 
         let _ = fs::remove_dir_all(root);
     }

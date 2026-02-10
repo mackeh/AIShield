@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+#[cfg(feature = "onnx")]
 pub mod onnx;
 
 #[cfg(feature = "onnx")]
