@@ -1,0 +1,23 @@
+id: AISHIELD-JS-LLM-001
+title: Template Literal Injection in LLM Prompt
+severity: critical
+confidence_that_ai_generated: 0.87
+languages: [javascript, typescript]
+category: llm
+cwe_id: CWE-77
+owasp_category: A03:2021 - Injection
+ai_tendency: AI-generated JavaScript frequently uses template literals to embed user input directly into LLM prompts without escaping.
+pattern:
+  any:
+    - "${user"
+    - "${input"
+    - "${req."
+    - "${request."
+  all:
+    - "`"
+  not:
+    - "// test"
+    - "// example"
+fix:
+  suggestion: Use parameterized prompt construction with explicit input sanitization. Separate user-provided content from prompt instructions using the messages API role boundaries.
+tags: [llm, prompt-injection, template-literal]

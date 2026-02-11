@@ -1,0 +1,22 @@
+id: AISHIELD-GO-LLM-003
+title: Prompt Injection via User Input Concatenation
+severity: critical
+confidence_that_ai_generated: 0.83
+languages: [go]
+category: llm
+cwe_id: CWE-77
+owasp_category: A03:2021 - Injection
+ai_tendency: AI-generated Go code frequently concatenates user input into prompt strings using the + operator without any sanitization.
+pattern:
+  all:
+    - "+"
+    - "user"
+  any:
+    - "prompt"
+    - "message"
+  not:
+    - "// sanitized"
+    - "// validated"
+fix:
+  suggestion: Avoid string concatenation for building LLM prompts with user input. Use structured prompt templates with input validation. Apply input length limits and character filtering before including user content in prompts.
+tags: [llm, prompt-injection, string-concatenation]

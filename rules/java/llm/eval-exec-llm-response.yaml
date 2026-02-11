@@ -1,0 +1,20 @@
+id: AISHIELD-JAVA-LLM-002
+title: Eval or Exec on LLM Response
+severity: critical
+confidence_that_ai_generated: 0.86
+languages: [java]
+category: llm
+cwe_id: CWE-74
+owasp_category: A03:2021 - Injection
+ai_tendency: AI-generated Java code may pass LLM responses directly to Runtime.exec or ScriptEngine.eval for dynamic execution.
+pattern:
+  any:
+    - "runtime.exec"
+    - "scriptengine.eval"
+    - "getruntime().exec"
+    - ".eval("
+  all:
+    - "response"
+fix:
+  suggestion: Never pass LLM output to Runtime.exec or ScriptEngine.eval. Validate all LLM responses against a strict allowlist before any dynamic execution. Use a sandboxed execution environment if code evaluation is required.
+tags: [llm, code-execution, command-injection, output-validation]

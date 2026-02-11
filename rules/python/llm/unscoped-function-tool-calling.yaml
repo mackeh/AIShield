@@ -1,0 +1,20 @@
+id: AISHIELD-PY-LLM-005
+title: Unscoped Function/Tool Calling
+severity: high
+confidence_that_ai_generated: 0.80
+languages: [python]
+category: llm
+cwe_id: CWE-269
+owasp_category: A01:2021 - Broken Access Control
+ai_tendency: AI examples default to auto mode for function/tool calling without restricting which tools the model can invoke.
+pattern:
+  any:
+    - "function_call = \"auto\""
+    - "function_call=\"auto\""
+    - "tool_choice = \"auto\""
+    - "tool_choice=\"auto\""
+    - "function_call= \"auto\""
+    - "tool_choice= \"auto\""
+fix:
+  suggestion: Restrict function/tool calling to a specific set of allowed functions. Use tool_choice with explicit function names instead of "auto". Implement authorization checks before executing any tool call.
+tags: [llm, function-calling, tool-use, privilege-escalation]

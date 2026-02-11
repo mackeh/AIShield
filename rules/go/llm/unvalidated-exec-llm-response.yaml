@@ -1,0 +1,20 @@
+id: AISHIELD-GO-LLM-002
+title: Unvalidated exec.Command on LLM Response
+severity: critical
+confidence_that_ai_generated: 0.87
+languages: [go]
+category: llm
+cwe_id: CWE-78
+owasp_category: A03:2021 - Injection
+ai_tendency: AI code examples may pass LLM-generated output directly to exec.Command for shell execution without validation.
+pattern:
+  all:
+    - "exec.command"
+  any:
+    - "response"
+    - "completion"
+    - "content"
+    - "result"
+fix:
+  suggestion: Never pass LLM output directly to exec.Command. Validate and sanitize all LLM responses against an allowlist of permitted commands. Use a restricted execution sandbox if dynamic command execution is required.
+tags: [llm, command-injection, output-validation, code-execution]

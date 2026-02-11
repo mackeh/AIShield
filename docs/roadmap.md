@@ -48,12 +48,40 @@ This page mirrors `project.md` and highlights the current implementation directi
 - [x] Custom rule marketplace/sharing (`rules install` command)
 - [x] Team-level analytics dashboards (supported via schema/API/CLI tagging)
 
+## Phase 5: Usability & Adoption
+
+- [ ] 5.1 — Package Manager Distribution (crates.io, Homebrew tap, npx wrapper, pre-built binaries)
+- [ ] 5.2 — Interactive Config Wizard (`aishield init` with dialoguer)
+- [ ] 5.3 — Severity Tuning Profiles (`--profile strict|pragmatic|ai-focus`)
+- [ ] 5.4 — Watch Mode (`aishield watch` with file-system notifications)
+- [ ] 5.5 — PR Comment Bot (GitHub App / Action for inline review comments)
+- [ ] 5.6 — Online Playground (WASM-compiled scanner in browser)
+- [ ] 5.7 — Dashboard Enhancements (Team/Org views, scan comparison, PDF/CSV export)
+
+## Phase 6: Advanced Security & Woo Factor
+
+- [x] 6.1 — Prompt Injection Detection (15 LLM rules across Python, JS, Go, Java)
+- [ ] 6.2 — Supply Chain / Dependency Awareness (OSV API, lockfile parsing)
+- [x] 6.3 — Secrets Detection Expansion (15 cross-language rules for AWS, GCP, Azure, GitHub, Slack, Stripe, etc.)
+- [ ] 6.4 — Lightweight Taint Analysis (tree-sitter intra-function tracking)
+- [ ] 6.5 — SBOM Generation (SPDX 2.3 / CycloneDX 1.5)
+- [ ] 6.6 — Signed Scan Reports (Ed25519 cryptographic signatures)
+- [ ] 6.7 — AI Vulnerability Score Badge (`--badge` with shields.io)
+- [ ] 6.8 — Vibe Check Mode (`--vibe` personality-driven output)
+- [ ] 6.9 — VS Code AI Radar Heatmap (gutter overlay for AI confidence)
+- [ ] 6.10 — LLM-Powered Auto-Fix Loop (one-click AI-assisted remediation)
+- [ ] 6.11 — Browser Extension (WASM scanner for GitHub/GitLab/StackOverflow)
+
+## Long-Term Vision
+
+- AST-based analysis (tree-sitter full cross-file)
+- Language Server Protocol (LSP) for multi-editor support
+- AIShield Cloud (SaaS with multi-tenant API, SSO, hosted dashboards)
+
 ## Milestone Notes
 
-Rule catalog: 237 rules across 13 languages (all application languages at 20 rules, IaC at 15 each).
+Rule catalog: 268 rules across 14 language categories + cross-language secrets.
 
 CI/CD templates: GitHub Actions, GitLab CI, Bitbucket Pipelines, CircleCI, Jenkins all production-ready with `aishield init --templates all`.
 
-Near-term focus:
-- Long-term maintenance
-- Community adoption
+Dependency map for Phase 5-6: see `aishield-build-process.md`.

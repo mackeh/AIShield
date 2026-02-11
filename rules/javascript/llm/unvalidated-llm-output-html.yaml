@@ -1,0 +1,18 @@
+id: AISHIELD-JS-LLM-004
+title: Unvalidated LLM Output Rendered as HTML
+severity: critical
+confidence_that_ai_generated: 0.89
+languages: [javascript, typescript]
+category: llm
+cwe_id: CWE-79
+owasp_category: A03:2021 - Injection
+ai_tendency: AI code samples frequently render LLM responses directly into the DOM using innerHTML or dangerouslySetInnerHTML without sanitization.
+pattern:
+  any:
+    - "innerhtml"
+    - "dangerouslysetinnerhtml"
+  all:
+    - "response"
+fix:
+  suggestion: Sanitize all LLM output before rendering as HTML using a library like DOMPurify. Use textContent instead of innerHTML when HTML rendering is not needed. For React, avoid dangerouslySetInnerHTML with LLM content.
+tags: [llm, xss, output-validation, html-injection]

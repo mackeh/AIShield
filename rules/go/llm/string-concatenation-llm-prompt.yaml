@@ -1,0 +1,22 @@
+id: AISHIELD-GO-LLM-001
+title: String Concatenation in LLM Prompt via fmt.Sprintf
+severity: critical
+confidence_that_ai_generated: 0.85
+languages: [go]
+category: llm
+cwe_id: CWE-77
+owasp_category: A03:2021 - Injection
+ai_tendency: AI-generated Go code often uses fmt.Sprintf to inject user input directly into LLM prompts without sanitization.
+pattern:
+  all:
+    - "fmt.sprintf"
+  any:
+    - "userinput"
+    - "user_input"
+    - "usermessage"
+    - "user_message"
+    - "userquery"
+    - "input)"
+fix:
+  suggestion: Use structured prompt construction with explicit input validation and escaping. Separate user content from system instructions using the messages API role boundaries. Sanitize all user-provided input before including it in prompts.
+tags: [llm, prompt-injection, string-formatting]

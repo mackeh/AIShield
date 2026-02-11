@@ -1,0 +1,22 @@
+id: AISHIELD-PY-LLM-002
+title: System Prompt Exposed in Client Code
+severity: medium
+confidence_that_ai_generated: 0.82
+languages: [python]
+category: llm
+cwe_id: CWE-200
+owasp_category: A01:2021 - Broken Access Control
+ai_tendency: AI-generated examples frequently hardcode system prompts alongside API keys in application code.
+pattern:
+  any:
+    - "system_prompt ="
+    - "system_message ="
+    - "system_prompt=\""
+    - "system_message=\""
+  not:
+    - "os.environ"
+    - "os.getenv"
+    - "config."
+fix:
+  suggestion: Store system prompts in secure configuration files or environment variables. Never expose system prompts in client-shipped code where they can be extracted.
+tags: [llm, prompt-exposure, information-disclosure]

@@ -8,7 +8,14 @@ The format is based on Keep a Changelog and follows semantic versioning.
 
 ### Added
 
-- No unreleased entries yet.
+- **Prompt Injection Detection (6.1)**: 15 new LLM security rules across Python (5), JavaScript (5), Go (3), and Java (2) detecting unsanitized user input in prompts, eval/exec on LLM output, exposed system prompts, template injection, and unscoped tool calling.
+- **Secrets Detection Expansion (6.3)**: 15 cross-language rules detecting hardcoded AWS keys, GCP service accounts, Azure connection strings, private keys, GitHub PATs, Slack tokens, Stripe keys, JWT tokens, database URLs with passwords, Google API keys, and generic API key assignments.
+- New `rules/secrets/` directory for cross-language credential detection.
+- New `rules/{python,javascript,go,java}/llm/` directories for LLM security rules.
+- Test fixtures for all new rules: `tests/fixtures/llm/` and `tests/fixtures/secrets_vulnerable_suite.py`.
+- Rule catalog expanded from 237 to 268 rules.
+- Updated roadmap with Phase 5-6 items from build process document.
+- `CLAUDE.md` for Claude Code onboarding.
 
 ## [0.5.0] - 2026-02-10
 

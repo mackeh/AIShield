@@ -1,0 +1,21 @@
+id: AISHIELD-JS-LLM-003
+title: System Prompt in Client-Side Code
+severity: medium
+confidence_that_ai_generated: 0.83
+languages: [javascript, typescript]
+category: llm
+cwe_id: CWE-200
+owasp_category: A01:2021 - Broken Access Control
+ai_tendency: AI-generated frontend code often embeds system prompts directly in client-side JavaScript where users can inspect them.
+pattern:
+  any:
+    - "systemprompt"
+    - "system_prompt"
+    - "system_message"
+    - "systemmessage"
+  not:
+    - "process.env"
+    - "import.meta.env"
+fix:
+  suggestion: Move system prompts to server-side code or secure environment variables. Never include system prompts in client-side bundles where they can be extracted through browser developer tools.
+tags: [llm, prompt-exposure, information-disclosure, client-side]

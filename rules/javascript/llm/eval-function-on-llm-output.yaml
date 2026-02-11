@@ -1,0 +1,18 @@
+id: AISHIELD-JS-LLM-002
+title: Eval or Function Constructor on LLM Output
+severity: critical
+confidence_that_ai_generated: 0.86
+languages: [javascript, typescript]
+category: llm
+cwe_id: CWE-74
+owasp_category: A03:2021 - Injection
+ai_tendency: AI examples may suggest using eval or new Function to dynamically execute code returned by an LLM.
+pattern:
+  any:
+    - "eval("
+    - "new function("
+  all:
+    - "response"
+fix:
+  suggestion: Never execute LLM output as code. Parse structured responses with JSON.parse and validate against a strict schema. Use sandboxed interpreters if dynamic evaluation is absolutely required.
+tags: [llm, code-execution, output-validation]

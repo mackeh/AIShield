@@ -1,0 +1,20 @@
+id: AISHIELD-PY-LLM-004
+title: Prompt Template with Format String Injection
+severity: critical
+confidence_that_ai_generated: 0.84
+languages: [python]
+category: llm
+cwe_id: CWE-134
+owasp_category: A03:2021 - Injection
+ai_tendency: AI-generated prompt construction frequently uses .format() or % formatting with unsanitized user input.
+pattern:
+  any:
+    - "prompt.format("
+    - "prompt %"
+    - "template.format("
+    - "message.format("
+  all:
+    - "user"
+fix:
+  suggestion: Use parameterized prompt templates with explicit input validation. Avoid .format() or % interpolation with user-controlled values in prompts. Consider a dedicated prompt templating library with built-in escaping.
+tags: [llm, prompt-injection, format-string]

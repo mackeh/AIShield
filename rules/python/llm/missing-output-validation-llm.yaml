@@ -1,0 +1,20 @@
+id: AISHIELD-PY-LLM-003
+title: Missing Output Validation from LLM Response
+severity: critical
+confidence_that_ai_generated: 0.85
+languages: [python]
+category: llm
+cwe_id: CWE-74
+owasp_category: A03:2021 - Injection
+ai_tendency: AI code samples frequently pass LLM output directly to exec or eval without validation.
+pattern:
+  any:
+    - "exec("
+    - "eval("
+  all:
+    - "response"
+  not:
+    - "ast.literal_eval("
+fix:
+  suggestion: Never pass LLM output directly to exec or eval. Validate and sanitize all LLM responses before dynamic execution. Use an allowlist-based parser or sandbox environment.
+tags: [llm, code-execution, output-validation]

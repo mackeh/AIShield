@@ -1,0 +1,22 @@
+id: AISHIELD-JS-LLM-005
+title: Excessive Token Limit Without Guard
+severity: high
+confidence_that_ai_generated: 0.78
+languages: [javascript, typescript]
+category: llm
+cwe_id: CWE-770
+owasp_category: A05:2021 - Security Misconfiguration
+ai_tendency: AI-generated examples often set very high max_tokens values without implementing cost controls or rate limiting.
+pattern:
+  any:
+    - "max_tokens"
+    - "maxtokens"
+  all:
+    - "4000"
+  not:
+    - "// capped"
+    - "// limited"
+    - "math.min"
+fix:
+  suggestion: Implement token budget controls with appropriate limits for each use case. Add rate limiting and cost monitoring. Use Math.min to cap user-configurable token values against a safe maximum.
+tags: [llm, resource-exhaustion, denial-of-service, cost-control]
