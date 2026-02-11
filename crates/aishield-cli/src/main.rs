@@ -101,6 +101,9 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     let mut changed_from = None::<String>;
     let mut config_path = PathBuf::from(".aishield.yml");
     let mut use_config = true;
+    let mut profile_override = None::<ScanProfile>;
+    let mut badge_flag = false;
+    let mut vibe_flag = false;
 
     let mut i = 1;
     while i < args.len() {
@@ -243,6 +246,14 @@ fn run_scan(args: &[String]) -> Result<(), String> {
                 config_path = PathBuf::from(args.get(i).ok_or("--config requires a value")?);
             }
             "--no-config" => use_config = false,
+            "--profile" => {
+                i += 1;
+                profile_override = Some(ScanProfile::parse(
+                    args.get(i).ok_or("--profile requires a value")?,
+                )?);
+            }
+            "--badge" => badge_flag = true,
+            "--vibe" => vibe_flag = true,
             other => return Err(format!("unknown scan option `{other}`")),
         }
         i += 1;
@@ -265,7 +276,6 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     if let Some(extra) = exclude_paths_override {
         exclude_paths.extend(extra);
     }
-    let ai_only = ai_only_flag || config.ai_only;
     let cross_file = cross_file_flag || config.cross_file;
     let ai_model = ai_model_override
         .or_else(|| onnx_model_override.as_ref().map(|_| AiClassifierMode::Onnx))
@@ -278,8 +288,24 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     let onnx_model_path = onnx_model_override.or_else(|| config.onnx_model_path.clone());
     let onnx_manifest_path = onnx_manifest_override.or_else(|| config.onnx_manifest_path.clone());
     let ai_calibration = ai_calibration_override.unwrap_or(config.ai_calibration);
-    let min_ai_confidence = min_ai_confidence_override.or(config.min_ai_confidence);
-    let severity_threshold = severity_override.or(config.severity_threshold);
+    // Apply profile overrides (profile sets defaults, explicit flags still take precedence)
+    let (profile_min_severity, profile_min_ai, profile_ai_only) = match profile_override {
+        Some(ScanProfile::Strict) => (None, None, false),
+        Some(ScanProfile::Pragmatic) => (
+            Some(SeverityThreshold::High),
+            Some(0.50_f32),
+            true,
+        ),
+        Some(ScanProfile::AiFocus) => (None, Some(0.75_f32), true),
+        None => (None, None, false),
+    };
+    let ai_only = ai_only_flag || config.ai_only || profile_ai_only;
+    let severity_threshold = severity_override
+        .or(config.severity_threshold)
+        .or(profile_min_severity);
+    let min_ai_confidence = min_ai_confidence_override
+        .or(config.min_ai_confidence)
+        .or(profile_min_ai);
     let fail_on_findings = fail_on_findings_flag || config.fail_on_findings;
     let history_file = history_file_override.unwrap_or_else(|| config.history_file.clone());
     let record_history = if no_history_flag {
@@ -399,23 +425,33 @@ fn run_scan(args: &[String]) -> Result<(), String> {
         }
     }
 
-    let rendered = match format {
-        OutputFormat::Table => render_table(&result),
-        OutputFormat::Json => {
-            let deduped = dedup_machine_output(&result, dedup_mode);
-            let summary = build_output_summary(&result, &deduped, dedup_mode);
-            render_json(&deduped, &summary)
+    let rendered = if vibe_flag {
+        render_vibe(&result)
+    } else {
+        match format {
+            OutputFormat::Table => render_table(&result),
+            OutputFormat::Json => {
+                let deduped = dedup_machine_output(&result, dedup_mode);
+                let summary = build_output_summary(&result, &deduped, dedup_mode);
+                render_json(&deduped, &summary)
+            }
+            OutputFormat::Sarif => {
+                let deduped = dedup_machine_output(&result, dedup_mode);
+                let summary = build_output_summary(&result, &deduped, dedup_mode);
+                render_sarif(&deduped, &summary)
+            }
+            OutputFormat::Github => {
+                let deduped = dedup_machine_output(&result, dedup_mode);
+                let summary = build_output_summary(&result, &deduped, dedup_mode);
+                render_github_annotations(&deduped, &summary)
+            }
         }
-        OutputFormat::Sarif => {
-            let deduped = dedup_machine_output(&result, dedup_mode);
-            let summary = build_output_summary(&result, &deduped, dedup_mode);
-            render_sarif(&deduped, &summary)
-        }
-        OutputFormat::Github => {
-            let deduped = dedup_machine_output(&result, dedup_mode);
-            let summary = build_output_summary(&result, &deduped, dedup_mode);
-            render_github_annotations(&deduped, &summary)
-        }
+    };
+
+    let badge_output = if badge_flag {
+        Some(render_badge(&result))
+    } else {
+        None
     };
 
     if let Some(path) = output_path {
@@ -424,6 +460,10 @@ fn run_scan(args: &[String]) -> Result<(), String> {
         println!("Wrote report to {}", path.display());
     } else {
         write_stdout(&rendered)?;
+    }
+
+    if let Some(badge) = badge_output {
+        println!("{badge}");
     }
 
     if fail_on_findings && !result.findings.is_empty() {
@@ -4899,7 +4939,7 @@ fn format_optional_ms(ms: Option<f64>) -> String {
 fn print_help() {
     println!("AIShield CLI (foundation)\n");
     println!("Usage:");
-    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--cross-file] [--ai-model heuristic|onnx] [--onnx-model FILE] [--onnx-manifest FILE] [--ai-calibration conservative|balanced|aggressive] [--min-ai-confidence N] [--severity LEVEL] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--baseline FILE] [--notify-webhook URL] [--notify-min-severity LEVEL] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
+    println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--cross-file] [--ai-model heuristic|onnx] [--onnx-model FILE] [--onnx-manifest FILE] [--ai-calibration conservative|balanced|aggressive] [--min-ai-confidence N] [--severity LEVEL] [--profile strict|pragmatic|ai-focus] [--badge] [--vibe] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--baseline FILE] [--notify-webhook URL] [--notify-min-severity LEVEL] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
     println!("  aishield fix <path[:line[:col]]> [--rules-dir DIR] [--write|--interactive] [--dry-run] [--config FILE] [--no-config]");
     println!("  aishield bench <path> [--rules-dir DIR] [--iterations N] [--warmup N] [--format table|json] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--cross-file] [--ai-model heuristic|onnx] [--onnx-model FILE] [--onnx-manifest FILE] [--ai-calibration conservative|balanced|aggressive] [--min-ai-confidence N] [--config FILE] [--no-config]");
     println!("  aishield init [--output PATH] [--templates config,github-actions,gitlab-ci,bitbucket-pipelines,circleci,jenkins,vscode,pre-commit|all] [--force]");
@@ -6027,6 +6067,159 @@ impl SeverityThreshold {
             SeverityThreshold::Info => Severity::Info,
         }
     }
+}
+
+#[derive(Clone, Copy)]
+enum ScanProfile {
+    Strict,
+    Pragmatic,
+    AiFocus,
+}
+
+impl ScanProfile {
+    fn parse(raw: &str) -> Result<Self, String> {
+        match raw.trim().to_ascii_lowercase().replace('-', "_").as_str() {
+            "strict" => Ok(Self::Strict),
+            "pragmatic" => Ok(Self::Pragmatic),
+            "ai_focus" | "ai-focus" | "aifocus" => Ok(Self::AiFocus),
+            _ => Err("profile must be strict, pragmatic, or ai-focus".to_string()),
+        }
+    }
+}
+
+fn render_badge(result: &ScanResult) -> String {
+    let critical = result.summary.by_severity.get("critical").copied().unwrap_or(0);
+    let high = result.summary.by_severity.get("high").copied().unwrap_or(0);
+    let medium = result.summary.by_severity.get("medium").copied().unwrap_or(0);
+    let low = result.summary.by_severity.get("low").copied().unwrap_or(0);
+
+    let raw_score: i64 =
+        100 - (critical as i64 * 25 + high as i64 * 10 + medium as i64 * 3 + low as i64);
+    let score = raw_score.clamp(0, 100);
+
+    let (grade, color) = match score {
+        95..=100 => ("A+", "brightgreen"),
+        85..=94 => ("A", "green"),
+        70..=84 => ("B", "yellowgreen"),
+        50..=69 => ("C", "yellow"),
+        25..=49 => ("D", "orange"),
+        _ => ("F", "red"),
+    };
+
+    let label = format!("{grade} ({score})");
+    let encoded = label.replace(' ', "%20").replace('+', "%2B");
+    format!(
+        "![AIShield Score](https://img.shields.io/badge/AIShield-{encoded}-{color})"
+    )
+}
+
+fn render_vibe(result: &ScanResult) -> String {
+    let mut out = String::new();
+    let _ = writeln!(out, "\n  ___  _____ _____ _     _     _   _ ");
+    let _ = writeln!(out, " / _ \\|_   _/  ___| |   (_)   | | | |");
+    let _ = writeln!(out, "/ /_\\ \\ | | \\ `--.| |__  _  __| |_| |");
+    let _ = writeln!(out, "|  _  | | |  `--. \\ '_ \\| |/ _ \\ | |_| |");
+    let _ = writeln!(out, "| | | |_| |_/\\__/ / | | | |  __/ | |_| |");
+    let _ = writeln!(out, "\\_| |_/\\___/\\____/|_| |_|_|\\___|_|\\___/ ");
+    let _ = writeln!(out, "         VIBE CHECK");
+    let _ = writeln!(out);
+
+    let critical = result.summary.by_severity.get("critical").copied().unwrap_or(0);
+    let high = result.summary.by_severity.get("high").copied().unwrap_or(0);
+    let medium = result.summary.by_severity.get("medium").copied().unwrap_or(0);
+    let total = result.summary.total;
+
+    let ai_estimated = result
+        .findings
+        .iter()
+        .filter(|f| f.ai_confidence >= 70.0)
+        .count();
+    let ai_pct = if total > 0 {
+        (ai_estimated as f64 / total as f64 * 100.0) as u64
+    } else {
+        0
+    };
+
+    let message = match (critical, high, total, ai_pct) {
+        (0, 0, 0, _) => {
+            "Your code is immaculate. Not a single finding. \
+             Either you're a security wizard or you haven't written anything yet."
+        }
+        (0, 0, t, _) if t <= 3 => {
+            "Looking pretty clean! Just a few minor notes. \
+             Your future self will thank you for fixing them now."
+        }
+        (0, h, _, _) if h <= 2 => {
+            "Not bad! A couple of things to look at, but nothing catastrophic. \
+             You're clearly not blindly copy-pasting from ChatGPT."
+        }
+        (0, h, _, ai) if h <= 5 && ai < 30 => {
+            "Some rough edges, but mostly human-written issues. \
+             A focused review session should clean these up."
+        }
+        (c, _, _, ai) if c == 0 && ai > 60 => {
+            "The AI wrote most of this, didn't it? No critical issues though, \
+             so at least the AI has decent taste. Double-check those high findings."
+        }
+        (c, _, _, _) if c == 1 => {
+            "One critical issue found. Just one. Fix it before you ship and \
+             you'll sleep much better tonight."
+        }
+        (c, h, _, ai) if c >= 2 && c <= 4 && ai > 50 => {
+            "Houston, we have a problem. Multiple critical issues and over half \
+             look AI-generated. Time for a serious security review."
+        }
+        (c, _, _, ai) if c > 4 && ai > 50 => {
+            "Yikes. Your codebase looks like it was written by GPT-3.5 at 2am \
+             after a prompt injection. Drop everything and fix these critical issues."
+        }
+        (c, h, _, _) if c > 4 => {
+            "This is a five-alarm fire. Multiple critical vulnerabilities detected. \
+             Do not merge this. Do not pass Go. Do not collect $200."
+        }
+        _ => {
+            "Mixed bag. Some things to fix, some things that are fine. \
+             Prioritize the critical and high findings, ignore the rest for now."
+        }
+    };
+
+    let _ = writeln!(out, "  {message}");
+    let _ = writeln!(out);
+    let _ = writeln!(
+        out,
+        "  Findings: {} total | {} critical | {} high | {} medium",
+        total, critical, high, medium
+    );
+    let _ = writeln!(
+        out,
+        "  AI-generated (est.): {}% ({} of {} findings)",
+        ai_pct, ai_estimated, total
+    );
+    let _ = writeln!(
+        out,
+        "  Files scanned: {} | Rules loaded: {}",
+        result.summary.scanned_files, result.summary.matched_rules
+    );
+    let _ = writeln!(out);
+
+    if !result.findings.is_empty() {
+        let _ = writeln!(out, "  Top issues:");
+        for (i, f) in result.findings.iter().take(5).enumerate() {
+            let ai_tag = if f.ai_confidence >= 70.0 { " [AI]" } else { "" };
+            let _ = writeln!(
+                out,
+                "    {}. [{}] {} ({}:{}){ai_tag}",
+                i + 1,
+                f.severity.as_str().to_ascii_uppercase(),
+                f.title,
+                f.file,
+                f.line,
+            );
+        }
+        let _ = writeln!(out);
+    }
+
+    out
 }
 
 #[cfg(test)]
