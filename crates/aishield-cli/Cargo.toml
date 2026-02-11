@@ -41,3 +41,12 @@ zip = "0.6"
 # File watching for watch mode
 notify = "7.0"
 notify-debouncer-mini = "0.5"
+
+# Interactive config wizard
+dialoguer = "0.11"
+
+# Signed scan reports
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+rand = "0.8"
+base64 = "0.22"
+sha2 = "0.10"

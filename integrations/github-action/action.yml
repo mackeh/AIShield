@@ -1,0 +1,50 @@
+name: "AIShield PR Review"
+description: "Run AIShield security scan and post inline PR review comments"
+author: "AIShield"
+
+branding:
+  icon: "shield"
+  color: "blue"
+
+inputs:
+  results-file:
+    description: "Path to the AIShield JSON results file"
+    required: true
+  github-token:
+    description: "GitHub token for posting PR review comments"
+    required: true
+  severity-threshold:
+    description: >
+      Minimum severity level to include in PR comments.
+      One of: critical, high, medium, low, info.
+    required: false
+    default: "high"
+  max-comments:
+    description: "Maximum number of inline comments to post per review"
+    required: false
+    default: "25"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install jq
+      shell: bash
+      run: |
+        if ! command -v jq &>/dev/null; then
+          echo "::group::Installing jq"
+          sudo apt-get update -qq && sudo apt-get install -yqq jq
+          echo "::endgroup::"
+        fi
+
+    - name: Post PR review comments
+      shell: bash
+      env:
+        RESULTS_FILE: ${{ inputs.results-file }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        SEVERITY_THRESHOLD: ${{ inputs.severity-threshold }}
+        MAX_COMMENTS: ${{ inputs.max-comments }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
+        COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+      run: |
+        bash "${{ github.action_path }}/post-review.sh"

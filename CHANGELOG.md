@@ -10,6 +10,16 @@ The format is based on Keep a Changelog and follows semantic versioning.
 
 - No unreleased entries yet.
 
+## [0.7.0] - 2026-02-11
+
+### Added
+
+- **Interactive Config Wizard (5.2)**: `aishield init --wizard` launches a step-by-step interactive setup using `dialoguer` with project language auto-detection, CI platform selection, severity threshold, output format, and scan profile configuration. Generates `.aishield.toml` and optional CI templates.
+- **Supply Chain / Dependency Scanning (6.2)**: `aishield deps <path>` scans 8 manifest types (requirements.txt, Pipfile, pyproject.toml, package.json, go.mod, Cargo.toml, pom.xml, build.gradle) and queries the OSV vulnerability database for known CVEs. Supports table and JSON output.
+- **SBOM Generation (6.5)**: `aishield sbom <path>` generates Software Bill of Materials in SPDX 2.3 or CycloneDX 1.5 JSON format. Recursively walks project directories, parses 6 manifest types, and produces standards-compliant SBOM documents with Package URLs.
+- **Signed Scan Reports (6.6)**: Ed25519 cryptographic signing for scan reports. `aishield keys generate` creates a keypair in `~/.aishield/`, `--sign` flag on scan commands appends a `_signature` object to JSON output, and `aishield verify <report.json>` validates report integrity.
+- **PR Comment Bot (5.5)**: GitHub Action composite action (`integrations/github-action/`) that posts inline PR review comments from AIShield scan results. Includes severity filtering, max comment limits, AI confidence metrics, and collapsible snippet previews. Ships with a ready-to-use workflow template.
+
 ## [0.6.0] - 2026-02-11
 
 ### Added
@@ -176,7 +186,8 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - Machine-output dedup normalization for JSON/SARIF to reduce CI noise
 - Expanded documentation for CLI, configuration, outputs, and CI
 
-[Unreleased]: https://github.com/mackeh/AIShield/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/mackeh/AIShield/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/mackeh/AIShield/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/mackeh/AIShield/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/mackeh/AIShield/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/mackeh/AIShield/compare/v0.4.1...v0.4.2

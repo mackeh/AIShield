@@ -8,6 +8,10 @@ use std::process::Command;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use base64::Engine as _;
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use sha2::{Digest, Sha256};
+
 mod analytics_client;
 mod config;
 mod git_utils;
@@ -29,6 +33,7 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
     Terminal,
 };
+use dialoguer::{Confirm, MultiSelect, Select};
 use reqwest::blocking::Client;
 use serde_json::Value;
 
@@ -58,6 +63,10 @@ fn run() -> Result<(), String> {
         "config" => run_config(&args[1..]),
         "analytics" => run_analytics(&args[1..]),
         "watch" => run_watch(&args[1..]),
+        "deps" => run_deps(&args[1..]),
+        "sbom" => run_sbom(&args[1..]),
+        "keys" => run_keys(&args[1..]),
+        "verify" => run_verify(&args[1..]),
         "--help" | "-h" | "help" => {
             print_help();
             Ok(())
@@ -105,6 +114,7 @@ fn run_scan(args: &[String]) -> Result<(), String> {
     let mut profile_override = None::<ScanProfile>;
     let mut badge_flag = false;
     let mut vibe_flag = false;
+    let mut sign_flag = false;
 
     let mut i = 1;
     while i < args.len() {
@@ -255,6 +265,7 @@ fn run_scan(args: &[String]) -> Result<(), String> {
             }
             "--badge" => badge_flag = true,
             "--vibe" => vibe_flag = true,
+            "--sign" => sign_flag = true,
             other => return Err(format!("unknown scan option `{other}`")),
         }
         i += 1;
@@ -453,6 +464,18 @@ fn run_scan(args: &[String]) -> Result<(), String> {
         Some(render_badge(&result))
     } else {
         None
+    };
+
+    let rendered = if sign_flag && matches!(format, OutputFormat::Json) {
+        match sign_scan_output(&rendered) {
+            Ok(signed) => signed,
+            Err(e) => {
+                eprintln!("warning: signing failed: {e}");
+                rendered
+            }
+        }
+    } else {
+        rendered
     };
 
     if let Some(path) = output_path {
@@ -2824,10 +2847,12 @@ fn run_init(args: &[String]) -> Result<(), String> {
     let mut output = PathBuf::from(".aishield.yml");
     let mut templates = vec![InitTemplate::Config];
     let mut force = false;
+    let mut wizard = false;
 
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
+            "--wizard" => wizard = true,
             "--output" => {
                 i += 1;
                 output = PathBuf::from(args.get(i).ok_or("--output requires a value")?);
@@ -2841,6 +2866,10 @@ fn run_init(args: &[String]) -> Result<(), String> {
             other => return Err(format!("unknown init option `{other}`")),
         }
         i += 1;
+    }
+
+    if wizard {
+        return run_init_wizard();
     }
 
     if output != PathBuf::from(".aishield.yml") && !templates.contains(&InitTemplate::Config) {
@@ -2887,6 +2916,371 @@ fn run_init(args: &[String]) -> Result<(), String> {
                 .join(", ")
         );
     }
+    Ok(())
+}
+
+fn run_init_wizard() -> Result<(), String> {
+    if !io::stdin().is_terminal() {
+        return Err(
+            "interactive wizard requires a terminal (stdin is not a TTY)".to_string(),
+        );
+    }
+
+    println!();
+    println!("=== AIShield Configuration Wizard ===");
+    println!();
+
+    // ---------------------------------------------------------------
+    // Step 1: Detect project languages/frameworks by checking markers
+    // ---------------------------------------------------------------
+    println!("Detecting project structure...");
+
+    let marker_to_language: &[(&str, &str)] = &[
+        ("package.json", "JavaScript/TypeScript"),
+        ("Cargo.toml", "Rust"),
+        ("go.mod", "Go"),
+        ("requirements.txt", "Python"),
+        ("pyproject.toml", "Python"),
+        ("Dockerfile", "Docker"),
+    ];
+
+    // Glob-based markers (need a directory walk)
+    let glob_marker_to_language: &[(&str, &str)] = &[
+        ("*.tf", "Terraform/IaC"),
+        ("*.java", "Java"),
+        ("*.cs", "C#/.NET"),
+        ("*.rb", "Ruby"),
+        ("*.php", "PHP"),
+        ("*.kt", "Kotlin"),
+        ("*.swift", "Swift"),
+    ];
+
+    let mut detected: Vec<String> = Vec::new();
+
+    // Check file-based markers in the current directory
+    for (marker, lang) in marker_to_language {
+        if Path::new(marker).exists() && !detected.contains(&lang.to_string()) {
+            detected.push(lang.to_string());
+        }
+    }
+
+    // Check glob-based markers with a shallow walk (max depth 3 to stay fast)
+    for (pattern, lang) in glob_marker_to_language {
+        if detected.contains(&lang.to_string()) {
+            continue;
+        }
+        let ext = pattern.trim_start_matches("*.");
+        let found = walkdir::WalkDir::new(".")
+            .max_depth(3)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .any(|entry| {
+                entry
+                    .path()
+                    .extension()
+                    .map(|e| e == ext)
+                    .unwrap_or(false)
+            });
+        if found {
+            detected.push(lang.to_string());
+        }
+    }
+
+    if detected.is_empty() {
+        println!("  No known project markers found.");
+    } else {
+        println!("  Detected: {}", detected.join(", "));
+    }
+    println!();
+
+    // Full list of selectable languages
+    let all_languages = &[
+        "JavaScript/TypeScript",
+        "Rust",
+        "Go",
+        "Python",
+        "Java",
+        "C#/.NET",
+        "Ruby",
+        "PHP",
+        "Kotlin",
+        "Swift",
+        "Terraform/IaC",
+        "Docker",
+    ];
+
+    // Pre-select detected languages
+    let defaults: Vec<bool> = all_languages
+        .iter()
+        .map(|lang| detected.contains(&lang.to_string()))
+        .collect();
+
+    let lang_selections = MultiSelect::new()
+        .with_prompt("Select languages/frameworks to scan (Space to toggle, Enter to confirm)")
+        .items(all_languages)
+        .defaults(&defaults)
+        .interact()
+        .map_err(|e| format!("language selection failed: {e}"))?;
+
+    let selected_languages: Vec<&str> = lang_selections
+        .iter()
+        .map(|&idx| all_languages[idx])
+        .collect();
+
+    if selected_languages.is_empty() {
+        println!("  No languages selected; config will use default rules.");
+    } else {
+        println!("  Selected: {}", selected_languages.join(", "));
+    }
+    println!();
+
+    // ---------------------------------------------------------------
+    // Step 2: CI platform
+    // ---------------------------------------------------------------
+    let ci_options = &[
+        "GitHub Actions",
+        "GitLab CI",
+        "Bitbucket Pipelines",
+        "None",
+    ];
+
+    let ci_idx = Select::new()
+        .with_prompt("Select CI platform")
+        .items(ci_options)
+        .default(0)
+        .interact()
+        .map_err(|e| format!("CI selection failed: {e}"))?;
+
+    let ci_platform = ci_options[ci_idx];
+    println!();
+
+    // ---------------------------------------------------------------
+    // Step 3: Severity threshold
+    // ---------------------------------------------------------------
+    let severity_options = &[
+        "Critical only",
+        "Critical + High",
+        "Critical + High + Medium",
+        "All (including Low and Info)",
+    ];
+    let severity_thresholds = &["critical", "high", "medium", "info"];
+
+    let sev_idx = Select::new()
+        .with_prompt("Minimum severity threshold for findings")
+        .items(severity_options)
+        .default(2) // default to Critical+High+Medium
+        .interact()
+        .map_err(|e| format!("severity selection failed: {e}"))?;
+
+    let severity_threshold = severity_thresholds[sev_idx];
+    println!();
+
+    // ---------------------------------------------------------------
+    // Step 4: Output format
+    // ---------------------------------------------------------------
+    let format_options = &["table", "json", "sarif"];
+
+    let fmt_idx = Select::new()
+        .with_prompt("Default output format")
+        .items(format_options)
+        .default(0)
+        .interact()
+        .map_err(|e| format!("format selection failed: {e}"))?;
+
+    let output_format = format_options[fmt_idx];
+    println!();
+
+    // ---------------------------------------------------------------
+    // Step 5: Scan profile
+    // ---------------------------------------------------------------
+    let profile_options = &[
+        "strict  -- flag everything, zero false-negative tolerance",
+        "pragmatic -- balanced noise vs. coverage (recommended)",
+        "ai-focus -- only AI-generated code patterns",
+        "none    -- no profile, use raw rule defaults",
+    ];
+    let profile_values = &["strict", "pragmatic", "ai-focus", ""];
+
+    let prof_idx = Select::new()
+        .with_prompt("Scan profile")
+        .items(profile_options)
+        .default(1) // default to pragmatic
+        .interact()
+        .map_err(|e| format!("profile selection failed: {e}"))?;
+
+    let scan_profile = profile_values[prof_idx];
+    println!();
+
+    // ---------------------------------------------------------------
+    // Step 6: Generate .aishield.toml
+    // ---------------------------------------------------------------
+    let config_path = PathBuf::from(".aishield.toml");
+
+    if config_path.exists() {
+        let overwrite = Confirm::new()
+            .with_prompt(format!(
+                "{} already exists. Overwrite?",
+                config_path.display()
+            ))
+            .default(false)
+            .interact()
+            .map_err(|e| format!("confirmation failed: {e}"))?;
+
+        if !overwrite {
+            println!("Aborted -- existing config left unchanged.");
+            return Ok(());
+        }
+    }
+
+    // Map selected languages to rule language keys used by the scanner
+    let rule_languages: Vec<&str> = selected_languages
+        .iter()
+        .filter_map(|lang| match *lang {
+            "JavaScript/TypeScript" => Some("javascript"),
+            "Rust" => Some("rust"),
+            "Go" => Some("go"),
+            "Python" => Some("python"),
+            "Java" => Some("java"),
+            "C#/.NET" => Some("csharp"),
+            "Ruby" => Some("ruby"),
+            "PHP" => Some("php"),
+            "Kotlin" => Some("kotlin"),
+            "Swift" => Some("swift"),
+            "Terraform/IaC" => Some("terraform"),
+            "Docker" => Some("docker"),
+            _ => None,
+        })
+        .collect();
+
+    let languages_toml = if rule_languages.is_empty() {
+        "[]".to_string()
+    } else {
+        let quoted: Vec<String> = rule_languages
+            .iter()
+            .map(|l| format!("\"{}\"", l))
+            .collect();
+        format!("[{}]", quoted.join(", "))
+    };
+
+    let profile_line = if scan_profile.is_empty() {
+        "# profile = \"\"  # no profile selected".to_string()
+    } else {
+        format!("profile = \"{}\"", scan_profile)
+    };
+
+    let ai_only = scan_profile == "ai-focus";
+
+    let toml_content = format!(
+        r#"# AIShield configuration -- generated by `aishield init --wizard`
+# Documentation: https://github.com/antigravity/AIShield#configuration
+
+[scan]
+rules_dir = "rules"
+languages = {languages}
+format = "{format}"
+severity_threshold = "{severity}"
+{profile}
+ai_only = {ai_only}
+fail_on_findings = false
+dedup_mode = "normalized"
+
+[scan.ai]
+model = "heuristic"
+calibration = "balanced"
+min_confidence = 0.70
+
+[history]
+enabled = true
+file = ".aishield-history.log"
+
+[notifications]
+# webhook_url = ""
+# min_severity = "high"
+"#,
+        languages = languages_toml,
+        format = output_format,
+        severity = severity_threshold,
+        profile = profile_line,
+        ai_only = ai_only,
+    );
+
+    let mut file = File::create(&config_path)
+        .map_err(|err| format!("failed to create {}: {err}", config_path.display()))?;
+    file.write_all(toml_content.as_bytes())
+        .map_err(|err| format!("failed to write {}: {err}", config_path.display()))?;
+
+    println!("Created {}", config_path.display());
+
+    // ---------------------------------------------------------------
+    // Step 7: Optionally generate CI template
+    // ---------------------------------------------------------------
+    if ci_platform != "None" {
+        let generate_ci = Confirm::new()
+            .with_prompt(format!("Generate {} CI template?", ci_platform))
+            .default(true)
+            .interact()
+            .map_err(|e| format!("CI confirmation failed: {e}"))?;
+
+        if generate_ci {
+            let (ci_path, ci_content) = match ci_platform {
+                "GitHub Actions" => (
+                    PathBuf::from(".github/workflows/aishield.yml"),
+                    init_github_actions_template(),
+                ),
+                "GitLab CI" => (
+                    PathBuf::from(".gitlab-ci.yml"),
+                    init_gitlab_ci_template(),
+                ),
+                "Bitbucket Pipelines" => (
+                    PathBuf::from("bitbucket-pipelines.yml"),
+                    init_bitbucket_pipelines_template(),
+                ),
+                _ => unreachable!(),
+            };
+
+            if let Some(parent) = ci_path.parent() {
+                if !parent.as_os_str().is_empty() {
+                    fs::create_dir_all(parent).map_err(|err| {
+                        format!("failed to create directory {}: {err}", parent.display())
+                    })?;
+                }
+            }
+
+            let existed = ci_path.exists();
+            if existed {
+                let overwrite_ci = Confirm::new()
+                    .with_prompt(format!(
+                        "{} already exists. Overwrite?",
+                        ci_path.display()
+                    ))
+                    .default(false)
+                    .interact()
+                    .map_err(|e| format!("CI overwrite confirmation failed: {e}"))?;
+
+                if !overwrite_ci {
+                    println!("Skipped CI template (existing file kept).");
+                    println!();
+                    println!("Setup complete. Run `aishield scan .` to start scanning.");
+                    return Ok(());
+                }
+            }
+
+            let mut ci_file = File::create(&ci_path)
+                .map_err(|err| format!("failed to create {}: {err}", ci_path.display()))?;
+            ci_file
+                .write_all(ci_content.as_bytes())
+                .map_err(|err| format!("failed to write {}: {err}", ci_path.display()))?;
+
+            println!(
+                "{} {}",
+                if existed { "Updated" } else { "Created" },
+                ci_path.display()
+            );
+        }
+    }
+
+    println!();
+    println!("Setup complete. Run `aishield scan .` to start scanning.");
     Ok(())
 }
 
@@ -5113,13 +5507,17 @@ fn print_help() {
     println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--cross-file] [--ai-model heuristic|onnx] [--onnx-model FILE] [--onnx-manifest FILE] [--ai-calibration conservative|balanced|aggressive] [--min-ai-confidence N] [--severity LEVEL] [--profile strict|pragmatic|ai-focus] [--badge] [--vibe] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--baseline FILE] [--notify-webhook URL] [--notify-min-severity LEVEL] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
     println!("  aishield fix <path[:line[:col]]> [--rules-dir DIR] [--write|--interactive] [--dry-run] [--config FILE] [--no-config]");
     println!("  aishield bench <path> [--rules-dir DIR] [--iterations N] [--warmup N] [--format table|json] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--cross-file] [--ai-model heuristic|onnx] [--onnx-model FILE] [--onnx-manifest FILE] [--ai-calibration conservative|balanced|aggressive] [--min-ai-confidence N] [--config FILE] [--no-config]");
-    println!("  aishield init [--output PATH] [--templates config,github-actions,gitlab-ci,bitbucket-pipelines,circleci,jenkins,vscode,pre-commit|all] [--force]");
+    println!("  aishield init [--wizard] [--output PATH] [--templates config,github-actions,gitlab-ci,bitbucket-pipelines,circleci,jenkins,vscode,pre-commit|all] [--force]");
     println!("  aishield create-rule --id ID --title TITLE --language LANG --category CAT [--severity LEVEL] [--pattern-any P] [--pattern-all P] [--pattern-not P] [--tags t1,t2] [--suggestion TEXT] [--out-dir DIR] [--force]");
     println!("  aishield stats [--last Nd] [--history-file FILE] [--format table|json] [--config FILE] [--no-config]");
     println!("  aishield watch <path> [--rules-dir DIR] [--severity LEVEL] [--profile strict|pragmatic|ai-focus] [--debounce-ms N]");
     println!("  aishield hook install [--severity LEVEL] [--path TARGET] [--all-files]");
     println!("  aishield analytics migrate-history [--dry-run] [--history-file FILE]");
     println!("  aishield analytics summary [--days N] [--limit N] [--org-id ID] [--team-id ID] [--repo-id ID] [--format table|json] [--probes N] [--probe-interval-ms N] [--max-error-rate-pct N] [--max-summary-p95-ms N] [--max-compliance-p95-ms N] [--min-coverage-pct N] [--fail-on-threshold]");
+    println!("  aishield deps <path> [--format table|json]");
+    println!("  aishield sbom <path> [--format spdx|cyclonedx] [--output FILE]");
+    println!("  aishield keys generate");
+    println!("  aishield verify <report.json> [--key <pubkey-path>]");
     println!("  aishield config set|get|show ...");
 }
 
@@ -6392,6 +6790,1603 @@ fn render_vibe(result: &ScanResult) -> String {
     }
 
     out
+}
+
+// ---------------------------------------------------------------------------
+// Signed scan reports: key generation, signing, and verification
+// ---------------------------------------------------------------------------
+
+fn run_keys(args: &[String]) -> Result<(), String> {
+    let sub = args.first().map(|s| s.as_str()).unwrap_or("");
+    if sub != "generate" {
+        return Err("usage: aishield keys generate".to_string());
+    }
+
+    let home = dirs::home_dir().ok_or("cannot determine home directory")?;
+    let key_dir = home.join(".aishield");
+    fs::create_dir_all(&key_dir)
+        .map_err(|e| format!("failed to create {}: {e}", key_dir.display()))?;
+
+    let mut csprng = rand::rngs::OsRng;
+    let signing_key = SigningKey::generate(&mut csprng);
+    let verifying_key = signing_key.verifying_key();
+
+    let b64 = base64::engine::general_purpose::STANDARD;
+
+    let private_path = key_dir.join("signing-key.pem");
+    fs::write(&private_path, b64.encode(signing_key.to_bytes()))
+        .map_err(|e| format!("failed to write private key: {e}"))?;
+
+    let public_path = key_dir.join("public-key.pem");
+    fs::write(&public_path, b64.encode(verifying_key.to_bytes()))
+        .map_err(|e| format!("failed to write public key: {e}"))?;
+
+    // Restrict private key permissions on Unix
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o600);
+        fs::set_permissions(&private_path, perms)
+            .map_err(|e| format!("failed to set permissions on private key: {e}"))?;
+    }
+
+    println!("Signing keypair generated successfully.");
+    println!("  Private key: {}", private_path.display());
+    println!("  Public key:  {}", public_path.display());
+    Ok(())
+}
+
+fn run_verify(args: &[String]) -> Result<(), String> {
+    if args.is_empty() {
+        return Err("usage: aishield verify <report.json> [--key <pubkey-path>]".to_string());
+    }
+
+    let report_path = PathBuf::from(&args[0]);
+
+    // Parse optional --key flag
+    let mut pubkey_path: Option<PathBuf> = None;
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--key" => {
+                i += 1;
+                pubkey_path = Some(PathBuf::from(
+                    args.get(i).ok_or("--key requires a path")?,
+                ));
+            }
+            other => return Err(format!("unknown flag: {other}")),
+        }
+        i += 1;
+    }
+
+    let pubkey_path = pubkey_path.unwrap_or_else(|| {
+        dirs::home_dir()
+            .unwrap_or_default()
+            .join(".aishield/public-key.pem")
+    });
+
+    // Read and parse the report
+    let report_raw =
+        fs::read_to_string(&report_path).map_err(|e| format!("cannot read report: {e}"))?;
+    let mut report: serde_json::Map<String, Value> =
+        serde_json::from_str(&report_raw).map_err(|e| format!("invalid JSON report: {e}"))?;
+
+    // Extract the _signature block
+    let sig_value = report
+        .remove("_signature")
+        .ok_or("report does not contain a _signature field")?;
+    let sig_obj = sig_value
+        .as_object()
+        .ok_or("_signature is not a JSON object")?;
+
+    let sig_b64 = sig_obj
+        .get("signature")
+        .and_then(|v| v.as_str())
+        .ok_or("_signature.signature missing")?;
+    let pubkey_b64_from_report = sig_obj
+        .get("public_key")
+        .and_then(|v| v.as_str())
+        .ok_or("_signature.public_key missing")?;
+
+    let b64 = base64::engine::general_purpose::STANDARD;
+
+    // Decode the signature
+    let sig_bytes = b64
+        .decode(sig_b64)
+        .map_err(|e| format!("invalid base64 signature: {e}"))?;
+    let signature = Signature::from_slice(&sig_bytes)
+        .map_err(|e| format!("invalid Ed25519 signature: {e}"))?;
+
+    // Read and decode the public key from file
+    let pubkey_pem =
+        fs::read_to_string(&pubkey_path).map_err(|e| format!("cannot read public key: {e}"))?;
+    let pubkey_bytes = b64
+        .decode(pubkey_pem.trim())
+        .map_err(|e| format!("invalid base64 public key: {e}"))?;
+    let pubkey_array: [u8; 32] = pubkey_bytes
+        .try_into()
+        .map_err(|_| "public key must be 32 bytes".to_string())?;
+    let verifying_key = VerifyingKey::from_bytes(&pubkey_array)
+        .map_err(|e| format!("invalid public key: {e}"))?;
+
+    // Verify that the embedded public key matches the file
+    let embedded_pubkey_bytes = b64
+        .decode(pubkey_b64_from_report)
+        .map_err(|e| format!("invalid base64 embedded public key: {e}"))?;
+    if embedded_pubkey_bytes != verifying_key.to_bytes() {
+        return Err(
+            "embedded public key in report does not match the provided key file".to_string(),
+        );
+    }
+
+    // Recompute the digest over the report body (without _signature)
+    let canonical =
+        serde_json::to_string(&report).map_err(|e| format!("failed to serialise body: {e}"))?;
+    let mut hasher = Sha256::new();
+    hasher.update(canonical.as_bytes());
+    let digest = hasher.finalize();
+
+    // Verify
+    match verifying_key.verify(&digest, &signature) {
+        Ok(()) => {
+            println!("Signature verification: PASSED");
+            if let Some(ts) = sig_obj.get("timestamp").and_then(|v| v.as_str()) {
+                println!("  Signed at: {ts}");
+            }
+            if let Some(algo) = sig_obj.get("algorithm").and_then(|v| v.as_str()) {
+                println!("  Algorithm: {algo}");
+            }
+            println!("  Public key: {}", pubkey_path.display());
+            Ok(())
+        }
+        Err(e) => Err(format!("Signature verification: FAILED ({e})")),
+    }
+}
+
+fn sign_scan_output(json_output: &str) -> Result<String, String> {
+    let home = dirs::home_dir().ok_or("cannot determine home directory")?;
+    let private_path = home.join(".aishield/signing-key.pem");
+
+    let b64 = base64::engine::general_purpose::STANDARD;
+
+    // Read and decode the private key
+    let key_pem =
+        fs::read_to_string(&private_path).map_err(|e| format!("cannot read signing key: {e}"))?;
+    let key_bytes = b64
+        .decode(key_pem.trim())
+        .map_err(|e| format!("invalid base64 signing key: {e}"))?;
+    let key_array: [u8; 32] = key_bytes
+        .try_into()
+        .map_err(|_| "signing key must be 32 bytes".to_string())?;
+    let signing_key = SigningKey::from_bytes(&key_array);
+    let verifying_key = signing_key.verifying_key();
+
+    // Compute SHA-256 digest of the original JSON
+    let mut hasher = Sha256::new();
+    hasher.update(json_output.as_bytes());
+    let digest = hasher.finalize();
+
+    // Sign the digest
+    let signature = signing_key.sign(&digest);
+
+    // Build the signed output by appending _signature to the existing JSON object
+    let mut report: serde_json::Map<String, Value> =
+        serde_json::from_str(json_output).map_err(|e| format!("invalid JSON: {e}"))?;
+
+    let timestamp = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+
+    let sig_obj = serde_json::json!({
+        "algorithm": "Ed25519",
+        "public_key": b64.encode(verifying_key.to_bytes()),
+        "signature": b64.encode(signature.to_bytes()),
+        "timestamp": timestamp,
+    });
+
+    report.insert("_signature".to_string(), sig_obj);
+
+    serde_json::to_string_pretty(&report).map_err(|e| format!("failed to serialise output: {e}"))
+}
+
+// ---------------------------------------------------------------------------
+// SBOM (Software Bill of Materials) generation
+// ---------------------------------------------------------------------------
+
+struct SbomPackage {
+    name: String,
+    version: String,
+    ecosystem: String,
+    manifest_file: String,
+}
+
+#[derive(Clone, Copy)]
+enum SbomFormat {
+    Spdx,
+    CycloneDx,
+}
+
+impl SbomFormat {
+    fn parse(raw: &str) -> Result<Self, String> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "spdx" => Ok(Self::Spdx),
+            "cyclonedx" => Ok(Self::CycloneDx),
+            _ => Err("sbom format must be spdx or cyclonedx".to_string()),
+        }
+    }
+}
+
+fn run_sbom(args: &[String]) -> Result<(), String> {
+    if args.is_empty() {
+        return Err("sbom requires a target path".to_string());
+    }
+
+    let target = PathBuf::from(&args[0]);
+    if !target.exists() {
+        return Err(format!("target path does not exist: {}", target.display()));
+    }
+
+    let mut sbom_format = SbomFormat::Spdx;
+    let mut output_path: Option<PathBuf> = None;
+
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--format" => {
+                i += 1;
+                sbom_format = SbomFormat::parse(
+                    args.get(i).ok_or("--format requires a value")?,
+                )?;
+            }
+            "--output" => {
+                i += 1;
+                output_path = Some(PathBuf::from(
+                    args.get(i).ok_or("--output requires a value")?,
+                ));
+            }
+            other => return Err(format!("unknown sbom flag: {other}")),
+        }
+        i += 1;
+    }
+
+    let packages = collect_all_packages(&target);
+
+    if packages.is_empty() {
+        eprintln!("No dependency manifests found in {}", target.display());
+    }
+
+    let json_output = match sbom_format {
+        SbomFormat::Spdx => generate_spdx_json(&packages),
+        SbomFormat::CycloneDx => generate_cyclonedx_json(&packages),
+    };
+
+    let formatted = serde_json::to_string_pretty(
+        &serde_json::from_str::<Value>(&json_output)
+            .map_err(|e| format!("internal serialization error: {e}"))?,
+    )
+    .map_err(|e| format!("internal serialization error: {e}"))?;
+
+    match output_path {
+        Some(ref path) => {
+            fs::write(path, &formatted)
+                .map_err(|e| format!("failed to write {}: {e}", path.display()))?;
+            println!("SBOM written to {}", path.display());
+        }
+        None => {
+            write_stdout(&formatted)?;
+        }
+    }
+
+    println!(
+        "\nSBOM generation complete: {} packages from {} manifests",
+        packages.len(),
+        packages
+            .iter()
+            .map(|p| p.manifest_file.as_str())
+            .collect::<HashSet<_>>()
+            .len(),
+    );
+
+    Ok(())
+}
+
+/// Walk the target directory recursively and collect packages from all recognized
+/// dependency manifest files.
+fn collect_all_packages(target: &Path) -> Vec<SbomPackage> {
+    let manifest_names: &[&str] = &[
+        "requirements.txt",
+        "package.json",
+        "go.mod",
+        "Cargo.toml",
+        "pom.xml",
+        "build.gradle",
+    ];
+
+    let mut packages = Vec::new();
+
+    let walker = walkdir::WalkDir::new(target)
+        .follow_links(true)
+        .into_iter()
+        .filter_map(|e| e.ok());
+
+    for entry in walker {
+        let path = entry.path();
+        let file_name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(n) => n,
+            None => continue,
+        };
+
+        if !manifest_names.contains(&file_name) {
+            continue;
+        }
+
+        // Skip node_modules, .git, target directories
+        let path_str = path.to_string_lossy();
+        if path_str.contains("node_modules")
+            || path_str.contains("/.git/")
+            || path_str.contains("/target/")
+        {
+            continue;
+        }
+
+        let content = match fs::read_to_string(path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        let rel_path = path
+            .strip_prefix(target)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .to_string();
+
+        let parsed: Vec<(String, String)> = match file_name {
+            "requirements.txt" => sbom_parse_requirements_txt(&content),
+            "package.json" => sbom_parse_package_json(&content),
+            "go.mod" => sbom_parse_go_mod(&content),
+            "Cargo.toml" => sbom_parse_cargo_toml_deps(&content),
+            "pom.xml" => sbom_parse_pom_xml(&content),
+            "build.gradle" => sbom_parse_build_gradle(&content),
+            _ => continue,
+        };
+
+        let ecosystem = match file_name {
+            "requirements.txt" => "pypi",
+            "package.json" => "npm",
+            "go.mod" => "golang",
+            "Cargo.toml" => "cargo",
+            "pom.xml" => "maven",
+            "build.gradle" => "maven",
+            _ => "generic",
+        };
+
+        for (name, version) in parsed {
+            packages.push(SbomPackage {
+                name,
+                version,
+                ecosystem: ecosystem.to_string(),
+                manifest_file: rel_path.clone(),
+            });
+        }
+    }
+
+    packages
+}
+
+// ---------------------------------------------------------------------------
+// Manifest parsers for SBOM collection
+// ---------------------------------------------------------------------------
+
+fn sbom_parse_requirements_txt(content: &str) -> Vec<(String, String)> {
+    let mut packages = Vec::new();
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') || line.starts_with('-') {
+            continue;
+        }
+        // Handle ==, >=, <=, ~=, != version specifiers
+        let (name, version) = if let Some(idx) = line.find("==") {
+            (line[..idx].trim().to_string(), line[idx + 2..].trim().to_string())
+        } else if let Some(idx) = line.find(">=") {
+            (line[..idx].trim().to_string(), line[idx + 2..].trim().to_string())
+        } else if let Some(idx) = line.find("<=") {
+            (line[..idx].trim().to_string(), line[idx + 2..].trim().to_string())
+        } else if let Some(idx) = line.find("~=") {
+            (line[..idx].trim().to_string(), line[idx + 2..].trim().to_string())
+        } else if let Some(idx) = line.find("!=") {
+            (line[..idx].trim().to_string(), line[idx + 2..].trim().to_string())
+        } else {
+            // No version constraint -- bare package name
+            (line.to_string(), "*".to_string())
+        };
+        // Strip extras like [security] from package name
+        let name = if let Some(bracket) = name.find('[') {
+            name[..bracket].trim().to_string()
+        } else {
+            name
+        };
+        // Strip environment markers and comments from version
+        let version = version
+            .split(';')
+            .next()
+            .unwrap_or(&version)
+            .split('#')
+            .next()
+            .unwrap_or(&version)
+            .split(',')
+            .next()
+            .unwrap_or(&version)
+            .trim()
+            .to_string();
+        if !name.is_empty() {
+            packages.push((name, version));
+        }
+    }
+    packages
+}
+
+fn sbom_parse_package_json(content: &str) -> Vec<(String, String)> {
+    let mut packages = Vec::new();
+    let parsed: Result<Value, _> = serde_json::from_str(content);
+    let value = match parsed {
+        Ok(v) => v,
+        Err(_) => return packages,
+    };
+
+    for dep_key in &[
+        "dependencies",
+        "devDependencies",
+        "peerDependencies",
+        "optionalDependencies",
+    ] {
+        if let Some(deps) = value.get(dep_key).and_then(|v| v.as_object()) {
+            for (name, version_val) in deps {
+                let version = version_val.as_str().unwrap_or("*").to_string();
+                // Strip semver range prefixes for a cleaner version
+                let version = version
+                    .trim_start_matches('^')
+                    .trim_start_matches('~')
+                    .trim_start_matches(">=")
+                    .trim_start_matches("<=")
+                    .trim_start_matches('>')
+                    .trim_start_matches('<')
+                    .trim_start_matches('=')
+                    .trim()
+                    .to_string();
+                packages.push((name.clone(), version));
+            }
+        }
+    }
+
+    packages
+}
+
+fn sbom_parse_go_mod(content: &str) -> Vec<(String, String)> {
+    let mut packages = Vec::new();
+    let mut in_require = false;
+
+    for line in content.lines() {
+        let line = line.trim();
+
+        if line.starts_with("require (") || line == "require (" {
+            in_require = true;
+            continue;
+        }
+        if in_require && line == ")" {
+            in_require = false;
+            continue;
+        }
+
+        let dep_line = if in_require {
+            line
+        } else if let Some(rest) = line.strip_prefix("require ") {
+            rest.trim()
+        } else {
+            continue;
+        };
+
+        // Strip comments
+        let dep_line = dep_line.split("//").next().unwrap_or(dep_line).trim();
+        let parts: Vec<&str> = dep_line.split_whitespace().collect();
+        if parts.len() >= 2 {
+            let module = parts[0].to_string();
+            let version = parts[1].trim_start_matches('v').to_string();
+            packages.push((module, version));
+        }
+    }
+
+    packages
+}
+
+fn sbom_parse_cargo_toml_deps(content: &str) -> Vec<(String, String)> {
+    let mut packages = Vec::new();
+
+    let parsed: Result<Value, _> = content.parse::<toml::Value>().map(|v| {
+        let s = serde_json::to_string(&v).unwrap_or_default();
+        serde_json::from_str(&s).unwrap_or(Value::Null)
+    });
+
+    let value = match parsed {
+        Ok(v) => v,
+        Err(_) => return packages,
+    };
+
+    for section in &["dependencies", "dev-dependencies", "build-dependencies"] {
+        if let Some(deps) = value.get(section).and_then(|v| v.as_object()) {
+            for (name, dep_val) in deps {
+                let version = if let Some(v) = dep_val.as_str() {
+                    v.to_string()
+                } else if let Some(obj) = dep_val.as_object() {
+                    obj.get("version")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("*")
+                        .to_string()
+                } else {
+                    "*".to_string()
+                };
+                packages.push((name.clone(), version));
+            }
+        }
+    }
+
+    packages
+}
+
+fn sbom_parse_pom_xml(content: &str) -> Vec<(String, String)> {
+    let mut packages = Vec::new();
+
+    let mut i = 0;
+    let len = content.len();
+
+    while i < len {
+        if let Some(dep_start) = content[i..].find("<dependency>") {
+            let abs_start = i + dep_start;
+            if let Some(dep_end) = content[abs_start..].find("</dependency>") {
+                let block = &content[abs_start..abs_start + dep_end + "</dependency>".len()];
+
+                let group_id = sbom_extract_xml_tag(block, "groupId").unwrap_or_default();
+                let artifact_id =
+                    sbom_extract_xml_tag(block, "artifactId").unwrap_or_default();
+                let version =
+                    sbom_extract_xml_tag(block, "version").unwrap_or_else(|| "*".to_string());
+
+                if !artifact_id.is_empty() {
+                    let name = if group_id.is_empty() {
+                        artifact_id
+                    } else {
+                        format!("{group_id}:{artifact_id}")
+                    };
+                    packages.push((name, version));
+                }
+
+                i = abs_start + dep_end + "</dependency>".len();
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    packages
+}
+
+fn sbom_extract_xml_tag(block: &str, tag: &str) -> Option<String> {
+    let open = format!("<{tag}>");
+    let close = format!("</{tag}>");
+    let start = block.find(&open)?;
+    let end = block.find(&close)?;
+    if start + open.len() <= end {
+        Some(block[start + open.len()..end].trim().to_string())
+    } else {
+        None
+    }
+}
+
+fn sbom_parse_build_gradle(content: &str) -> Vec<(String, String)> {
+    let mut packages = Vec::new();
+
+    for line in content.lines() {
+        let line = line.trim();
+
+        // Skip comments
+        if line.starts_with("//") || line.starts_with("/*") || line.starts_with('*') {
+            continue;
+        }
+
+        // Common Gradle dependency configurations
+        let dep_configs = [
+            "implementation",
+            "api",
+            "compile",
+            "testImplementation",
+            "testCompile",
+            "androidTestImplementation",
+            "compileOnly",
+            "runtimeOnly",
+            "annotationProcessor",
+            "kapt",
+        ];
+
+        for config in &dep_configs {
+            if let Some(rest) = line.strip_prefix(config) {
+                let rest = rest.trim();
+                // Handle single-quote and double-quote strings, with or without parens
+                let dep_str =
+                    if (rest.starts_with('\'') || rest.starts_with('"')) && rest.len() > 1 {
+                        let quote = rest.as_bytes()[0] as char;
+                        let inner = &rest[1..];
+                        if let Some(end) = inner.find(quote) {
+                            &inner[..end]
+                        } else {
+                            continue;
+                        }
+                    } else if (rest.starts_with("(\"") || rest.starts_with("('"))
+                        && rest.len() > 2
+                    {
+                        let quote = rest.as_bytes()[1] as char;
+                        let inner = &rest[2..];
+                        if let Some(end) = inner.find(quote) {
+                            &inner[..end]
+                        } else {
+                            continue;
+                        }
+                    } else {
+                        continue;
+                    };
+
+                let parts: Vec<&str> = dep_str.split(':').collect();
+                match parts.len() {
+                    3 => {
+                        let name = format!("{}:{}", parts[0], parts[1]);
+                        let version = parts[2].to_string();
+                        packages.push((name, version));
+                    }
+                    2 => {
+                        let name = format!("{}:{}", parts[0], parts[1]);
+                        packages.push((name, "*".to_string()));
+                    }
+                    _ => {}
+                }
+                break;
+            }
+        }
+    }
+
+    packages
+}
+
+// ---------------------------------------------------------------------------
+// SPDX 2.3 JSON generation
+// ---------------------------------------------------------------------------
+
+fn generate_spdx_json(packages: &[SbomPackage]) -> String {
+    let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+    let timestamp_ns = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let namespace = format!("https://aishield.dev/sbom/{timestamp_ns}");
+
+    let mut spdx_packages = Vec::new();
+    for pkg in packages {
+        let spdx_id = format!(
+            "SPDXRef-Package-{}-{}",
+            sanitize_spdx_id(&pkg.name),
+            sanitize_spdx_id(&pkg.version),
+        );
+
+        let purl = format!(
+            "pkg:{}/{}@{}",
+            pkg.ecosystem,
+            purl_encode_name(&pkg.name),
+            pkg.version,
+        );
+
+        let pkg_json = serde_json::json!({
+            "SPDXID": spdx_id,
+            "name": pkg.name,
+            "versionInfo": pkg.version,
+            "downloadLocation": "NOASSERTION",
+            "filesAnalyzed": false,
+            "externalRefs": [
+                {
+                    "referenceCategory": "PACKAGE-MANAGER",
+                    "referenceType": "purl",
+                    "referenceLocator": purl,
+                }
+            ]
+        });
+
+        spdx_packages.push(pkg_json);
+    }
+
+    let doc = serde_json::json!({
+        "spdxVersion": "SPDX-2.3",
+        "dataLicense": "CC0-1.0",
+        "SPDXID": "SPDXRef-DOCUMENT",
+        "name": "aishield-sbom",
+        "documentNamespace": namespace,
+        "creationInfo": {
+            "created": now,
+            "creators": ["Tool: aishield"],
+            "licenseListVersion": "3.19"
+        },
+        "packages": spdx_packages,
+    });
+
+    doc.to_string()
+}
+
+// ---------------------------------------------------------------------------
+// CycloneDX 1.5 JSON generation
+// ---------------------------------------------------------------------------
+
+fn generate_cyclonedx_json(packages: &[SbomPackage]) -> String {
+    let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+
+    let mut components = Vec::new();
+    for pkg in packages {
+        let purl = format!(
+            "pkg:{}/{}@{}",
+            pkg.ecosystem,
+            purl_encode_name(&pkg.name),
+            pkg.version,
+        );
+
+        let comp = serde_json::json!({
+            "type": "library",
+            "name": pkg.name,
+            "version": pkg.version,
+            "purl": purl,
+        });
+
+        components.push(comp);
+    }
+
+    let doc = serde_json::json!({
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.5",
+        "version": 1,
+        "metadata": {
+            "timestamp": now,
+            "tools": [
+                {
+                    "vendor": "AIShield",
+                    "name": "aishield",
+                    "version": "0.7.0",
+                }
+            ]
+        },
+        "components": components,
+    });
+
+    doc.to_string()
+}
+
+/// Sanitize a string for use as an SPDX identifier (only letters, digits, ., -).
+fn sanitize_spdx_id(input: &str) -> String {
+    input
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '.' || c == '-' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect()
+}
+
+/// Encode a package name for use in a Package URL (purl).
+/// For npm scoped packages like @scope/pkg, purl uses %40scope/pkg.
+fn purl_encode_name(name: &str) -> String {
+    if name.starts_with('@') {
+        return name.replacen('@', "%40", 1);
+    }
+    name.to_string()
+}
+
+// ---------------------------------------------------------------------------
+// Supply-chain / dependency scanning
+// ---------------------------------------------------------------------------
+
+/// A single vulnerability finding tied to a dependency.
+#[derive(Clone, Debug)]
+struct DepFinding {
+    package: String,
+    version: String,
+    ecosystem: String,
+    vuln_id: String,
+    summary: String,
+    severity: String,
+    fixed_version: Option<String>,
+    manifest_file: String,
+}
+
+/// Deserialized subset of an OSV vulnerability entry.
+#[derive(Clone, Debug)]
+struct OsvVulnerability {
+    id: String,
+    summary: String,
+    severity: String,
+    fixed_version: Option<String>,
+}
+
+/// Lightweight client that queries the OSV.dev API.
+struct OsvClient {
+    http: Client,
+    endpoint: String,
+}
+
+impl OsvClient {
+    fn new() -> Self {
+        Self {
+            http: Client::builder()
+                .timeout(Duration::from_secs(15))
+                .build()
+                .unwrap_or_else(|_| Client::new()),
+            endpoint: "https://api.osv.dev/v1/query".to_string(),
+        }
+    }
+
+    /// Query OSV for known vulnerabilities affecting `pkg` at `version` in
+    /// the given `ecosystem` (e.g. "PyPI", "npm", "Go", "crates.io", "Maven").
+    fn query(
+        &self,
+        pkg: &str,
+        version: &str,
+        ecosystem: &str,
+    ) -> Result<Vec<OsvVulnerability>, String> {
+        let body = serde_json::json!({
+            "package": {
+                "name": pkg,
+                "ecosystem": ecosystem,
+            },
+            "version": version,
+        });
+
+        let resp = self
+            .http
+            .post(&self.endpoint)
+            .json(&body)
+            .send()
+            .map_err(|e| format!("OSV request failed for {pkg}@{version}: {e}"))?;
+
+        if !resp.status().is_success() {
+            return Err(format!(
+                "OSV returned HTTP {} for {pkg}@{version}",
+                resp.status()
+            ));
+        }
+
+        let json: Value = resp
+            .json()
+            .map_err(|e| format!("failed to parse OSV response for {pkg}@{version}: {e}"))?;
+
+        let vulns = json
+            .get("vulns")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+
+        let mut results = Vec::new();
+        for entry in &vulns {
+            let id = entry
+                .get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("UNKNOWN")
+                .to_string();
+
+            let summary = entry
+                .get("summary")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            // Extract severity -- OSV stores it in database_specific or severity array.
+            let severity = extract_osv_severity(entry);
+
+            // Try to find a fixed version from the affected[].ranges[].events[].
+            let fixed_version = extract_osv_fixed_version(entry);
+
+            results.push(OsvVulnerability {
+                id,
+                summary,
+                severity,
+                fixed_version,
+            });
+        }
+
+        Ok(results)
+    }
+}
+
+/// Best-effort extraction of a human-readable severity string from an OSV entry.
+fn extract_osv_severity(entry: &Value) -> String {
+    // First try the top-level severity array (CVSS).
+    if let Some(sev_arr) = entry.get("severity").and_then(|v| v.as_array()) {
+        for s in sev_arr {
+            if let Some(score_str) = s.get("score").and_then(|v| v.as_str()) {
+                if let Some(numeric) = parse_cvss_score(score_str) {
+                    return cvss_to_label(numeric);
+                }
+            }
+        }
+    }
+    // Fallback: database_specific.severity
+    if let Some(db) = entry.get("database_specific") {
+        if let Some(sev) = db.get("severity").and_then(|v| v.as_str()) {
+            return sev.to_string();
+        }
+    }
+    "UNKNOWN".to_string()
+}
+
+fn parse_cvss_score(vector: &str) -> Option<f64> {
+    // Some OSV entries include a separate numeric score. Try parsing as f64.
+    vector.parse::<f64>().ok()
+}
+
+fn cvss_to_label(score: f64) -> String {
+    if score >= 9.0 {
+        "CRITICAL".to_string()
+    } else if score >= 7.0 {
+        "HIGH".to_string()
+    } else if score >= 4.0 {
+        "MEDIUM".to_string()
+    } else if score > 0.0 {
+        "LOW".to_string()
+    } else {
+        "UNKNOWN".to_string()
+    }
+}
+
+/// Try to extract a "fixed" version from `affected[].ranges[].events[]`.
+fn extract_osv_fixed_version(entry: &Value) -> Option<String> {
+    let affected = entry.get("affected")?.as_array()?;
+    for aff in affected {
+        if let Some(ranges) = aff.get("ranges").and_then(|r| r.as_array()) {
+            for range in ranges {
+                if let Some(events) = range.get("events").and_then(|e| e.as_array()) {
+                    for event in events {
+                        if let Some(fixed) = event.get("fixed").and_then(|v| v.as_str()) {
+                            return Some(fixed.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+// ---------------------------------------------------------------------------
+// Lockfile / manifest parsers
+// ---------------------------------------------------------------------------
+
+/// Map a manifest filename to the OSV ecosystem identifier.
+fn ecosystem_for_file(filename: &str) -> &'static str {
+    match filename {
+        "requirements.txt" | "Pipfile" | "pyproject.toml" => "PyPI",
+        "package.json" | "package-lock.json" => "npm",
+        "go.mod" => "Go",
+        "Cargo.toml" => "crates.io",
+        "pom.xml" | "build.gradle" => "Maven",
+        _ => "Unknown",
+    }
+}
+
+/// Parse `requirements.txt` lines of the form `package==version` (or `>=`, `~=`).
+fn parse_requirements_txt(content: &str) -> Vec<(String, String)> {
+    let mut deps = Vec::new();
+    for raw_line in content.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() || line.starts_with('#') || line.starts_with('-') {
+            continue;
+        }
+        // Remove inline comments.
+        let line = if let Some(idx) = line.find(" #") {
+            line[..idx].trim()
+        } else {
+            line
+        };
+        if let Some((name, ver)) = split_requirement(line) {
+            deps.push((name.to_lowercase(), ver));
+        }
+    }
+    deps
+}
+
+fn split_requirement(line: &str) -> Option<(String, String)> {
+    for delim in &["==", ">=", "~=", "<=", "!="] {
+        if let Some(idx) = line.find(delim) {
+            let name = line[..idx].trim().to_string();
+            let ver = line[idx + delim.len()..].trim().to_string();
+            // Strip extras e.g. `requests[security]==2.25.0`
+            let name = name
+                .split('[')
+                .next()
+                .unwrap_or(&name)
+                .trim()
+                .to_string();
+            if !name.is_empty() && !ver.is_empty() {
+                let ver = ver.split(',').next().unwrap_or("").trim().to_string();
+                return Some((name, ver));
+            }
+        }
+    }
+    None
+}
+
+/// Parse `package.json` -- extract from `dependencies` and `devDependencies`.
+fn parse_package_json(content: &str) -> Vec<(String, String)> {
+    let mut deps = Vec::new();
+    let json: Value = match serde_json::from_str(content) {
+        Ok(v) => v,
+        Err(_) => return deps,
+    };
+    for section in &["dependencies", "devDependencies"] {
+        if let Some(obj) = json.get(section).and_then(|v| v.as_object()) {
+            for (name, ver_val) in obj {
+                if let Some(ver_raw) = ver_val.as_str() {
+                    let ver = ver_raw
+                        .trim_start_matches('^')
+                        .trim_start_matches('~')
+                        .trim_start_matches(">=")
+                        .trim_start_matches('=')
+                        .trim()
+                        .to_string();
+                    if !ver.is_empty() && ver.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+                        deps.push((name.clone(), ver));
+                    }
+                }
+            }
+        }
+    }
+    deps
+}
+
+/// Parse `go.mod` require blocks.
+fn parse_go_mod(content: &str) -> Vec<(String, String)> {
+    let mut deps = Vec::new();
+    let mut in_require = false;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("require (") || trimmed == "require (" {
+            in_require = true;
+            continue;
+        }
+        if in_require {
+            if trimmed == ")" {
+                in_require = false;
+                continue;
+            }
+            let parts: Vec<&str> = trimmed.split_whitespace().collect();
+            if parts.len() >= 2 {
+                let name = parts[0].to_string();
+                let ver = parts[1]
+                    .trim_start_matches('v')
+                    .split('+')
+                    .next()
+                    .unwrap_or("")
+                    .to_string();
+                if !name.is_empty() && !ver.is_empty() {
+                    deps.push((name, ver));
+                }
+            }
+        } else if trimmed.starts_with("require ") && !trimmed.contains('(') {
+            let rest = trimmed.strip_prefix("require ").unwrap_or("").trim();
+            let parts: Vec<&str> = rest.split_whitespace().collect();
+            if parts.len() >= 2 {
+                let name = parts[0].to_string();
+                let ver = parts[1]
+                    .trim_start_matches('v')
+                    .split('+')
+                    .next()
+                    .unwrap_or("")
+                    .to_string();
+                if !name.is_empty() && !ver.is_empty() {
+                    deps.push((name, ver));
+                }
+            }
+        }
+    }
+    deps
+}
+
+/// Parse `Cargo.toml` [dependencies] (and [dev-dependencies], [build-dependencies]).
+fn parse_cargo_toml_deps(content: &str) -> Vec<(String, String)> {
+    let mut deps = Vec::new();
+
+    // Try proper TOML parsing first.
+    if let Ok(doc) = content.parse::<toml::Value>() {
+        for section in &["dependencies", "dev-dependencies", "build-dependencies"] {
+            if let Some(table) = doc.get(section).and_then(|v| v.as_table()) {
+                for (name, val) in table {
+                    let ver = match val {
+                        toml::Value::String(s) => s.clone(),
+                        toml::Value::Table(t) => t
+                            .get("version")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        _ => String::new(),
+                    };
+                    if !ver.is_empty() {
+                        let ver = ver
+                            .trim_start_matches('^')
+                            .trim_start_matches('~')
+                            .trim_start_matches(">=")
+                            .trim_start_matches('=')
+                            .trim()
+                            .to_string();
+                        deps.push((name.clone(), ver));
+                    }
+                }
+            }
+        }
+        return deps;
+    }
+
+    // Fallback: simple line-based parsing when TOML is malformed.
+    let mut in_deps = false;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("[dependencies]")
+            || trimmed.starts_with("[dev-dependencies]")
+            || trimmed.starts_with("[build-dependencies]")
+        {
+            in_deps = true;
+            continue;
+        }
+        if trimmed.starts_with('[') {
+            in_deps = false;
+            continue;
+        }
+        if !in_deps || trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        if let Some(eq_idx) = trimmed.find('=') {
+            let name = trimmed[..eq_idx].trim().to_string();
+            let rest = trimmed[eq_idx + 1..].trim();
+            if rest.starts_with('{') {
+                if let Some(ver_start) = rest.find("version") {
+                    let after = &rest[ver_start..];
+                    if let Some(q1) = after.find('"') {
+                        let after_q1 = &after[q1 + 1..];
+                        if let Some(q2) = after_q1.find('"') {
+                            let ver = after_q1[..q2].to_string();
+                            let ver = ver
+                                .trim_start_matches('^')
+                                .trim_start_matches('~')
+                                .trim()
+                                .to_string();
+                            if !ver.is_empty() {
+                                deps.push((name, ver));
+                            }
+                        }
+                    }
+                }
+            } else {
+                let ver = rest.trim_matches('"').to_string();
+                let ver = ver
+                    .trim_start_matches('^')
+                    .trim_start_matches('~')
+                    .trim()
+                    .to_string();
+                if !ver.is_empty() && !name.is_empty() {
+                    deps.push((name, ver));
+                }
+            }
+        }
+    }
+
+    deps
+}
+
+/// Parse a `Pipfile` to extract [packages] and [dev-packages].
+fn parse_pipfile(content: &str) -> Vec<(String, String)> {
+    let mut deps = Vec::new();
+    let mut in_packages = false;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed == "[packages]" || trimmed == "[dev-packages]" {
+            in_packages = true;
+            continue;
+        }
+        if trimmed.starts_with('[') {
+            in_packages = false;
+            continue;
+        }
+        if !in_packages || trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        if let Some(eq_idx) = trimmed.find('=') {
+            let name = trimmed[..eq_idx].trim().to_string();
+            let rest = trimmed[eq_idx + 1..].trim();
+            let ver = rest
+                .trim_matches('"')
+                .trim_start_matches("==")
+                .trim_start_matches(">=")
+                .trim_start_matches("~=")
+                .trim_start_matches('*')
+                .trim()
+                .to_string();
+            if !name.is_empty() && !ver.is_empty() && ver != "*" {
+                deps.push((name, ver));
+            }
+        }
+    }
+    deps
+}
+
+/// Parse `pyproject.toml` project.dependencies list.
+fn parse_pyproject_toml(content: &str) -> Vec<(String, String)> {
+    let mut deps = Vec::new();
+    if let Ok(doc) = content.parse::<toml::Value>() {
+        // PEP 621: [project] dependencies = [...]
+        if let Some(arr) = doc
+            .get("project")
+            .and_then(|p| p.get("dependencies"))
+            .and_then(|d| d.as_array())
+        {
+            for item in arr {
+                if let Some(s) = item.as_str() {
+                    if let Some((name, ver)) = split_requirement(s) {
+                        deps.push((name, ver));
+                    }
+                }
+            }
+        }
+        // Poetry: [tool.poetry.dependencies]
+        if let Some(table) = doc
+            .get("tool")
+            .and_then(|t| t.get("poetry"))
+            .and_then(|p| p.get("dependencies"))
+            .and_then(|d| d.as_table())
+        {
+            for (name, val) in table {
+                if name == "python" {
+                    continue;
+                }
+                let ver = match val {
+                    toml::Value::String(s) => s
+                        .trim_start_matches('^')
+                        .trim_start_matches('~')
+                        .trim()
+                        .to_string(),
+                    toml::Value::Table(t) => t
+                        .get("version")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .trim_start_matches('^')
+                        .trim_start_matches('~')
+                        .trim()
+                        .to_string(),
+                    _ => String::new(),
+                };
+                if !ver.is_empty() {
+                    deps.push((name.clone(), ver));
+                }
+            }
+        }
+    }
+    deps
+}
+
+/// Simple pom.xml parser for <dependency> blocks.
+fn parse_pom_xml(content: &str) -> Vec<(String, String)> {
+    let mut deps = Vec::new();
+    let mut group_id = String::new();
+    let mut artifact_id = String::new();
+    let mut version = String::new();
+    let mut in_dependency = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.contains("<dependency>") {
+            in_dependency = true;
+            group_id.clear();
+            artifact_id.clear();
+            version.clear();
+            continue;
+        }
+        if trimmed.contains("</dependency>") {
+            if in_dependency && !artifact_id.is_empty() && !version.is_empty() {
+                let name = if group_id.is_empty() {
+                    artifact_id.clone()
+                } else {
+                    format!("{}:{}", group_id, artifact_id)
+                };
+                if !version.starts_with('$') {
+                    deps.push((name, version.clone()));
+                }
+            }
+            in_dependency = false;
+            continue;
+        }
+        if in_dependency {
+            if let Some(val) = extract_xml_tag_value(trimmed, "groupId") {
+                group_id = val;
+            }
+            if let Some(val) = extract_xml_tag_value(trimmed, "artifactId") {
+                artifact_id = val;
+            }
+            if let Some(val) = extract_xml_tag_value(trimmed, "version") {
+                version = val;
+            }
+        }
+    }
+    deps
+}
+
+fn extract_xml_tag_value(line: &str, tag: &str) -> Option<String> {
+    let open = format!("<{tag}>");
+    let close = format!("</{tag}>");
+    if let Some(start) = line.find(&open) {
+        let after = &line[start + open.len()..];
+        if let Some(end) = after.find(&close) {
+            let val = after[..end].trim().to_string();
+            if !val.is_empty() {
+                return Some(val);
+            }
+        }
+    }
+    None
+}
+
+/// Simple build.gradle parser for dependency declarations.
+fn parse_build_gradle(content: &str) -> Vec<(String, String)> {
+    let mut deps = Vec::new();
+    let configs = [
+        "implementation",
+        "api",
+        "compileOnly",
+        "runtimeOnly",
+        "testImplementation",
+        "testRuntimeOnly",
+    ];
+    for line in content.lines() {
+        let trimmed = line.trim();
+        for cfg in &configs {
+            if trimmed.starts_with(cfg) {
+                let rest = trimmed[cfg.len()..].trim();
+                let rest = rest
+                    .trim_start_matches('(')
+                    .trim_end_matches(')')
+                    .trim_matches('\'')
+                    .trim_matches('"')
+                    .trim();
+                let parts: Vec<&str> = rest.split(':').collect();
+                if parts.len() == 3 {
+                    let name = format!("{}:{}", parts[0], parts[1]);
+                    let ver = parts[2].to_string();
+                    if !ver.is_empty() && !ver.starts_with('$') {
+                        deps.push((name, ver));
+                    }
+                }
+            }
+        }
+    }
+    deps
+}
+
+// ---------------------------------------------------------------------------
+// Core dependency scanning logic
+// ---------------------------------------------------------------------------
+
+const MANIFEST_FILES: &[&str] = &[
+    "requirements.txt",
+    "Pipfile",
+    "pyproject.toml",
+    "package.json",
+    "package-lock.json",
+    "go.mod",
+    "Cargo.toml",
+    "pom.xml",
+    "build.gradle",
+];
+
+/// Scan `target` directory for dependency manifests and query OSV for each package.
+fn scan_dependencies(target: &Path) -> Result<Vec<DepFinding>, String> {
+    let osv = OsvClient::new();
+    let mut findings: Vec<DepFinding> = Vec::new();
+
+    for manifest in MANIFEST_FILES {
+        let manifest_path = target.join(manifest);
+        if !manifest_path.is_file() {
+            continue;
+        }
+
+        let content = fs::read_to_string(&manifest_path)
+            .map_err(|e| format!("failed to read {}: {e}", manifest_path.display()))?;
+
+        let packages = parse_manifest(manifest, &content);
+        let ecosystem = ecosystem_for_file(manifest);
+
+        eprintln!(
+            "  [deps] {} -> {} packages (ecosystem: {})",
+            manifest,
+            packages.len(),
+            ecosystem
+        );
+
+        for (name, version) in &packages {
+            match osv.query(name, version, ecosystem) {
+                Ok(vulns) => {
+                    for v in vulns {
+                        findings.push(DepFinding {
+                            package: name.clone(),
+                            version: version.clone(),
+                            ecosystem: ecosystem.to_string(),
+                            vuln_id: v.id,
+                            summary: v.summary,
+                            severity: v.severity,
+                            fixed_version: v.fixed_version,
+                            manifest_file: manifest.to_string(),
+                        });
+                    }
+                }
+                Err(e) => {
+                    eprintln!("  [deps] warning: {e}");
+                }
+            }
+        }
+    }
+
+    Ok(findings)
+}
+
+fn parse_manifest(filename: &str, content: &str) -> Vec<(String, String)> {
+    match filename {
+        "requirements.txt" => parse_requirements_txt(content),
+        "Pipfile" => parse_pipfile(content),
+        "pyproject.toml" => parse_pyproject_toml(content),
+        "package.json" | "package-lock.json" => parse_package_json(content),
+        "go.mod" => parse_go_mod(content),
+        "Cargo.toml" => parse_cargo_toml_deps(content),
+        "pom.xml" => parse_pom_xml(content),
+        "build.gradle" => parse_build_gradle(content),
+        _ => Vec::new(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// deps CLI entry-point
+// ---------------------------------------------------------------------------
+
+fn run_deps(args: &[String]) -> Result<(), String> {
+    if args.is_empty() {
+        return Err(
+            "deps requires a target path\nUsage: aishield deps <path> [--format table|json]"
+                .to_string(),
+        );
+    }
+
+    let target = PathBuf::from(&args[0]);
+    if !target.is_dir() {
+        return Err(format!("{} is not a directory", target.display()));
+    }
+
+    let mut format = OutputFormat::Table;
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--format" => {
+                i += 1;
+                let raw = args.get(i).ok_or("--format requires a value")?;
+                format = match raw.as_str() {
+                    "table" => OutputFormat::Table,
+                    "json" => OutputFormat::Json,
+                    other => {
+                        return Err(format!(
+                            "unsupported deps format `{other}` (use table or json)"
+                        ))
+                    }
+                };
+            }
+            other => return Err(format!("unknown option `{other}`")),
+        }
+        i += 1;
+    }
+
+    eprintln!("Scanning dependencies in {} ...", target.display());
+    let start = Instant::now();
+    let findings = scan_dependencies(&target)?;
+    let elapsed = start.elapsed();
+
+    match format {
+        OutputFormat::Table => print_deps_table(&findings, elapsed),
+        OutputFormat::Json => print_deps_json(&findings, elapsed),
+        _ => print_deps_table(&findings, elapsed),
+    }
+
+    if findings.is_empty() {
+        eprintln!("\nNo known vulnerabilities found.");
+    } else {
+        eprintln!(
+            "\nFound {} vulnerabilit{} across dependencies.",
+            findings.len(),
+            if findings.len() == 1 { "y" } else { "ies" }
+        );
+    }
+
+    Ok(())
+}
+
+fn print_deps_table(findings: &[DepFinding], elapsed: Duration) {
+    if findings.is_empty() {
+        println!("No vulnerabilities found ({:.2}s)", elapsed.as_secs_f64());
+        return;
+    }
+
+    println!(
+        "{:<30} {:<12} {:<10} {:<18} {:<10} {:<14} {}",
+        "PACKAGE", "VERSION", "ECOSYSTEM", "VULN ID", "SEVERITY", "FIXED IN", "MANIFEST"
+    );
+    println!("{}", "-".repeat(120));
+
+    for f in findings {
+        let fixed = f.fixed_version.as_deref().unwrap_or("-");
+        println!(
+            "{:<30} {:<12} {:<10} {:<18} {:<10} {:<14} {}",
+            deps_truncate(&f.package, 29),
+            deps_truncate(&f.version, 11),
+            deps_truncate(&f.ecosystem, 9),
+            deps_truncate(&f.vuln_id, 17),
+            deps_truncate(&f.severity, 9),
+            deps_truncate(fixed, 13),
+            f.manifest_file,
+        );
+    }
+
+    let mut by_sev: BTreeMap<&str, usize> = BTreeMap::new();
+    for f in findings {
+        *by_sev.entry(f.severity.as_str()).or_insert(0) += 1;
+    }
+    println!(
+        "\n{} vulnerabilities found in {:.2}s",
+        findings.len(),
+        elapsed.as_secs_f64()
+    );
+    let sev_parts: Vec<String> = by_sev.iter().map(|(k, v)| format!("{v} {k}")).collect();
+    println!("  Breakdown: {}", sev_parts.join(", "));
+}
+
+fn print_deps_json(findings: &[DepFinding], elapsed: Duration) {
+    let entries: Vec<Value> = findings
+        .iter()
+        .map(|f| {
+            serde_json::json!({
+                "package": f.package,
+                "version": f.version,
+                "ecosystem": f.ecosystem,
+                "vuln_id": f.vuln_id,
+                "summary": f.summary,
+                "severity": f.severity,
+                "fixed_version": f.fixed_version,
+                "manifest_file": f.manifest_file,
+            })
+        })
+        .collect();
+
+    let output = serde_json::json!({
+        "vulnerabilities": entries,
+        "total": findings.len(),
+        "elapsed_secs": elapsed.as_secs_f64(),
+    });
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&output).unwrap_or_else(|_| "{}".to_string())
+    );
+}
+
+fn deps_truncate(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max_len.saturating_sub(3)])
+    }
 }
 
 #[cfg(test)]
