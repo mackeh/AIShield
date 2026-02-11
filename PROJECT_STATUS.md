@@ -1,6 +1,6 @@
 # AIShield - Project Status
 
-## Current Status: Phase 5 In Progress 🚀
+## Current Status: v0.6.0 — Phase 5-6 In Progress 🚀
 
 **Last Updated**: February 11, 2026
 
@@ -24,21 +24,21 @@
 ### Phase 5 — Usability & Adoption
 - 🚧 **5.1** Package Manager Distribution (crates.io, Homebrew, npx wrapper)
 - 🚧 **5.2** Interactive Config Wizard (`aishield init` with dialoguer)
-- 🚧 **5.3** Severity Tuning Profiles (`--profile strict|pragmatic|ai-focus`)
-- 🚧 **5.4** Watch Mode (`aishield watch` with file-system notifications)
+- ✅ **5.3** Severity Tuning Profiles (`--profile strict|pragmatic|ai-focus`)
+- ✅ **5.4** Watch Mode (`aishield watch` with file-system notifications)
 - 🚧 **5.5** PR Comment Bot (GitHub App / Action)
 - 🚧 **5.6** Online Playground (WASM)
 - 🚧 **5.7** Dashboard Enhancements (Team/Org Views)
 
 ### Phase 6 — Advanced Security & Woo Factor
 - ✅ **6.1** Prompt Injection Detection (15 LLM rules across Python, JS, Go, Java)
-- ✅ **6.3** Secrets Detection Expansion (15 rules for AWS, GCP, Azure, GitHub, Slack, Stripe, etc.)
 - 🚧 **6.2** Supply Chain / Dependency Awareness
+- ✅ **6.3** Secrets Detection Expansion (15 rules for AWS, GCP, Azure, GitHub, Slack, Stripe, etc.)
 - 🚧 **6.4** Lightweight Taint Analysis (tree-sitter)
 - 🚧 **6.5** SBOM Generation
 - 🚧 **6.6** Signed Scan Reports
-- 🚧 **6.7** AI Vulnerability Score Badge (`--badge`)
-- 🚧 **6.8** Vibe Check Mode (`--vibe`)
+- ✅ **6.7** AI Vulnerability Score Badge (`--badge`)
+- ✅ **6.8** Vibe Check Mode (`--vibe`)
 - 🚧 **6.9** VS Code AI Radar Heatmap
 - 🚧 **6.10** LLM-Powered Auto-Fix Loop
 - 🚧 **6.11** Browser Extension (WASM)

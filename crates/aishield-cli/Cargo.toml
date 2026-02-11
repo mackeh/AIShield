@@ -37,3 +37,7 @@ indicatif = "0.17"
 ratatui = "0.28"
 crossterm = "0.28"
 zip = "0.6"
+
+# File watching for watch mode
+notify = "7.0"
+notify-debouncer-mini = "0.5"

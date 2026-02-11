@@ -57,6 +57,7 @@ fn run() -> Result<(), String> {
         "hook" => run_hook(&args[1..]),
         "config" => run_config(&args[1..]),
         "analytics" => run_analytics(&args[1..]),
+        "watch" => run_watch(&args[1..]),
         "--help" | "-h" | "help" => {
             print_help();
             Ok(())
@@ -4936,6 +4937,176 @@ fn format_optional_ms(ms: Option<f64>) -> String {
     }
 }
 
+fn run_watch(args: &[String]) -> Result<(), String> {
+    use notify::RecursiveMode;
+    use notify_debouncer_mini::new_debouncer;
+    use std::sync::mpsc;
+
+    if args.is_empty() {
+        return Err("watch requires a target path".to_string());
+    }
+
+    let target = PathBuf::from(&args[0]);
+    let mut rules_dir = PathBuf::from("rules");
+    let mut debounce_ms: u64 = 500;
+    let mut severity_threshold = None::<SeverityThreshold>;
+    let mut profile_override = None::<ScanProfile>;
+
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--rules-dir" => {
+                i += 1;
+                rules_dir = PathBuf::from(args.get(i).ok_or("--rules-dir requires a value")?);
+            }
+            "--severity" => {
+                i += 1;
+                severity_threshold = Some(SeverityThreshold::parse(
+                    args.get(i).ok_or("--severity requires a value")?,
+                )?);
+            }
+            "--profile" => {
+                i += 1;
+                profile_override = Some(ScanProfile::parse(
+                    args.get(i).ok_or("--profile requires a value")?,
+                )?);
+            }
+            "--debounce-ms" => {
+                i += 1;
+                debounce_ms = args
+                    .get(i)
+                    .ok_or("--debounce-ms requires a value")?
+                    .parse::<u64>()
+                    .map_err(|_| "invalid --debounce-ms value".to_string())?;
+            }
+            other => return Err(format!("unknown watch option `{other}`")),
+        }
+        i += 1;
+    }
+
+    // Apply profile
+    let profile_severity = match profile_override {
+        Some(ScanProfile::Pragmatic) => Some(SeverityThreshold::High),
+        _ => None,
+    };
+    let effective_severity = severity_threshold.or(profile_severity);
+
+    let profile_ai_only = matches!(
+        profile_override,
+        Some(ScanProfile::Pragmatic) | Some(ScanProfile::AiFocus)
+    );
+    let profile_min_ai = match profile_override {
+        Some(ScanProfile::Pragmatic) => Some(0.50_f32),
+        Some(ScanProfile::AiFocus) => Some(0.75_f32),
+        _ => None,
+    };
+
+    let ruleset = RuleSet::load_from_dir(&rules_dir)
+        .map_err(|err| format!("failed to load rules from {}: {err}", rules_dir.display()))?;
+    let rules_count = ruleset.rules.len();
+    let analyzer = Analyzer::new(ruleset);
+
+    let ai_classifier = AiClassifierOptions::default();
+    let options = AnalysisOptions {
+        ai_only: profile_ai_only,
+        min_ai_confidence: profile_min_ai,
+        ai_classifier,
+        ..AnalysisOptions::default()
+    };
+
+    // Initial scan
+    eprintln!(
+        "AIShield watching {} ({} rules loaded, debounce {}ms)",
+        target.display(),
+        rules_count,
+        debounce_ms
+    );
+    eprintln!("Press Ctrl+C to stop.\n");
+
+    let do_scan = |analyzer: &Analyzer, options: &AnalysisOptions, target: &Path| {
+        match analyzer.analyze_path(target, options) {
+            Ok(mut result) => {
+                if let Some(threshold) = effective_severity {
+                    result.findings = result
+                        .findings
+                        .into_iter()
+                        .filter(|f| threshold.includes(f.severity))
+                        .collect();
+                    result.summary = recompute_summary(&result);
+                }
+                let critical = result.summary.by_severity.get("critical").copied().unwrap_or(0);
+                let high = result.summary.by_severity.get("high").copied().unwrap_or(0);
+                let medium = result.summary.by_severity.get("medium").copied().unwrap_or(0);
+                let now = chrono::Local::now().format("%H:%M:%S");
+                eprintln!(
+                    "[{now}] {} findings (critical={critical} high={high} medium={medium}) across {} files",
+                    result.summary.total,
+                    result.summary.scanned_files
+                );
+            }
+            Err(err) => {
+                eprintln!("scan error: {err}");
+            }
+        }
+    };
+
+    do_scan(&analyzer, &options, &target);
+
+    let (tx, rx) = mpsc::channel();
+    let mut debouncer = new_debouncer(Duration::from_millis(debounce_ms), tx)
+        .map_err(|err| format!("failed to create file watcher: {err}"))?;
+
+    debouncer
+        .watcher()
+        .watch(&target, RecursiveMode::Recursive)
+        .map_err(|err| format!("failed to watch {}: {err}", target.display()))?;
+
+    loop {
+        match rx.recv() {
+            Ok(Ok(events)) => {
+                // Check if any event involves a supported source file
+                let has_source_change = events.iter().any(|event| {
+                    let path = &event.path;
+                    let ext = path
+                        .extension()
+                        .map(|e| e.to_string_lossy().to_ascii_lowercase());
+                    matches!(
+                        ext.as_deref(),
+                        Some("py")
+                            | Some("js")
+                            | Some("ts")
+                            | Some("jsx")
+                            | Some("tsx")
+                            | Some("go")
+                            | Some("rs")
+                            | Some("java")
+                            | Some("cs")
+                            | Some("rb")
+                            | Some("php")
+                            | Some("kt")
+                            | Some("swift")
+                            | Some("tf")
+                            | Some("yaml")
+                            | Some("yml")
+                    )
+                });
+                if has_source_change {
+                    do_scan(&analyzer, &options, &target);
+                }
+            }
+            Ok(Err(err)) => {
+                eprintln!("watch error: {err:?}");
+            }
+            Err(_) => {
+                // Channel closed, watcher dropped
+                break;
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn print_help() {
     println!("AIShield CLI (foundation)\n");
     println!("Usage:");
@@ -4945,6 +5116,7 @@ fn print_help() {
     println!("  aishield init [--output PATH] [--templates config,github-actions,gitlab-ci,bitbucket-pipelines,circleci,jenkins,vscode,pre-commit|all] [--force]");
     println!("  aishield create-rule --id ID --title TITLE --language LANG --category CAT [--severity LEVEL] [--pattern-any P] [--pattern-all P] [--pattern-not P] [--tags t1,t2] [--suggestion TEXT] [--out-dir DIR] [--force]");
     println!("  aishield stats [--last Nd] [--history-file FILE] [--format table|json] [--config FILE] [--no-config]");
+    println!("  aishield watch <path> [--rules-dir DIR] [--severity LEVEL] [--profile strict|pragmatic|ai-focus] [--debounce-ms N]");
     println!("  aishield hook install [--severity LEVEL] [--path TARGET] [--all-files]");
     println!("  aishield analytics migrate-history [--dry-run] [--history-file FILE]");
     println!("  aishield analytics summary [--days N] [--limit N] [--org-id ID] [--team-id ID] [--repo-id ID] [--format table|json] [--probes N] [--probe-interval-ms N] [--max-error-rate-pct N] [--max-summary-p95-ms N] [--max-compliance-p95-ms N] [--min-coverage-pct N] [--fail-on-threshold]");

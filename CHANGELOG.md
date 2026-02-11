@@ -8,8 +8,18 @@ The format is based on Keep a Changelog and follows semantic versioning.
 
 ### Added
 
+- No unreleased entries yet.
+
+## [0.6.0] - 2026-02-11
+
+### Added
+
 - **Prompt Injection Detection (6.1)**: 15 new LLM security rules across Python (5), JavaScript (5), Go (3), and Java (2) detecting unsanitized user input in prompts, eval/exec on LLM output, exposed system prompts, template injection, and unscoped tool calling.
 - **Secrets Detection Expansion (6.3)**: 15 cross-language rules detecting hardcoded AWS keys, GCP service accounts, Azure connection strings, private keys, GitHub PATs, Slack tokens, Stripe keys, JWT tokens, database URLs with passwords, Google API keys, and generic API key assignments.
+- **Severity Tuning Profiles (5.3)**: `--profile strict|pragmatic|ai-focus` flag for noise reduction presets. Pragmatic filters to critical+high with AI confidence >= 50%; ai-focus shows all severities but only rules with AI confidence >= 75%.
+- **Watch Mode (5.4)**: `aishield watch <path>` re-scans on file changes using file system notifications with configurable debounce (default 500ms).
+- **AI Vulnerability Score Badge (6.7)**: `--badge` flag outputs a shields.io markdown badge with letter grade (A+ to F) based on findings.
+- **Vibe Check Mode (6.8)**: `--vibe` flag replaces standard table output with personality-driven scan summary and top-5 findings.
 - New `rules/secrets/` directory for cross-language credential detection.
 - New `rules/{python,javascript,go,java}/llm/` directories for LLM security rules.
 - Test fixtures for all new rules: `tests/fixtures/llm/` and `tests/fixtures/secrets_vulnerable_suite.py`.
@@ -166,7 +176,8 @@ The format is based on Keep a Changelog and follows semantic versioning.
 - Machine-output dedup normalization for JSON/SARIF to reduce CI noise
 - Expanded documentation for CLI, configuration, outputs, and CI
 
-[Unreleased]: https://github.com/mackeh/AIShield/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/mackeh/AIShield/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/mackeh/AIShield/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/mackeh/AIShield/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/mackeh/AIShield/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/mackeh/AIShield/compare/v0.4.0...v0.4.1
