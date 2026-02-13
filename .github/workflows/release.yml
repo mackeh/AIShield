@@ -78,7 +78,7 @@ jobs:
 
           # ---- macOS x86_64 (Intel) ----
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-14
             use_cross: false
             archive: tar.gz
 
@@ -184,13 +184,19 @@ jobs:
   # 3. Publish GitHub Release with all artefacts.
   # ---------------------------------------------------------------------------
   release:
+    if: ${{ always() && needs.resolve-tag.result == 'success' }}
     needs: [resolve-tag, build]
     runs-on: ubuntu-latest
+    env:
+      BUILD_JOB_RESULT: ${{ needs.build.result }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Build result summary
+        run: echo "Build matrix result: ${BUILD_JOB_RESULT}"
 
       - name: Download all artefacts
         uses: actions/download-artifact@v4
@@ -204,10 +210,16 @@ jobs:
 
       # Combine per-file checksums into a single manifest
       - name: Create combined checksum file
+        shell: bash
         run: |
-          cd artefacts
-          cat *.sha256 | sort > ../checksums-sha256.txt
-          cp ../checksums-sha256.txt .
+          shopt -s nullglob
+          checksum_files=(artefacts/*.sha256)
+          if [ "${#checksum_files[@]}" -eq 0 ]; then
+            echo "No checksum artifacts were downloaded."
+            exit 1
+          fi
+          cat "${checksum_files[@]}" | sort > checksums-sha256.txt
+          cp checksums-sha256.txt artefacts/
           echo "--- checksums-sha256.txt ---"
           cat checksums-sha256.txt
 
@@ -233,6 +245,8 @@ jobs:
 
             **Manual download:** grab the archive for your platform below and
             extract the `aishield` binary to a directory on your `$PATH`.
+
+            **Release build matrix result:** `${{ env.BUILD_JOB_RESULT }}`.
 
             Curated highlights are tracked in `CHANGELOG.md`.
           files: |
