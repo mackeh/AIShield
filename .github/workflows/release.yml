@@ -3,20 +3,30 @@ name: Release
 on:
   push:
     tags:
-      - "v*.*.*"
+      - "v*"
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing tag to release (for example v0.1.1)"
+        description: "Existing tag to release (for example v0.5.0)"
         required: true
         type: string
 
 permissions:
   contents: write
 
+env:
+  CARGO_TERM_COLOR: always
+  BINARY_NAME: aishield-cli
+
 jobs:
-  release:
+  # ---------------------------------------------------------------------------
+  # 1. Resolve the tag once so every downstream job can reference it.
+  # ---------------------------------------------------------------------------
+  resolve-tag:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,21 +37,203 @@ jobs:
         id: tag
         run: |
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
-            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+            TAG="${{ inputs.tag }}"
           else
-            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            TAG="${GITHUB_REF_NAME}"
           fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Verify tag exists
         run: |
           git fetch --tags --force
           git rev-parse "${{ steps.tag.outputs.tag }}" >/dev/null
 
-      - name: Create GitHub release
+  # ---------------------------------------------------------------------------
+  # 2. Build matrix -- six platform targets.
+  # ---------------------------------------------------------------------------
+  build:
+    needs: resolve-tag
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ---- Linux x86_64 (glibc) ----
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            use_cross: true
+            archive: tar.gz
+
+          # ---- Linux x86_64 (musl / static) ----
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            use_cross: true
+            archive: tar.gz
+
+          # ---- Linux aarch64 ----
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            use_cross: true
+            archive: tar.gz
+
+          # ---- macOS x86_64 (Intel) ----
+          - target: x86_64-apple-darwin
+            os: macos-13
+            use_cross: false
+            archive: tar.gz
+
+          # ---- macOS aarch64 (Apple Silicon) ----
+          - target: aarch64-apple-darwin
+            os: macos-14
+            use_cross: false
+            archive: tar.gz
+
+          # ---- Windows x86_64 ----
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            use_cross: false
+            archive: zip
+
+    runs-on: ${{ matrix.os }}
+    env:
+      TAG: ${{ needs.resolve-tag.outputs.tag }}
+      VERSION: ${{ needs.resolve-tag.outputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---- Rust toolchain ----
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry and build artefacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.target }}-
+
+      # ---- cross (Linux cross-compilation) ----
+      - name: Install cross
+        if: matrix.use_cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      # ---- Build ----
+      - name: Build release binary
+        shell: bash
+        run: |
+          if [ "${{ matrix.use_cross }}" = "true" ]; then
+            cross build --release --target ${{ matrix.target }} \
+              --package aishield-cli --no-default-features
+          else
+            cargo build --release --target ${{ matrix.target }} \
+              --package aishield-cli --no-default-features
+          fi
+
+      # ---- Package ----
+      - name: Package artefact (unix)
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          STAGING="aishield-${VERSION}-${{ matrix.target }}"
+          mkdir -p "${STAGING}"
+          cp "target/${{ matrix.target }}/release/${BINARY_NAME}" "${STAGING}/aishield"
+          cp LICENSE README.md "${STAGING}/" 2>/dev/null || true
+          tar czf "${STAGING}.tar.gz" "${STAGING}"
+          echo "ASSET=${STAGING}.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Package artefact (windows)
+        if: matrix.archive == 'zip'
+        shell: bash
+        run: |
+          STAGING="aishield-${VERSION}-${{ matrix.target }}"
+          mkdir -p "${STAGING}"
+          cp "target/${{ matrix.target }}/release/${BINARY_NAME}.exe" "${STAGING}/aishield.exe"
+          cp LICENSE README.md "${STAGING}/" 2>/dev/null || true
+          7z a "${STAGING}.zip" "${STAGING}"
+          echo "ASSET=${STAGING}.zip" >> "$GITHUB_ENV"
+
+      # ---- SHA256 checksum ----
+      - name: Generate SHA256 checksum
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            shasum -a 256 "${ASSET}" > "${ASSET}.sha256"
+          else
+            sha256sum "${ASSET}" > "${ASSET}.sha256"
+          fi
+
+      # ---- Upload artefact for the release job ----
+      - name: Upload build artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}
+          path: |
+            ${{ env.ASSET }}
+            ${{ env.ASSET }}.sha256
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # 3. Publish GitHub Release with all artefacts.
+  # ---------------------------------------------------------------------------
+  release:
+    needs: [resolve-tag, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artefacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artefacts
+          pattern: release-*
+          merge-multiple: true
+
+      - name: List artefacts
+        run: ls -lhR artefacts/
+
+      # Combine per-file checksums into a single manifest
+      - name: Create combined checksum file
+        run: |
+          cd artefacts
+          cat *.sha256 | sort > ../checksums-sha256.txt
+          cp ../checksums-sha256.txt .
+          echo "--- checksums-sha256.txt ---"
+          cat checksums-sha256.txt
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tag.outputs.tag }}
+          tag_name: ${{ needs.resolve-tag.outputs.tag }}
+          name: "AIShield ${{ needs.resolve-tag.outputs.tag }}"
           generate_release_notes: true
           append_body: true
           body: |
+            ## Installation
+
+            **Quick install (Linux / macOS):**
+            ```bash
+            curl -sSfL https://raw.githubusercontent.com/mackeh/AIShield/main/install.sh | sh
+            ```
+
+            **Homebrew (macOS / Linux):**
+            ```bash
+            brew install mackeh/tap/aishield
+            ```
+
+            **Manual download:** grab the archive for your platform below and
+            extract the `aishield` binary to a directory on your `$PATH`.
+
             Curated highlights are tracked in `CHANGELOG.md`.
+          files: |
+            artefacts/*

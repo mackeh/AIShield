@@ -1612,6 +1612,7 @@ fn run_fix(args: &[String]) -> Result<(), String> {
     let mut write_changes = false;
     let mut dry_run = false;
     let mut interactive = false;
+    let mut autofix = false;
     let mut config_path = PathBuf::from(".aishield.yml");
     let mut use_config = true;
 
@@ -1631,6 +1632,7 @@ fn run_fix(args: &[String]) -> Result<(), String> {
             "--write" => write_changes = true,
             "--dry-run" => dry_run = true,
             "--interactive" => interactive = true,
+            "--autofix" => autofix = true,
             "--no-config" => use_config = false,
             other => return Err(format!("unknown fix option `{other}`")),
         }
@@ -1687,7 +1689,9 @@ fn run_fix(args: &[String]) -> Result<(), String> {
         return Ok(());
     }
 
-    if interactive {
+    if autofix {
+        run_llm_autofix(&target, &result, write_changes, interactive, &analyzer)?;
+    } else if interactive {
         run_fix_interactive(&target, &result, dry_run)?;
     } else if write_changes || dry_run {
         apply_autofixes(&target, &result, write_changes, dry_run)?;
@@ -5505,7 +5509,7 @@ fn print_help() {
     println!("AIShield CLI (foundation)\n");
     println!("Usage:");
     println!("  aishield scan <path> [--rules-dir DIR] [--format table|json|sarif|github] [--dedup none|normalized] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--cross-file] [--ai-model heuristic|onnx] [--onnx-model FILE] [--onnx-manifest FILE] [--ai-calibration conservative|balanced|aggressive] [--min-ai-confidence N] [--severity LEVEL] [--profile strict|pragmatic|ai-focus] [--badge] [--vibe] [--fail-on-findings] [--staged|--changed-from REF] [--output FILE] [--baseline FILE] [--notify-webhook URL] [--notify-min-severity LEVEL] [--history-file FILE] [--no-history] [--config FILE] [--no-config]");
-    println!("  aishield fix <path[:line[:col]]> [--rules-dir DIR] [--write|--interactive] [--dry-run] [--config FILE] [--no-config]");
+    println!("  aishield fix <path[:line[:col]]> [--rules-dir DIR] [--write|--interactive] [--dry-run] [--autofix] [--config FILE] [--no-config]");
     println!("  aishield bench <path> [--rules-dir DIR] [--iterations N] [--warmup N] [--format table|json] [--bridge semgrep,bandit,eslint|all] [--rules c1,c2] [--exclude p1,p2] [--ai-only] [--cross-file] [--ai-model heuristic|onnx] [--onnx-model FILE] [--onnx-manifest FILE] [--ai-calibration conservative|balanced|aggressive] [--min-ai-confidence N] [--config FILE] [--no-config]");
     println!("  aishield init [--wizard] [--output PATH] [--templates config,github-actions,gitlab-ci,bitbucket-pipelines,circleci,jenkins,vscode,pre-commit|all] [--force]");
     println!("  aishield create-rule --id ID --title TITLE --language LANG --category CAT [--severity LEVEL] [--pattern-any P] [--pattern-all P] [--pattern-not P] [--tags t1,t2] [--suggestion TEXT] [--out-dir DIR] [--force]");
@@ -8387,6 +8391,387 @@ fn deps_truncate(s: &str, max_len: usize) -> String {
     } else {
         format!("{}...", &s[..max_len.saturating_sub(3)])
     }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6.10 – LLM-Powered Auto-Fix Loop
+// ---------------------------------------------------------------------------
+
+/// Infer a language identifier from a file extension for code-fenced blocks.
+fn language_from_path(path: &Path) -> &'static str {
+    match path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+    {
+        "py" => "python",
+        "js" | "mjs" | "cjs" => "javascript",
+        "ts" | "mts" | "cts" => "typescript",
+        "rs" => "rust",
+        "go" => "go",
+        "java" => "java",
+        "rb" => "ruby",
+        "c" | "h" => "c",
+        "cpp" | "cc" | "cxx" | "hpp" => "cpp",
+        "cs" => "csharp",
+        "php" => "php",
+        "swift" => "swift",
+        "kt" | "kts" => "kotlin",
+        "yml" | "yaml" => "yaml",
+        "json" => "json",
+        "sh" | "bash" => "bash",
+        _ => "",
+    }
+}
+
+/// Extract surrounding source context (up to `radius` lines before/after) for
+/// the finding line in the given file.  Returns the context string together with
+/// the 1-based start line number of the extracted window.
+fn extract_code_context(
+    file_path: &Path,
+    finding_line: usize,
+    radius: usize,
+) -> Result<(String, usize), String> {
+    let content = fs::read_to_string(file_path)
+        .map_err(|e| format!("failed to read {}: {e}", file_path.display()))?;
+    let lines: Vec<&str> = content.lines().collect();
+    if lines.is_empty() {
+        return Ok((String::new(), 1));
+    }
+    let idx = finding_line.saturating_sub(1); // 0-based
+    let start = idx.saturating_sub(radius);
+    let end = (idx + radius + 1).min(lines.len());
+    let snippet = lines[start..end].join("\n");
+    Ok((snippet, start + 1))
+}
+
+/// Build the LLM prompt for a single finding.
+fn build_autofix_prompt(finding: &Finding, file_path: &Path, context: &str, lang: &str) -> String {
+    let fix_desc = finding
+        .fix_suggestion
+        .as_deref()
+        .unwrap_or("Apply secure defaults and follow best practices");
+
+    format!(
+        "The following code has a security vulnerability:\n\n\
+         File: {}:{}\n\
+         Rule: {} - {}\n\
+         Severity: {}\n\n\
+         Vulnerable code:\n\
+         ```{}\n\
+         {}\n\
+         ```\n\n\
+         Fix suggestion: {}\n\n\
+         Provide ONLY the corrected code block that fixes this vulnerability \
+         while preserving functionality. Do not include explanations.",
+        file_path.display(),
+        finding.line,
+        finding.id,
+        finding.title,
+        finding.severity.as_str(),
+        lang,
+        context,
+        fix_desc,
+    )
+}
+
+/// Determine which LLM provider to use based on environment variables.
+/// Returns `("anthropic", key)` or `("openai", key)`.
+fn detect_llm_provider() -> Result<(&'static str, String), String> {
+    if let Ok(key) = env::var("ANTHROPIC_API_KEY") {
+        if !key.is_empty() {
+            return Ok(("anthropic", key));
+        }
+    }
+    if let Ok(key) = env::var("OPENAI_API_KEY") {
+        if !key.is_empty() {
+            return Ok(("openai", key));
+        }
+    }
+    Err(
+        "LLM autofix requires ANTHROPIC_API_KEY or OPENAI_API_KEY environment variable".to_string(),
+    )
+}
+
+/// Call the configured LLM API and return the generated fix text.
+fn call_llm_api(prompt: &str) -> Result<String, String> {
+    let (provider, api_key) = detect_llm_provider()?;
+    let client = Client::new();
+
+    match provider {
+        "anthropic" => {
+            let body = serde_json::json!({
+                "model": "claude-sonnet-4-20250514",
+                "max_tokens": 4096,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+            });
+            let resp = client
+                .post("https://api.anthropic.com/v1/messages")
+                .header("x-api-key", &api_key)
+                .header("anthropic-version", "2023-06-01")
+                .header("content-type", "application/json")
+                .json(&body)
+                .send()
+                .map_err(|e| format!("Anthropic API request failed: {e}"))?;
+
+            let status = resp.status();
+            let text = resp
+                .text()
+                .map_err(|e| format!("failed to read Anthropic response: {e}"))?;
+            if !status.is_success() {
+                return Err(format!("Anthropic API error ({}): {}", status, text));
+            }
+            let json: Value = serde_json::from_str(&text)
+                .map_err(|e| format!("failed to parse Anthropic response: {e}"))?;
+
+            // Extract text from content[0].text
+            let content = json
+                .get("content")
+                .and_then(|c| c.as_array())
+                .and_then(|arr| arr.first())
+                .and_then(|block| block.get("text"))
+                .and_then(|t| t.as_str())
+                .unwrap_or("")
+                .to_string();
+            Ok(strip_code_fences(&content))
+        }
+        "openai" => {
+            let body = serde_json::json!({
+                "model": "gpt-4o",
+                "max_tokens": 4096,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+            });
+            let resp = client
+                .post("https://api.openai.com/v1/chat/completions")
+                .header("Authorization", format!("Bearer {}", api_key))
+                .header("content-type", "application/json")
+                .json(&body)
+                .send()
+                .map_err(|e| format!("OpenAI API request failed: {e}"))?;
+
+            let status = resp.status();
+            let text = resp
+                .text()
+                .map_err(|e| format!("failed to read OpenAI response: {e}"))?;
+            if !status.is_success() {
+                return Err(format!("OpenAI API error ({}): {}", status, text));
+            }
+            let json: Value = serde_json::from_str(&text)
+                .map_err(|e| format!("failed to parse OpenAI response: {e}"))?;
+
+            // Extract text from choices[0].message.content
+            let content = json
+                .get("choices")
+                .and_then(|c| c.as_array())
+                .and_then(|arr| arr.first())
+                .and_then(|choice| choice.get("message"))
+                .and_then(|msg| msg.get("content"))
+                .and_then(|t| t.as_str())
+                .unwrap_or("")
+                .to_string();
+            Ok(strip_code_fences(&content))
+        }
+        _ => Err(format!("unsupported LLM provider: {provider}")),
+    }
+}
+
+/// Strip leading/trailing markdown code fences from LLM output so we get the
+/// raw replacement code.
+fn strip_code_fences(text: &str) -> String {
+    let trimmed = text.trim();
+    let without_opening = if let Some(rest) = trimmed.strip_prefix("```") {
+        // skip the optional language tag on the same line
+        match rest.find('\n') {
+            Some(pos) => &rest[pos + 1..],
+            None => rest,
+        }
+    } else {
+        trimmed
+    };
+    let without_closing = if let Some(rest) = without_opening.strip_suffix("```") {
+        rest
+    } else {
+        without_opening
+    };
+    without_closing.trim_end().to_string()
+}
+
+/// Run the autofix process for a single finding: extract context, call LLM,
+/// return the proposed fix together with the context window information.
+fn autofix_finding(
+    finding: &Finding,
+    file_path: &Path,
+) -> Result<String, String> {
+    let lang = language_from_path(file_path);
+    let (context, _start_line) = extract_code_context(file_path, finding.line, 10)?;
+    let prompt = build_autofix_prompt(finding, file_path, &context, lang);
+    call_llm_api(&prompt)
+}
+
+/// Apply a fixed code block to a file by replacing the context window around
+/// the finding line.
+fn apply_llm_fix(
+    file_path: &Path,
+    finding_line: usize,
+    radius: usize,
+    fixed_code: &str,
+) -> Result<(), String> {
+    let content = fs::read_to_string(file_path)
+        .map_err(|e| format!("failed to read {}: {e}", file_path.display()))?;
+    let lines: Vec<&str> = content.lines().collect();
+    let idx = finding_line.saturating_sub(1);
+    let start = idx.saturating_sub(radius);
+    let end = (idx + radius + 1).min(lines.len());
+
+    let mut new_content = String::new();
+    for line in &lines[..start] {
+        new_content.push_str(line);
+        new_content.push('\n');
+    }
+    new_content.push_str(fixed_code);
+    if !fixed_code.ends_with('\n') {
+        new_content.push('\n');
+    }
+    for line in &lines[end..] {
+        new_content.push_str(line);
+        new_content.push('\n');
+    }
+    // Preserve original trailing-newline behaviour
+    if !content.ends_with('\n') && new_content.ends_with('\n') {
+        new_content.pop();
+    }
+
+    fs::write(file_path, new_content)
+        .map_err(|e| format!("failed to write {}: {e}", file_path.display()))?;
+    Ok(())
+}
+
+/// Orchestrate the LLM-powered autofix loop across all findings.
+fn run_llm_autofix(
+    target: &Path,
+    result: &ScanResult,
+    write_changes: bool,
+    interactive: bool,
+    analyzer: &Analyzer,
+) -> Result<(), String> {
+    // Validate that we have an API key before doing any work.
+    let (provider, _) = detect_llm_provider()?;
+    println!(
+        "LLM autofix: using {} provider for {} finding(s).",
+        provider,
+        result.findings.len()
+    );
+
+    let mut applied = 0usize;
+    let mut skipped = 0usize;
+    let mut failed = 0usize;
+
+    for finding in &result.findings {
+        let file_path = resolve_finding_path(target, &finding.file);
+
+        println!(
+            "\n--- [{} | {}] {}:{} - {}",
+            finding.id,
+            finding.severity.as_str(),
+            finding.file,
+            finding.line,
+            finding.title,
+        );
+
+        let fixed_code = match autofix_finding(finding, &file_path) {
+            Ok(code) => code,
+            Err(e) => {
+                eprintln!("  LLM fix failed: {e}");
+                failed += 1;
+                continue;
+            }
+        };
+
+        if fixed_code.is_empty() {
+            eprintln!("  LLM returned empty fix, skipping.");
+            failed += 1;
+            continue;
+        }
+
+        // Show the proposed fix.
+        println!("  Proposed fix:");
+        for line in fixed_code.lines() {
+            println!("  + {line}");
+        }
+
+        // Decide whether to apply.
+        let should_apply = if write_changes {
+            true
+        } else if interactive {
+            if io::stdin().is_terminal() && io::stdout().is_terminal() {
+                print!("  Apply this fix? [y/N] ");
+                io::stdout().flush().ok();
+                let mut answer = String::new();
+                io::stdin()
+                    .read_line(&mut answer)
+                    .map_err(|e| format!("failed to read stdin: {e}"))?;
+                matches!(answer.trim(), "y" | "Y" | "yes" | "Yes")
+            } else {
+                false
+            }
+        } else {
+            // Dry-run: just print, do not apply.
+            false
+        };
+
+        if should_apply {
+            if let Err(e) = apply_llm_fix(&file_path, finding.line, 10, &fixed_code) {
+                eprintln!("  Failed to apply fix: {e}");
+                failed += 1;
+                continue;
+            }
+            println!("  Fix applied to {}.", file_path.display());
+            applied += 1;
+        } else if !write_changes && !interactive {
+            println!("  (dry-run, not applied)");
+            skipped += 1;
+        } else {
+            println!("  Skipped.");
+            skipped += 1;
+        }
+    }
+
+    println!(
+        "\nLLM autofix summary: {} applied, {} skipped, {} failed.",
+        applied, skipped, failed
+    );
+
+    // Re-scan to verify if any fixes were applied.
+    if applied > 0 {
+        println!("\nRe-scanning to verify fixes...");
+        let verify_result = analyzer.analyze_path(target, &AnalysisOptions::default())?;
+        if verify_result.findings.is_empty() {
+            println!("Verification: all findings resolved.");
+        } else {
+            println!(
+                "Verification: {} finding(s) remain after autofix.",
+                verify_result.findings.len()
+            );
+            for f in &verify_result.findings {
+                println!(
+                    "  - [{}] {}:{}:{} - {}",
+                    f.id, f.file, f.line, f.column, f.title
+                );
+            }
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
